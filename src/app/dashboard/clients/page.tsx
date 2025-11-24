@@ -12,7 +12,7 @@ import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
 import type { Client, NewClientData, Technician } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 
 
@@ -54,7 +54,10 @@ export default function ClientsPage() {
       if (editingClient) {
         // Update existing client
         const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
-        await updateDoc(clientRef, clientData);
+        await updateDoc(clientRef, {
+            ...clientData,
+            franchiseId, // ensure franchiseId is present
+        });
         toast({
           title: "Cliente Atualizado!",
           description: `Os dados de ${clientData.name} foram atualizados.`,
@@ -66,8 +69,8 @@ export default function ClientsPage() {
   
         const dataToSave: Client = {
           id: newClientRef.id,
-          franchiseId: franchiseId,
           ...clientData,
+          franchiseId: franchiseId,
         };
   
         await setDoc(newClientRef, dataToSave);
@@ -95,10 +98,10 @@ export default function ClientsPage() {
   }
   
   const handleDialogChange = (open: boolean) => {
-    setIsNewClientDialogOpen(open);
     if (!open) {
       setEditingClient(null);
     }
+    setIsNewClientDialogOpen(open);
   }
   
   const isLoading = isLoadingClients || isLoadingTechnicians;
@@ -112,7 +115,7 @@ export default function ClientsPage() {
         </div>
         <Dialog open={isNewClientDialogOpen} onOpenChange={handleDialogChange}>
           <DialogTrigger asChild>
-            <Button onClick={() => setIsNewClientDialogOpen(true)}>
+            <Button>
               <PlusCircle className="mr-2 h-4 w-4" />
               Novo Cliente
             </Button>

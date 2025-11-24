@@ -1,5 +1,7 @@
+
 "use client";
 
+import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,13 +10,20 @@ import { PlusCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
-import type { Technician } from '@/lib/types';
+import { collection, doc, writeBatch } from 'firebase/firestore';
+import type { Technician, UserInfo } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { NewTechnicianForm, type NewTechnicianFormData } from '@/components/dashboard/technicians/new-technician-form';
+import { useToast } from '@/hooks/use-toast';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+
 
 export default function TechniciansPage() {
   const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
+  const { toast } = useToast();
+  const auth = getAuth();
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -23,8 +32,11 @@ export default function TechniciansPage() {
   , [firestore, franchiseId]);
 
   const { data: franchiseTechnicians, isLoading } = useCollection<Technician>(techniciansCollection);
+
+  const [isNewTechnicianDialogOpen, setIsNewTechnicianDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
-  if (!hasRole('owner')) {
+  if (!hasRole('owner') || !franchiseId) {
     return <p>Acesso negado.</p>;
   }
 
@@ -34,6 +46,75 @@ export default function TechniciansPage() {
     return placeholder?.imageUrl;
   }
 
+  const handleSaveTechnician = async (data: NewTechnicianFormData) => {
+    if (!firestore || !franchiseId) return;
+    setIsSaving(true);
+    
+    try {
+      // 1. Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const newUserId = userCredential.user.uid;
+
+      // 2. Prepare batch write
+      const batch = writeBatch(firestore);
+
+      // 3. Create Technician document
+      const technicianRef = doc(collection(firestore, 'franchises', franchiseId, 'technicians'));
+      const [firstName, ...lastNameParts] = data.name.split(' ');
+      
+      const newTechnician: Technician = {
+        id: technicianRef.id,
+        userId: newUserId,
+        franchiseId: franchiseId,
+        firstName: firstName,
+        lastName: lastNameParts.join(' ') || '',
+        phone: data.phone,
+        email: data.email,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      batch.set(technicianRef, newTechnician);
+
+      // 4. Create User Profile document
+      const userProfileRef = doc(firestore, 'users', newUserId);
+      const newUserProfile: Omit<UserInfo, 'id'> = {
+        firstName: firstName,
+        lastName: lastNameParts.join(' ') || '',
+        email: data.email,
+        role: 'technician',
+        franchiseId: franchiseId,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      batch.set(userProfileRef, newUserProfile);
+
+      // 5. Commit batch
+      await batch.commit();
+
+      toast({
+        title: "Técnico Criado!",
+        description: `O técnico ${data.name} foi adicionado à equipe.`,
+      });
+      setIsNewTechnicianDialogOpen(false);
+    } catch (error: any) {
+      console.error("Error creating technician:", error);
+      let description = "Ocorreu um erro ao salvar o novo técnico.";
+      if (error.code === 'auth/email-already-in-use') {
+        description = "Este e-mail já está em uso por outro usuário.";
+      } else if (error.code === 'auth/weak-password') {
+        description = "A senha é muito fraca. Use pelo menos 6 caracteres.";
+      }
+      toast({
+        variant: 'destructive',
+        title: "Erro ao criar técnico",
+        description: description,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -41,10 +122,27 @@ export default function TechniciansPage() {
           <h1 className="text-3xl font-bold tracking-tight">Gerenciamento de Técnicos</h1>
           <p className="text-muted-foreground">Adicione e gerencie os técnicos da sua equipe.</p>
         </div>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Novo Técnico
-        </Button>
+        <Dialog open={isNewTechnicianDialogOpen} onOpenChange={setIsNewTechnicianDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Novo Técnico
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Adicionar Novo Técnico</DialogTitle>
+              <DialogDescription>
+                Preencha os dados abaixo para cadastrar um novo técnico e criar seu acesso.
+              </DialogDescription>
+            </DialogHeader>
+            <NewTechnicianForm
+              onSave={handleSaveTechnician}
+              onCancel={() => setIsNewTechnicianDialogOpen(false)}
+              isSaving={isSaving}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card>
