@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
+import type { ContractType } from '@/lib/types';
 
 export default function ClientsPage() {
   const { user, hasRole } = useAuth();
@@ -27,11 +28,11 @@ export default function ClientsPage() {
     return technicians.find(t => t.id === id)?.name || 'N/A';
   }
 
-  const statusVariant = {
-    active: 'default',
-    inactive: 'destructive',
-    pending: 'secondary',
-  } as const;
+  const contractVariant: Record<ContractType, "default" | "secondary" | "destructive"> = {
+    mensal: 'default',
+    quinzenal: 'secondary',
+    avulso: 'destructive',
+  };
 
   const handleClientCreated = () => {
     // Here you would refresh the client list, for now, just close the dialog
@@ -87,7 +88,7 @@ export default function ClientsPage() {
                   <TableCell>{client.address}</TableCell>
                   <TableCell>{getTechnicianName(client.assignedTechnicianId)}</TableCell>
                   <TableCell>
-                    <Badge variant={statusVariant[client.contractStatus]}>{client.contractStatus}</Badge>
+                    <Badge variant={contractVariant[client.contractType]}>{client.contractType}</Badge>
                   </TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm">Editar</Button>

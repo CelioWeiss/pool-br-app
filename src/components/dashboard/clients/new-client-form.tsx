@@ -122,9 +122,9 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
                 <SelectValue placeholder="Selecione o tipo" />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="active">Ativo</SelectItem>
-                <SelectItem value="inactive">Inativo</SelectItem>
-                <SelectItem value="pending">Pendente</SelectItem>
+                <SelectItem value="mensal">Mensal</SelectItem>
+                <SelectItem value="quinzenal">Quinzenal</SelectItem>
+                <SelectItem value="avulso">Avulso</SelectItem>
             </SelectContent>
         </Select>
       </div>

@@ -16,13 +16,15 @@ export interface Franchise {
   region: string;
 }
 
+export type ContractType = 'mensal' | 'quinzenal' | 'avulso';
+
 export interface Client {
   id: string;
   name: string;
   address: string;
   franchiseId: string;
   assignedTechnicianId: string | null;
-  contractStatus: 'active' | 'inactive' | 'pending';
+  contractType: ContractType;
   poolSize: number; // in liters
 }
 

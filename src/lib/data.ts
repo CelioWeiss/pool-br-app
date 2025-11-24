@@ -16,10 +16,10 @@ export const franchises: Franchise[] = [
 ];
 
 export const clients: Client[] = [
-  { id: 'client-1', name: 'Condomínio Plaza', address: 'Av. Paulista, 1000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractStatus: 'active', poolSize: 50000 },
-  { id: 'client-2', name: 'Residencial Morumbi', address: 'Rua dos Bobos, 0', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractStatus: 'active', poolSize: 25000 },
-  { id: 'client-3', name: 'Clube Pinheiros', address: 'Av. Faria Lima, 2000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-2', contractStatus: 'inactive', poolSize: 120000 },
-  { id: 'client-4', name: 'Hotel Copacabana', address: 'Av. Atlântica, 1702', franchiseId: 'franchise-rj', assignedTechnicianId: null, contractStatus: 'pending', poolSize: 75000 },
+  { id: 'client-1', name: 'Condomínio Plaza', address: 'Av. Paulista, 1000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 50000 },
+  { id: 'client-2', name: 'Residencial Morumbi', address: 'Rua dos Bobos, 0', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 25000 },
+  { id: 'client-3', name: 'Clube Pinheiros', address: 'Av. Faria Lima, 2000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-2', contractType: 'quinzenal', poolSize: 120000 },
+  { id: 'client-4', name: 'Hotel Copacabana', address: 'Av. Atlântica, 1702', franchiseId: 'franchise-rj', assignedTechnicianId: null, contractType: 'avulso', poolSize: 75000 },
 ];
 
 export const technicians: Technician[] = [
