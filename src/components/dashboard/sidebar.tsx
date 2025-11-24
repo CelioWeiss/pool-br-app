@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Sidebar, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarContent } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -14,9 +15,7 @@ import {
   Calendar, 
   ClipboardList, 
   Map, 
-  Droplets,
   LogOut,
-  User,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
@@ -38,10 +37,16 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 p-2">
-            <Droplets className="h-8 w-8 text-white" />
-            <h2 className="text-xl font-bold text-white font-headline">Pool BR</h2>
+      <SidebarHeader className="border-b border-sidebar-border justify-center">
+        <div className="p-2">
+            <Image
+              src="/logo-white.png" // TODO: Substitua por uma versão do seu logo para fundos escuros
+              alt="Pool BR Logo"
+              width={150}
+              height={75}
+              className="object-contain"
+              data-ai-logo
+            />
         </div>
       </SidebarHeader>
 
