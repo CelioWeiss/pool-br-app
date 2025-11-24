@@ -53,11 +53,8 @@ export default function FranchisesPage() {
       // 2. Prepare Firestore batch write
       const batch = writeBatch(firestore);
 
-      // 3. Create Franchise document
+      // 3. Create Franchise document with the correct ownerId
       const franchiseRef = doc(collection(firestore, 'franchises'));
-      const [ownerFirstName, ...ownerLastNameParts] = data.ownerName.split(' ');
-      
-      // Ensure the ownerId in the franchise document is the UID from Auth
       const newFranchise: Omit<Franchise, 'id'> = {
         name: data.franchiseName,
         address: `${data.city}, ${data.state}`,
@@ -70,6 +67,7 @@ export default function FranchisesPage() {
 
       // 4. Create User Profile document with the correct franchiseId
       const userProfileRef = doc(firestore, 'users', ownerUid);
+      const [ownerFirstName, ...ownerLastNameParts] = data.ownerName.split(' ');
       const newUserProfile: UserInfo = {
         id: ownerUid,
         firstName: ownerFirstName,
