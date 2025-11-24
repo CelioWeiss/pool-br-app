@@ -1,9 +1,33 @@
 "use client";
 
-import React from 'react';
-import { APIProvider, Map, AdvancedMarker, Pin, Polyline } from '@vis.gl/react-google-maps';
+import React, { useEffect } from 'react';
+import { APIProvider, Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
+import { Polyline } from '@vis.gl/react-google-maps/routes';
 import { technicians, appointments, clients } from '@/lib/data';
 import { Wrench } from 'lucide-react';
+
+function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
+    const map = useMap();
+  
+    useEffect(() => {
+      if (!map || !route || route.length < 2) return;
+  
+      const polyline = new google.maps.Polyline({
+        path: route,
+        strokeColor: "#1A237E",
+        strokeOpacity: 0.8,
+        strokeWeight: 3,
+        map: map,
+      });
+  
+      return () => {
+        polyline.setMap(null);
+      };
+    }, [map, route]);
+  
+    return null;
+}
+
 
 export function TechnicianMap({ apiKey }: { apiKey: string }) {
   const mapCenter = { lat: -23.55052, lng: -46.633308 }; // São Paulo center
@@ -51,12 +75,7 @@ export function TechnicianMap({ apiKey }: { apiKey: string }) {
                 </AdvancedMarker>
               ))}
 
-              <Polyline
-                path={route}
-                strokeColor={techColors[index % techColors.length]}
-                strokeOpacity={0.8}
-                strokeWeight={3}
-              />
+              <RoutePolyline route={route} />
             </React.Fragment>
           );
         })}
