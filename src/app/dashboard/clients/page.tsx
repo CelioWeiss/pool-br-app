@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -11,7 +12,7 @@ import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
 import type { Client, NewClientData, Technician } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, addDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 
 
@@ -48,25 +49,32 @@ export default function ClientsPage() {
 
   const handleSaveClient = async (clientData: NewClientData) => {
     if (!firestore || !franchiseId) return;
-
-    const dataToSave = {
-      ...clientData,
-      franchiseId,
-    };
-
+  
     try {
       if (editingClient) {
-          await updateDoc(doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id), dataToSave);
-          toast({
-              title: "Cliente Atualizado!",
-              description: `Os dados de ${clientData.name} foram atualizados.`,
-          });
+        // Update existing client
+        const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
+        await updateDoc(clientRef, clientData);
+        toast({
+          title: "Cliente Atualizado!",
+          description: `Os dados de ${clientData.name} foram atualizados.`,
+        });
       } else {
-          await addDoc(collection(firestore, 'franchises', franchiseId, 'clients'), dataToSave);
-          toast({
-              title: "Cliente Criado!",
-              description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
-          });
+        // Create new client
+        const clientsRef = collection(firestore, 'franchises', franchiseId, 'clients');
+        const newClientRef = doc(clientsRef); // Create a new doc with a generated ID
+  
+        const dataToSave: Client = {
+          id: newClientRef.id,
+          franchiseId: franchiseId,
+          ...clientData,
+        };
+  
+        await setDoc(newClientRef, dataToSave);
+        toast({
+          title: "Cliente Criado!",
+          description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
+        });
       }
     } catch (error) {
       console.error("Error saving client: ", error);
@@ -79,16 +87,18 @@ export default function ClientsPage() {
       setIsNewClientDialogOpen(false);
       setEditingClient(null);
     }
-  }
+  };
   
   const handleEditClick = (client: Client) => {
     setEditingClient(client);
     setIsNewClientDialogOpen(true);
   }
   
-  const handleCloseDialog = () => {
-    setEditingClient(null);
-    setIsNewClientDialogOpen(false);
+  const handleDialogChange = (open: boolean) => {
+    setIsNewClientDialogOpen(open);
+    if (!open) {
+      setEditingClient(null);
+    }
   }
   
   const isLoading = isLoadingClients || isLoadingTechnicians;
@@ -100,9 +110,9 @@ export default function ClientsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Gerenciamento de Clientes</h1>
           <p className="text-muted-foreground">Adicione e gerencie os clientes da sua franquia.</p>
         </div>
-        <Dialog open={isNewClientDialogOpen} onOpenChange={handleCloseDialog}>
+        <Dialog open={isNewClientDialogOpen} onOpenChange={handleDialogChange}>
           <DialogTrigger asChild>
-            <Button onClick={() => { setEditingClient(null); setIsNewClientDialogOpen(true); }}>
+            <Button onClick={() => setIsNewClientDialogOpen(true)}>
               <PlusCircle className="mr-2 h-4 w-4" />
               Novo Cliente
             </Button>
@@ -118,7 +128,7 @@ export default function ClientsPage() {
               client={editingClient}
               technicians={franchiseTechnicians || []} 
               onSave={handleSaveClient}
-              onCancel={handleCloseDialog}
+              onCancel={() => handleDialogChange(false)}
             />
           </DialogContent>
         </Dialog>
