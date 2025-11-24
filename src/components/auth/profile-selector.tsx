@@ -22,9 +22,6 @@ export function ProfileSelector() {
   const getAvatar = (role: string) => {
     const idMap: Record<string, string> = {
         master: 'avatar1',
-        owner: 'avatar2',
-        technician: 'avatar3',
-        client: 'avatar5',
     }
     const placeholder = PlaceHolderImages.find(p => p.id === idMap[role]) || PlaceHolderImages.find(p => p.id === 'avatar1');
     return placeholder?.imageUrl;
@@ -33,14 +30,25 @@ export function ProfileSelector() {
   const isLoading = isLoggingIn;
 
   const masterUser = useMemo(() => userList.find(u => u.role === 'master'), []);
-  const otherUsers = useMemo(() => userList.filter(u => u.role !== 'master'), []);
-
+  
+  if (!masterUser) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Nenhum Perfil Disponível</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p className="text-center text-muted-foreground pt-4">Nenhum usuário de demonstração configurado.</p>
+            </CardContent>
+        </Card>
+    );
+  }
 
   return (
     <Card className="shadow-2xl">
       <CardHeader>
-        <CardTitle>Selecionar Perfil</CardTitle>
-        <CardDescription>Escolha um perfil de demonstração para entrar no sistema.</CardDescription>
+        <CardTitle>Entrar como Administrador</CardTitle>
+        <CardDescription>Clique no botão abaixo para entrar com o perfil Master.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading && (
@@ -50,9 +58,8 @@ export function ProfileSelector() {
             </div>
         )}
 
-        {!isLoading && masterUser && (
-           <>
-            <Button
+        {!isLoading && (
+           <Button
                 size="lg"
                 className="w-full h-18 justify-start p-4 gap-4 bg-primary/10 text-primary-foreground border-2 border-primary/50 hover:bg-primary/20"
                 onClick={() => handleLogin(masterUser)}
@@ -68,35 +75,7 @@ export function ProfileSelector() {
                 </div>
                 <Crown className="ml-auto h-6 w-6 text-yellow-400" />
             </Button>
-            <div className="flex items-center gap-2 py-2">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">Outros Perfis</span>
-                <Separator className="flex-1" />
-            </div>
-           </>
         )}
-
-        {!isLoading && otherUsers?.map((user) => (
-          <Button
-            key={user.id}
-            variant="outline"
-            className="w-full h-16 justify-start p-3 gap-4"
-            onClick={() => handleLogin(user)}
-            disabled={isLoading}
-          >
-            <Avatar className="h-10 w-10">
-                <AvatarImage src={getAvatar(user.role)} />
-                <AvatarFallback>{user.firstName.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col items-start">
-                <span className="font-semibold">{user.firstName} {user.lastName}</span>
-                <span className="text-sm text-muted-foreground capitalize">{user.role} ({user.franchiseId})</span>
-            </div>
-          </Button>
-        ))}
-         {!isLoading && !userList?.length && (
-            <p className="text-center text-muted-foreground pt-4">Nenhum usuário de demonstração encontrado.</p>
-         )}
       </CardContent>
     </Card>
   );

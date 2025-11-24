@@ -65,7 +65,7 @@ export interface Appointment {
   clientId: string;
   technicianId: string;
   franchiseId: string;
-ScheduledDateTime: string; // ISO string
+  scheduledDateTime: string; // ISO string
   status: AppointmentStatus;
   serviceReportId?: string;
 }

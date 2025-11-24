@@ -7,6 +7,10 @@ import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser } from '@/firebase';
 import { getAuth, signOut, signInWithEmailAndPassword, signInAnonymously, AuthError } from 'firebase/auth';
 import { users as demoUsers } from '@/lib/data';
+import { doc, getDoc } from "firebase/firestore";
+import { useFirestore } from '@/firebase/provider';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 interface AuthContextType {
   user: any | null; // Firebase Auth user
@@ -24,6 +28,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isUserLoading: isFirebaseUserLoading } = useUser();
+  const firestore = useFirestore();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -40,11 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isLoggedIn) {
       if (isAuthPage) {
-        // Determine redirect based on role
-        let redirect = '/dashboard'; // Default dashboard
-        if (userInfo.role === 'technician') {
-          redirect = '/dashboard/schedule';
-        }
+        let redirect = '/dashboard';
         router.replace(redirect);
       }
     } else {
@@ -60,18 +61,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getAuth();
     
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      const demoUser = demoUsers.find(u => u.email === email);
-      if (demoUser) {
-        setUserInfo(demoUser);
-        let redirect = '/dashboard';
-         if (demoUser.role === 'technician') {
-          redirect = '/dashboard/schedule';
-        }
-        return { ok: true, redirect };
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const authenticatedUser = userCredential.user;
+
+      if (!authenticatedUser || !firestore) {
+        throw new Error("Usuário ou Firestore não disponível.");
       }
-      await signOut(auth);
-      return { ok: false, error: "Perfil de demonstração não encontrado." };
+
+      const profileRef = doc(firestore, "users", authenticatedUser.uid);
+      const profileSnap = await getDoc(profileRef);
+
+      if (!profileSnap.exists()) {
+        await signOut(auth); // Log out user if profile doesn't exist
+        throw new Error("Perfil não encontrado no Firestore. Entre em contato com o suporte.");
+      }
+
+      const data = profileSnap.data() as UserInfo;
+
+      if (!data.role) {
+        throw new Error("O usuário não possui uma função atribuída. (role undefined)");
+      }
+      
+      setUserInfo(data);
+
+      let redirect = '/dashboard';
+      if (data.role === 'technician') {
+        redirect = '/dashboard/schedule';
+      }
+      
+      return { ok: true, redirect };
+
     } catch (err: any) {
       const errorMap: Record<string, string> = {
         "auth/invalid-email": "E-mail inválido.",
@@ -82,12 +101,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "auth/user-disabled": "Este usuário foi desativado.",
       };
       const errorMessage = errorMap[err.code] || err.message || "Erro desconhecido.";
-      setAuthError(err);
+      
+      if (err.code?.startsWith('auth/')) {
+        setAuthError(err);
+      } else if (firestore && err.message.includes('Firestore')) {
+          const profileRef = doc(firestore, "users", auth.currentUser?.uid || 'unknown-uid');
+          const contextualError = new FirestorePermissionError({
+            operation: 'get',
+            path: profileRef.path,
+          });
+          errorEmitter.emit('permission-error', contextualError);
+      }
+
       return { ok: false, error: errorMessage };
     } finally {
         setIsLoggingIn(false);
     }
-  }, [router]);
+  }, [firestore]);
 
   const anonymousLoginAs = useCallback(async (demoUser: UserInfo) => {
     setIsLoggingIn(true);
