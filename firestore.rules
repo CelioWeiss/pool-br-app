@@ -1,42 +1,12 @@
 
-/**
- * # Firestore Security Rules
- *
- * ## Core Philosophy
- * This ruleset enforces a franchise-centric, role-based access control model.
- * A user's access is primarily determined by their membership within a specific
- * franchise and their role ('owner', 'technician', etc.) within that franchise.
- * Data is strictly segregated by franchise, preventing any cross-franchise data access.
- *
- * ## Data Structure
- * The data is organized hierarchically. All operational data like users, clients,
- * and appointments is nested within a top-level `/franchises/{franchiseId}` collection.
- * There's also a top-level `/users` collection for profile lookups on login.
- *
- * ## Key Security Decisions
- * - **Franchise Isolation**: Most rules are scoped to a specific franchise ID from the
- *   request path. This is the primary security boundary.
- * - **Database-Based Access Control (DBAC)**: A user's permissions are derived from
- *   the `role` field in their document located at `/users/{userId}`.
- * - **Franchise Creation**: Any authenticated user can create a new franchise, and
- *   they are automatically assigned as the `ownerId` of that new franchise.
- * - **Default Read Access**: Within a franchise, all authenticated members of that
- *   franchise are granted read access to franchise-level data. Write access is more restrictive.
- * - **User Profile Access**: A user can always read their own profile from the top-level `/users`
- *   collection. This is crucial for the login flow to verify the user's role.
- *
- * ## Denormalization for Authorization
- * The `franchiseId` is denormalized (copied) onto every document within a franchise's
- * subcollections. This allows rules to validate relational integrity on write operations
- * without performing costly extra reads.
- */
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // -------------------------------------------------------------------------
+    // =============================
     // Helper Functions
-    // -------------------------------------------------------------------------
+    // =============================
 
     /**
      * Returns true if the user is authenticated.
@@ -46,181 +16,51 @@ service cloud.firestore {
     }
 
     /**
-     * Returns true if the requesting user's UID matches the provided userId.
-     * This is the fundamental check for document ownership.
-     * @param userId The user ID to check against the authenticated user.
+     * Returns true if the user's role is 'master'.
+     * This relies on a document in the /users collection.
      */
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isMaster() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master';
     }
 
     /**
-     * Retrieves the user's profile document data from the top-level users collection.
-     * This is the core of the role-based access control system.
-     */
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    /**
-     * Retrieves the role of the current user.
-     */
-    function getUserRole() {
-      return getUserData().role;
-    }
-    
-    /**
-     * Retrieves the franchise document data.
-     */
-    function getFranchiseData(franchiseId) {
-        return get(/databases/$(database)/documents/franchises/$(franchiseId)).data;
-    }
-
-
-    /**
-     * Checks if a user is a registered member of a given franchise.
-     * It checks the user's document in the top-level users collection.
-     * @param franchiseId The franchise to check membership in.
-     */
-    function isFranchiseMember(franchiseId) {
-      return isSignedIn() && getUserData().franchiseId == franchiseId;
-    }
-
-    /**
-     * Checks if the user is the direct owner of the franchise by checking the
-     * ownerId field on the franchise document itself.
-     */
-    function isDirectFranchiseOwner(franchiseId) {
-        return isSignedIn() && request.auth.uid == getFranchiseData(franchiseId).ownerId;
-    }
-
-    /**
-     * Checks if the user has the 'owner' role within the franchise.
-     * @param franchiseId The franchise context to check the role in.
+     * Returns true if the user is the owner of the franchise specified by franchiseId.
+     * This checks the ownerId field on the franchise document itself.
      */
     function isFranchiseOwner(franchiseId) {
-      return isFranchiseMember(franchiseId) && getUserRole() == 'owner';
+      return isSignedIn() && get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
     }
 
-    /**
-     * Checks if the user is considered 'staff' (owner or technician).
-     * This is used to grant write permissions on franchise-level data.
-     * @param franchiseId The franchise context to check the role in.
-     */
-    function isFranchiseStaff(franchiseId) {
-      let role = getUserRole();
-      return isFranchiseMember(franchiseId) && (role == 'owner' || role == 'technician');
-    }
-
-    /**
-     * Validates that the incoming document data has a franchiseId that
-     * matches the franchiseId from the document path.
-     * @param franchiseId The franchiseId from the path to validate against.
-     */
-    function hasCorrectFranchiseIdOnCreate(franchiseId) {
-      return request.resource.data.franchiseId == franchiseId;
-    }
-
-    /**
-     * Validates that the franchiseId field is not being changed during an update.
-     */
-    function hasImmutableFranchiseId() {
-      return request.resource.data.franchiseId == resource.data.franchiseId;
-    }
-
-    /**
-     * Validates that the incoming document's id matches the documentId from the path.
-     * Used for user profiles to ensure data integrity.
-     * @param docId The ID from the path to validate against.
-     */
-    function hasCorrectIdOnCreate(docId) {
-      return request.resource.data.id == docId;
-    }
-
-    /**
-     * Validates that the internal id field is not being changed during an update.
-     */
-    function hasImmutableId() {
-      return request.resource.data.id == resource.data.id;
-    }
-
-    // -------------------------------------------------------------------------
+    // =============================
     // Collection Rules
-    // -------------------------------------------------------------------------
+    // =============================
 
     /**
-     * @description Top-level user collection. Stores user profiles.
-     * A user can always read their own profile, which is essential for login.
-     * A user can create their own profile, or the seeding script can create it if the IDs match.
-     * A user can update their own profile.
-     * Listing all users is restricted to 'master' role.
-     * @path /users/{userId}
+     * @description Top-level user collection.
+     * A user can read/write their own profile.
+     * The master user can read/write any user profile.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId) || getUserRole() == 'master';
-      allow list: if isSignedIn() && getUserRole() == 'master';
-      allow create: if isOwner(userId) || hasCorrectIdOnCreate(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId) || getUserRole() == 'master';
+      allow read, write: if isMaster() || (isSignedIn() && request.auth.uid == userId);
     }
 
     /**
-     * @description Controls access to Franchise documents.
-     * Franchise information is public to read, but creating, updating, and
-     * deleting a franchise is restricted.
-     * @path /franchises/{franchiseId}
+     * @description Franchise documents and their subcollections.
+     * Access is granted to the master user or the owner of the specific franchise.
      */
     match /franchises/{franchiseId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource != null && isOwner(resource.data.ownerId);
+      // Allow read/write access on the franchise document itself
+      allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      allow list: if isSignedIn(); // Any signed in user can list franchises
 
-        /**
-         * @description Controls access to Client documents within a franchise.
-         * Any member of the franchise can read client data, but only staff (owners, technicians) can modify it.
-         * @path /franchises/{franchiseId}/clients/{clientId}
-         */
-        match /clients/{clientId} {
-          allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
-          allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-          allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
-        }
-
-        /**
-         * @description Controls access to Technician documents within a franchise.
-         * Any member of the franchise can read technician data, but only the franchise owner can modify it.
-         * @path /franchises/{franchiseId}/technicians/{technicianId}
-         */
-        match /technicians/{technicianId} {
-          allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
-          allow create: if isFranchiseOwner(franchiseId) || isDirectFranchiseOwner(franchiseId);
-          allow update, delete: if isSignedIn() && resource != null && (isFranchiseOwner(franchiseId) || isDirectFranchiseOwner(franchiseId));
-        }
-
-
-        /**
-         * @description Controls access to Appointment documents within a franchise.
-         * Any member of the franchise can read appointment data, but only staff can modify it.
-         * @path /franchises/{franchiseId}/appointments/{appointmentId}
-         */
-        match /appointments/{appointmentId} {
-          allow get, list: if isFranchiseMember(franchiseId);
-          allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-          allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
-        }
-
-        /**
-         * @description Controls access to Service Report documents within a franchise.
-         * Any member of the franchise can read reports, but only staff can modify them.
-         * @path /franchises/{franchiseId}/serviceReports/{serviceReportId}
-         */
-        match /serviceReports/{serviceReportId} {
-          allow get, list: if isFranchiseMember(franchiseId);
-          allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-          allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
-        }
+      /**
+       * @description Rules for all subcollections within a franchise.
+       * This single rule applies to clients, technicians, appointments, etc.
+       * Access is granted if the user is the master admin or the owner of the parent franchise.
+       */
+      match /{subcollection}/{docId} {
+        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      }
     }
   }
 }
-
-    
