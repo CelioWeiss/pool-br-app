@@ -11,7 +11,7 @@
  *
  * Key Security Decisions:
  * - User Data Privacy: Users can only read and modify their own profile data located at /users/{userId}.
- *   Listing all users is explicitly disabled to protect user privacy.
+ *   Listing all users is explicitly disabled to protect user privacy, except for the profile selector on login.
  * - Franchise Ownership: The /franchises/{franchiseId} document contains an `ownerId` field. Only the user
  *   matching this ID can modify or delete the franchise document, ensuring clear administrative control.
  * - Franchise Membership: Access to a franchise's subcollections (like clients or technicians) is granted
@@ -70,7 +70,7 @@ service cloud.firestore {
 
     /**
      * @description Manages user profiles. Users can create, read, and update their own profile.
-     *              Listing all users is forbidden to protect user privacy.
+     *              Listing is allowed for authenticated users for the profile selector.
      * @path /users/{userId}
      * @allow (create, get, update) A user with `auth.uid: 'u123'` can create, get, and update `/users/u123`.
      * @deny (get) A user with `auth.uid: 'u456'` cannot get or update `/users/u123`.
@@ -78,7 +78,7 @@ service cloud.firestore {
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if false;
+      allow list: if isSignedIn();
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
       allow delete: if isOwner(userId) && resource != null;
