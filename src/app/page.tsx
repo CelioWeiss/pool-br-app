@@ -1,56 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
 import { LoginForm } from '@/components/auth/login-form';
 import Image from 'next/image';
-import { useFirestore } from '@/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-
-
-// Temporary function to seed the master user in the correct /users collection for login purposes.
-async function seedMasterUser(firestore: any) {
-    if (!firestore) return;
-    const masterUserId = 'master-admin-01'; // This ID MUST match the user in Firebase Auth
-    const userRef = doc(firestore, 'users', masterUserId);
-    
-    try {
-        const userSnap = await getDoc(userRef);
-
-        if (!userSnap.exists()) {
-            console.log("Master user profile not found, creating one in /users collection...");
-            // IMPORTANT: You must create a user in Firebase Authentication with the UID 'master-admin-01'
-            // and the email 'master@poolbr.com' for this to work.
-            const masterUser = {
-                id: masterUserId,
-                firstName: 'Master',
-                lastName: 'Admin',
-                email: 'master@poolbr.com',
-                role: 'master',
-                franchiseId: null,
-                createdAt: new Date().toISOString(),
-                isActive: true,
-            };
-            await setDoc(userRef, masterUser);
-            console.log("Master user profile created successfully in Firestore at /users/master-admin-01.");
-        }
-    } catch (error) {
-         console.error("Error seeding master user:", error);
-    }
-}
-
 
 export default function Home() {
-  const firestore = useFirestore();
-
-  // Seed master user on component mount if it doesn't exist.
-  // Note: This only creates the Firestore document. The actual user must exist in Firebase Auth.
-  useEffect(() => {
-    if (firestore) {
-      seedMasterUser(firestore);
-    }
-  }, [firestore]);
-
-
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-background">
       <div className="flex flex-col items-center space-y-4">
