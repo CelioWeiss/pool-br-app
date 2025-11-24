@@ -57,10 +57,11 @@ export default function FranchisesPage() {
       const franchiseRef = doc(collection(firestore, 'franchises'));
       const [ownerFirstName, ...ownerLastNameParts] = data.ownerName.split(' ');
       
+      // Ensure the ownerId in the franchise document is the UID from Auth
       const newFranchise: Omit<Franchise, 'id'> = {
         name: data.franchiseName,
         address: `${data.city}, ${data.state}`,
-        ownerId: ownerUid,
+        ownerId: ownerUid, // CRITICAL: Use the created user's UID here.
         contactEmail: data.ownerEmail,
         contactPhone: data.ownerPhone,
         createdAt: new Date().toISOString(),
