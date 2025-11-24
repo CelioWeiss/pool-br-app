@@ -12,12 +12,12 @@ import { Spinner } from '@/components/ui/spinner';
 export function LoginForm() {
   const { login, authError, isLoggingIn } = useAuth();
   const [email, setEmail] = React.useState('master@poolbr.com');
-  const [password, setPassword] = React.useState(''); // Senha padrão removida
+  const [password, setPassword] = React.useState('');
   const { toast } = useToast();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    await login(email, password);
+    login(email, password);
   };
   
   React.useEffect(() => {
