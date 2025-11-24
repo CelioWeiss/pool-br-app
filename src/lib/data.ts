@@ -10,7 +10,7 @@ export const users: User[] = [
   { id: 'user-client-1', name: 'Família Silva', email: 'familia.silva@email.com', role: 'client', franchiseId: 'franchise-sp', avatarUrl: PlaceHolderImages.find(p => p.id === 'avatar5')?.imageUrl || '' },
 ];
 
-export const franchises: Franchise[] = [
+export let franchises: Franchise[] = [
   { id: 'franchise-sp', name: 'Pool BR - São Paulo', ownerId: 'user-owner-1', region: 'São Paulo, SP' },
   { id: 'franchise-rj', name: 'Pool BR - Rio de Janeiro', ownerId: 'user-owner-2', region: 'Rio de Janeiro, RJ' },
   { id: 'franchise-mg', name: 'Pool BR - Belo Horizonte', ownerId: 'user-owner-3', region: 'Belo Horizonte, MG' },

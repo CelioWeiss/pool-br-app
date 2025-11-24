@@ -16,6 +16,8 @@ export interface Franchise {
   region: string;
 }
 
+export type NewFranchiseData = Omit<Franchise, 'id'>
+
 export type ContractType = 'mensal' | 'quinzenal' | 'avulso';
 export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';
 

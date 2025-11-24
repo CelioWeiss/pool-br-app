@@ -1,22 +1,41 @@
 "use client";
 
+import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { franchises } from '@/lib/data';
+import type { NewFranchiseData } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { PlusCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { NewFranchiseForm } from '@/components/dashboard/franchises/new-franchise-form';
+import { useToast } from '@/hooks/use-toast';
 
 export default function FranchisesPage() {
   const { hasRole } = useAuth();
-  const router = useRouter();
+  const { toast } = useToast();
+  const [isNewFranchiseDialogOpen, setIsNewFranchiseDialogOpen] = useState(false);
+  const [franchiseList, setFranchiseList] = useState(franchises);
 
   if (!hasRole('master')) {
     // Or a redirect, or an "Access Denied" component
     return <p>Acesso negado.</p>;
   }
+
+  const handleSaveFranchise = (data: NewFranchiseData) => {
+    const newFranchise = {
+      ...data,
+      id: `franchise-${Date.now()}`,
+    };
+    setFranchiseList(prev => [...prev, newFranchise]);
+    toast({
+      title: "Franquia Criada!",
+      description: `A franquia ${data.name} foi adicionada com sucesso.`,
+    });
+    setIsNewFranchiseDialogOpen(false);
+  };
 
   return (
     <div className="space-y-8">
@@ -25,10 +44,23 @@ export default function FranchisesPage() {
           <h1 className="text-3xl font-bold tracking-tight">Gerenciamento de Franquias</h1>
           <p className="text-muted-foreground">Crie e gerencie as franquias da Pool BR.</p>
         </div>
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Nova Franquia
-        </Button>
+        <Dialog open={isNewFranchiseDialogOpen} onOpenChange={setIsNewFranchiseDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Nova Franquia
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Adicionar Nova Franquia</DialogTitle>
+              <DialogDescription>
+                Preencha os dados abaixo para cadastrar uma nova franquia.
+              </DialogDescription>
+            </DialogHeader>
+            <NewFranchiseForm onSave={handleSaveFranchise} onCancel={() => setIsNewFranchiseDialogOpen(false)} />
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card>
@@ -47,7 +79,7 @@ export default function FranchisesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {franchises.map((franchise) => (
+              {franchiseList.map((franchise) => (
                 <TableRow key={franchise.id}>
                   <TableCell className="font-medium">{franchise.name}</TableCell>
                   <TableCell>{franchise.region}</TableCell>
