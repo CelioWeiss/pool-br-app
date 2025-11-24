@@ -141,7 +141,7 @@ service cloud.firestore {
      * @path /users/{userId}
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get: if isOwner(userId) || getUserRole() == 'master';
       allow list: if isSignedIn() && getUserRole() == 'master';
       allow create: if isOwner(userId);
       allow update: if isOwner(userId);
