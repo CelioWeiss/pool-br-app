@@ -4,8 +4,7 @@ import React, { createContext, useContext, useState, ReactNode, useMemo, useCall
 import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
-import { getAuth, signInAnonymously, signOut, updateProfile } from 'firebase/auth';
+import { getAuth, signInAnonymously, signOut } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
 
 
@@ -13,7 +12,6 @@ interface AuthContextType {
   user: any | null;
   userInfo: UserInfo | null;
   isUserLoading: boolean;
-  login: (email: string, pass: string) => Promise<void>;
   anonymousLoginAs: (targetUser: UserInfo) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
@@ -26,6 +24,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isUserLoading, userError } = useUser();
   const firestore = useFirestore();
   const [authError, setAuthError] = useState<Error | null>(null);
+  const router = useRouter();
+  const pathname = usePathname();
 
   // HACK: For anonymous "impersonation", we check local storage.
   const impersonatedId = typeof window !== 'undefined' ? localStorage.getItem('impersonatedUserId') : null;
@@ -34,14 +34,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (impersonatedId) {
         return doc(firestore, 'users', impersonatedId);
     }
-    if (!user) return null;
+    // If not impersonating, we don't need user info on the auth pages.
+    if (!user || pathname === '/') return null;
     return doc(firestore, 'users', user.uid);
-  }, [firestore, user, impersonatedId]);
+  }, [firestore, user, impersonatedId, pathname]);
   
   const { data: finalUserInfo, isLoading: isFinalUserInfoLoading } = useDoc<UserInfo>(finalUserDocRef);
-  
-  const router = useRouter();
-  const pathname = usePathname();
+
+  // Auto-login anonymously if not logged in and on the login page
+  useEffect(() => {
+      const auth = getAuth();
+      if (!user && !isUserLoading && pathname === '/') {
+          signInAnonymously(auth).catch(e => {
+              console.error("Auto anonymous login failed:", e);
+              setAuthError(e);
+          });
+      }
+  }, [user, isUserLoading, pathname]);
   
   useEffect(() => {
     const totalLoading = isUserLoading || isFinalUserInfoLoading;
@@ -52,11 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const isAuthPage = pathname === '/';
     const isDashboardPage = pathname.startsWith('/dashboard');
 
-    if (user && finalUserInfo) {
+    // If we have impersonation data or real user data, we are "logged in"
+    const isLoggedIn = !!finalUserInfo;
+
+    if (isLoggedIn) {
       if (isAuthPage) {
         router.replace('/dashboard');
       }
     } else {
+      // If not logged in and trying to access dashboard, go to login
       if (isDashboardPage) {
         router.replace('/');
       }
@@ -67,22 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthError(userError);
   }, [userError]);
 
-  const login = useCallback(async (email: string, pass: string) => {
-    const auth = getAuth();
-    initiateEmailSignIn(auth, email, pass);
-  }, []);
 
   const anonymousLoginAs = useCallback(async (targetUser: UserInfo) => {
-    const auth = getAuth();
-    try {
-      await signInAnonymously(auth);
-      // This is a workaround: we store the ID of the user we want to be.
-      localStorage.setItem('impersonatedUserId', targetUser.id);
-      // Force a reload or redirect to ensure the new state is picked up
-      router.push('/dashboard');
-    } catch (e) {
-      console.error("Anonymous login failed", e);
-    }
+    // We are already logged in anonymously, just need to set the impersonation
+    localStorage.setItem('impersonatedUserId', targetUser.id);
+    // Force a reload or redirect to ensure the new state is picked up
+    router.push('/dashboard');
   }, [router]);
 
 
@@ -104,12 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     userInfo: finalUserInfo,
     isUserLoading: isUserLoading || isFinalUserInfoLoading,
-    login,
     anonymousLoginAs,
     logout,
     hasRole,
     authError,
-  }), [user, finalUserInfo, isUserLoading, isFinalUserInfoLoading, login, anonymousLoginAs, logout, hasRole, authError]);
+  }), [user, finalUserInfo, isUserLoading, isFinalUserInfoLoading, anonymousLoginAs, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>

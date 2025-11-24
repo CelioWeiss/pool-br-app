@@ -13,17 +13,19 @@ import { Spinner } from '../ui/spinner';
 import { useRouter } from 'next/navigation';
 
 export function ProfileSelector() {
-  const { anonymousLoginAs, isUserLoading } = useAuth();
+  const { user, anonymousLoginAs, isUserLoading } = useAuth();
   const firestore = useFirestore();
-  const router = useRouter();
 
-  const usersQuery = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
+  const usersQuery = useMemoFirebase(() => {
+      // Wait for anonymous user to be ready
+      if (!user) return null;
+      return collection(firestore, 'users')
+    }, [firestore, user]);
+  
   const { data: userList, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
   const handleLogin = async (user: User) => {
     await anonymousLoginAs(user);
-    // The redirect is handled by the AuthProvider now
-    router.push('/dashboard');
   };
 
   const getAvatar = (role: string) => {
@@ -36,7 +38,7 @@ export function ProfileSelector() {
     return PlaceHolderImages.find(p => p.id === idMap[role])?.imageUrl || PlaceHolderImages.find(p => p.id === 'avatar1')?.imageUrl;
   }
 
-  const isLoading = isUserLoading || areUsersLoading;
+  const isLoading = isUserLoading || areUsersLoading || !user;
 
   return (
     <Card className="shadow-2xl">
