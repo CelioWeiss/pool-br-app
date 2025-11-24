@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
@@ -34,22 +34,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: userInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
   
   const router = useRouter();
+  const pathname = usePathname();
   
   useEffect(() => {
-    if (!isUserLoading && !isUserInfoLoading && user && userInfo) {
-      if(window.location.pathname === '/') {
-          router.push('/dashboard');
-      }
-    } else if (!isUserLoading && !user) {
-       if(window.location.pathname.startsWith('/dashboard')) {
-          router.push('/');
-       }
+    // Wait until loading is fully complete before redirecting
+    if (isUserLoading || isUserInfoLoading) {
+      return;
     }
-  }, [user, userInfo, isUserLoading, isUserInfoLoading, router])
+    
+    const isAuthPage = pathname === '/';
+    const isDashboardPage = pathname.startsWith('/dashboard');
+
+    if (user && userInfo) {
+      // If user is logged in and on the login page, redirect to dashboard
+      if (isAuthPage) {
+        router.replace('/dashboard');
+      }
+    } else {
+      // If user is not logged in and trying to access dashboard, redirect to login
+      if (isDashboardPage) {
+        router.replace('/');
+      }
+    }
+  }, [user, userInfo, isUserLoading, isUserInfoLoading, router, pathname]);
   
   useEffect(() => {
     setAuthError(userError);
-  }, [userError])
+  }, [userError]);
 
   const login = useCallback(async (email: string, pass: string) => {
     const auth = getAuth();
@@ -59,8 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     const auth = getAuth();
-    signOut(auth);
-    router.push('/');
+    signOut(auth).then(() => {
+      // Ensure redirect happens after sign-out is complete.
+      router.push('/');
+    });
   }, [router]);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
