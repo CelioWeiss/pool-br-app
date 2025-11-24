@@ -2,8 +2,9 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Users, Wrench, Calendar, Droplets } from 'lucide-react';
+import { Building2, Users, Wrench, Calendar, Droplets, User, DollarSign, FileText } from 'lucide-react';
 import { clients, franchises, technicians, appointments } from '@/lib/data';
+import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
 
 const StatCard = ({ title, value, icon: Icon }: { title: string, value: string | number, icon: React.ElementType }) => (
   <Card>
@@ -21,6 +22,10 @@ export default function DashboardPage() {
   const { user, hasRole } = useAuth();
 
   if (!user) return null;
+
+  if (hasRole('client')) {
+    return <ClientDashboard />;
+  }
 
   const today = new Date();
   const upcomingAppointments = appointments.filter(a => new Date(a.date) >= today).length;
@@ -44,12 +49,6 @@ export default function DashboardPage() {
         )}
         {hasRole(['owner', 'technician']) && (
           <StatCard title="Serviços Agendados" value={upcomingAppointments} icon={Calendar} />
-        )}
-         {hasRole('client') && (
-          <StatCard title="Próxima Limpeza" value={new Date(new Date().setDate(today.getDate() + 3)).toLocaleDateString()} icon={Calendar} />
-        )}
-         {hasRole('client') && (
-          <StatCard title="Qualidade da Água" value="Excelente" icon={Droplets} />
         )}
       </div>
 
