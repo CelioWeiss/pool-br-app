@@ -65,7 +65,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await signInWithEmailAndPassword(auth, email, password);
       // onAuthStateChanged will handle the rest
     } catch (e: any) {
-      console.error("Login failed:", e);
       setAuthError(e);
     }
   }, []);
