@@ -67,14 +67,15 @@ export default function FranchisesPage() {
       };
       batch.set(franchiseRef, newFranchise);
 
-      // 4. Create User Profile document
+      // 4. Create User Profile document with the correct franchiseId
       const userProfileRef = doc(firestore, 'users', ownerUid);
-      const newUserProfile: Omit<UserInfo, 'id'> = {
+      const newUserProfile: UserInfo = {
+        id: ownerUid,
         firstName: ownerFirstName,
         lastName: ownerLastNameParts.join(' ') || '',
         email: data.ownerEmail,
         role: 'owner',
-        franchiseId: franchiseRef.id,
+        franchiseId: franchiseRef.id, // CRITICAL: Assign the new franchise ID here
         isActive: true,
         createdAt: new Date().toISOString(),
       };
