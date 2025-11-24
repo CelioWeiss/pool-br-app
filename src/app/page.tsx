@@ -27,8 +27,6 @@ async function seedMasterUser(firestore: any) {
                 email: 'master@poolbr.com',
                 role: 'master',
                 franchiseId: null,
-                isActive: true,
-                createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, masterUser);
             console.log("Master user created successfully in Firestore.");
