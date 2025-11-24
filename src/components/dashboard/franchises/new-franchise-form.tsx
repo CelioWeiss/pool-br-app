@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { DialogFooter } from '@/components/ui/dialog';
 import type { NewFranchiseData } from '@/lib/types';
 import { users } from '@/lib/data';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { states, cities } from '@/lib/brazil-locations';
 
 interface NewFranchiseFormProps {
   onSave: (data: NewFranchiseData) => void;
@@ -16,9 +18,15 @@ interface NewFranchiseFormProps {
 export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
     const [franchiseName, setFranchiseName] = useState('');
     const [ownerName, setOwnerName] = useState('');
-    const [region, setRegion] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
+    const [selectedState, setSelectedState] = useState<string | undefined>(undefined);
+    const [selectedCity, setSelectedCity] = useState<string | undefined>(undefined);
+
+    const handleStateChange = (stateAbbr: string) => {
+        setSelectedState(stateAbbr);
+        setSelectedCity(undefined); // Reset city when state changes
+    };
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -40,7 +48,7 @@ export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
         const franchiseData: NewFranchiseData = {
             name: franchiseName,
             ownerId: ownerId,
-            region,
+            region: `${selectedCity}, ${selectedState}`,
         };
         onSave(franchiseData);
     };
@@ -65,9 +73,33 @@ export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
                     <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} required />
                 </div>
             </div>
-             <div className="grid gap-2">
-                <Label htmlFor="region">Região</Label>
-                <Input id="region" value={region} onChange={e => setRegion(e.target.value)} placeholder="Ex: Campinas, SP" required />
+             <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label htmlFor="state">Estado</Label>
+                    <Select value={selectedState} onValueChange={handleStateChange} required>
+                        <SelectTrigger id="state">
+                            <SelectValue placeholder="Selecione o estado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {states.map(state => (
+                                <SelectItem key={state.abbr} value={state.abbr}>{state.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="city">Cidade</Label>
+                    <Select value={selectedCity} onValueChange={setSelectedCity} disabled={!selectedState} required>
+                        <SelectTrigger id="city">
+                            <SelectValue placeholder="Selecione a cidade" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {selectedState && cities[selectedState]?.map(city => (
+                                <SelectItem key={city} value={city}>{city}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
             
             <DialogFooter className="mt-4">
