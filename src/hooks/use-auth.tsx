@@ -61,13 +61,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // Let onAuthStateChanged handle the user object and useEffect handle redirection
-      // Find and set the corresponding demo user
       const demoUser = demoUsers.find(u => u.email === email);
       if (demoUser) {
         setUserInfo(demoUser);
-        return { ok: true };
+        let redirect = '/dashboard';
+         if (demoUser.role === 'technician') {
+          redirect = '/dashboard/schedule';
+        }
+        return { ok: true, redirect };
       }
+      await signOut(auth);
       return { ok: false, error: "Perfil de demonstração não encontrado." };
     } catch (err: any) {
       const errorMap: Record<string, string> = {
@@ -84,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
         setIsLoggingIn(false);
     }
-  }, []);
+  }, [router]);
 
   const anonymousLoginAs = useCallback(async (demoUser: UserInfo) => {
     setIsLoggingIn(true);
