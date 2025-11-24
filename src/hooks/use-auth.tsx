@@ -1,19 +1,21 @@
 
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import type { User as UserInfo, UserRole } from '@/lib/types';
-import { useUser } from '@/firebase';
-import { getAuth, signOut, signInAnonymously, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
-import { users } from '@/lib/data';
+import { useRouter } from 'next/navigation';
+import type { UserInfo, UserRole } from '@/lib/types';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
+import { doc } from 'firebase/firestore';
+
 
 interface AuthContextType {
   user: FirebaseUser | null;
   userInfo: UserInfo | null;
   isUserLoading: boolean;
   isLoggingIn: boolean;
-  anonymousLoginAs: (user: UserInfo) => Promise<void>;
+  login: (email: string, pass: string) => Promise<{ ok: boolean, error?: string, redirect?: string }>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   authError: AuthError | null;
@@ -22,64 +24,42 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [isUserLoading, setIsUserLoading] = useState(true);
+  const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } = useUser();
+  const firestore = useFirestore();
+
+  const userDocRef = useMemoFirebase(() => 
+    firestore && firebaseUser ? doc(firestore, 'users', firebaseUser.uid) : null,
+    [firestore, firebaseUser]
+  );
+  const { data: userInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
+  
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const router = useRouter();
-  const pathname = usePathname();
 
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        // If there's a Firebase user but no local userInfo, it might be from a real session.
-        // For this demo, we prioritize the simulated login.
-        // If userInfo is already set by anonymousLoginAs, we don't overwrite it.
-        if (!userInfo) {
-            // This part is for potential future real logins. For now, it keeps the session.
-            setUser(firebaseUser);
-        }
-      } else {
-        // User logged out
-        setUser(null);
-        setUserInfo(null);
-      }
-      setIsUserLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [userInfo]);
-
-  const anonymousLoginAs = useCallback(async (userToLogin: UserInfo) => {
+  const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
     setIsLoggingIn(true);
     setAuthError(null);
     const auth = getAuth();
     try {
-        const userCredential = await signInAnonymously(auth);
-        setUser(userCredential.user);
-        setUserInfo(userToLogin); // Directly set the user info from the selection
-        
-        let redirect = '/dashboard';
-        if (userToLogin.role === 'technician') {
-          redirect = '/dashboard/schedule';
-        }
-        router.push(redirect);
-
+      await signInWithEmailAndPassword(auth, email, pass);
+      // onIdTokenChanged and useDoc will handle the rest
+      setIsLoggingIn(false);
+      return { ok: true, redirect: '/dashboard' };
     } catch (err: any) {
-        console.error("Anonymous login failed:", err);
-        setAuthError(err);
-    } finally {
-        setIsLoggingIn(false);
+      console.error("Login failed:", err);
+      setAuthError(err);
+      setIsLoggingIn(false);
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        return { ok: false, error: 'E-mail ou senha inválidos.' };
+      }
+      return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
     }
   }, [router]);
 
   const logout = useCallback(() => {
     const auth = getAuth();
     signOut(auth).then(() => {
-        setUserInfo(null); // Clear local user profile
-        setUser(null);
         router.push('/');
     });
   }, [router]);
@@ -91,15 +71,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [userInfo]);
   
   const value = useMemo(() => ({
-    user,
-    userInfo,
-    isUserLoading,
+    user: firebaseUser,
+    userInfo: userInfo || null,
+    isUserLoading: isFirebaseUserLoading || isUserInfoLoading,
     isLoggingIn,
-    anonymousLoginAs,
+    login,
     logout,
     hasRole,
     authError,
-  }), [user, userInfo, isUserLoading, isLoggingIn, anonymousLoginAs, logout, hasRole, authError]);
+  }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isLoggingIn, login, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>

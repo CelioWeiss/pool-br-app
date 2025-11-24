@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import type { NewFranchiseData, Franchise } from '@/lib/types';
+import type { NewFranchiseData, Franchise, UserInfo } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,55 +13,109 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { NewFranchiseForm } from '@/components/dashboard/franchises/new-franchise-form';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, addDoc, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useAuth as useFirebaseAuth } from '@/firebase';
+import { collection, doc, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { useCollection } from '@/firebase';
 import { Spinner } from '@/components/ui/spinner';
+import type { NewFranchiseFormData } from '@/components/dashboard/franchises/new-franchise-form';
 
 export default function FranchisesPage() {
-  const { userInfo, hasRole } = useAuth();
+  const { hasRole } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
+  const auth = useFirebaseAuth();
 
-  const franchisesCollection = useMemoFirebase(() => 
+  const franchisesCollection = useMemo(() => 
     firestore ? collection(firestore, 'franchises') : null
   , [firestore]);
 
   const { data: franchiseList, isLoading } = useCollection<Franchise>(franchisesCollection);
 
   const [isNewFranchiseDialogOpen, setIsNewFranchiseDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [franchiseToDelete, setFranchiseToDelete] = useState<Franchise | null>(null);
 
   if (!hasRole('master')) {
     return <p>Acesso negado.</p>;
   }
 
-  const handleSaveFranchise = async (data: NewFranchiseData) => {
-    if (!firestore) return;
+  const handleSaveFranchise = async (data: NewFranchiseFormData) => {
+    if (!firestore || !auth) return;
+    
+    setIsSaving(true);
+    
     try {
-      await addDoc(collection(firestore, 'franchises'), data);
+      // 1. Create the user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, data.ownerEmail, data.password);
+      const ownerUid = userCredential.user.uid;
+
+      // 2. Prepare Firestore batch write
+      const batch = writeBatch(firestore);
+
+      // 3. Create Franchise document
+      const franchiseRef = doc(collection(firestore, 'franchises'));
+      const [ownerFirstName, ...ownerLastNameParts] = data.ownerName.split(' ');
+      
+      const newFranchise: Omit<Franchise, 'id'> = {
+        name: data.franchiseName,
+        address: `${data.city}, ${data.state}`,
+        ownerId: ownerUid,
+        contactEmail: data.ownerEmail,
+        contactPhone: data.ownerPhone,
+        createdAt: new Date().toISOString(),
+      };
+      batch.set(franchiseRef, newFranchise);
+
+      // 4. Create User Profile document
+      const userProfileRef = doc(firestore, 'users', ownerUid);
+      const newUserProfile: Omit<UserInfo, 'id'> = {
+        firstName: ownerFirstName,
+        lastName: ownerLastNameParts.join(' ') || '',
+        email: data.ownerEmail,
+        role: 'owner',
+        franchiseId: franchiseRef.id,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      batch.set(userProfileRef, newUserProfile);
+      
+      // 5. Commit batch write
+      await batch.commit();
+
       toast({
-        title: "Franquia Criada!",
-        description: `A franquia ${data.name} foi adicionada com sucesso.`,
+        title: "Franquia e Proprietário Criados!",
+        description: `A franquia ${data.franchiseName} foi adicionada com sucesso.`,
       });
       setIsNewFranchiseDialogOpen(false);
-    } catch (error) {
-      console.error("Error creating franchise: ", error);
+    } catch (error: any) {
+      console.error("Error creating franchise and user: ", error);
+      let description = "Ocorreu um erro ao salvar a nova franquia.";
+      if (error.code === 'auth/email-already-in-use') {
+        description = "Este e-mail já está em uso por outro usuário.";
+      } else if (error.code === 'auth/weak-password') {
+        description = "A senha é muito fraca. Use pelo menos 6 caracteres.";
+      }
+      
       toast({
         variant: 'destructive',
         title: "Erro ao criar franquia",
-        description: "Ocorreu um erro ao salvar a nova franquia.",
+        description: description,
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleDeleteFranchise = async () => {
     if (!franchiseToDelete || !firestore) return;
     try {
+      // Note: This only deletes the franchise document.
+      // A complete solution would involve a Cloud Function to delete all associated data (users, clients, etc.)
       await deleteDoc(doc(firestore, 'franchises', franchiseToDelete.id));
       toast({
         title: "Franquia Excluída!",
         description: `A franquia ${franchiseToDelete.name} foi removida.`,
-        variant: 'destructive',
       });
     } catch(error) {
        console.error("Error deleting franchise: ", error);
@@ -93,10 +148,14 @@ export default function FranchisesPage() {
               <DialogHeader>
                 <DialogTitle>Adicionar Nova Franquia</DialogTitle>
                 <DialogDescription>
-                  Preencha os dados abaixo para cadastrar uma nova franquia.
+                  Preencha os dados para cadastrar uma nova franquia e o perfil de seu proprietário.
                 </DialogDescription>
               </DialogHeader>
-              <NewFranchiseForm onSave={handleSaveFranchise} onCancel={() => setIsNewFranchiseDialogOpen(false)} />
+              <NewFranchiseForm 
+                onSave={handleSaveFranchise} 
+                onCancel={() => setIsNewFranchiseDialogOpen(false)}
+                isSaving={isSaving}
+              />
             </DialogContent>
           </Dialog>
         </div>
@@ -130,7 +189,7 @@ export default function FranchisesPage() {
                         <Badge variant="outline">{franchise.ownerId}</Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        {/* <Button variant="ghost" size="sm">Editar</Button> */}
+                        <Button variant="ghost" size="sm" disabled>Editar</Button>
                         <Button variant="destructive" size="sm" onClick={() => setFranchiseToDelete(franchise)}>
                           <Trash2 className="mr-2 h-4 w-4" />
                           Excluir
@@ -155,7 +214,7 @@ export default function FranchisesPage() {
             <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
               Esta ação não pode ser desfeita. Isso excluirá permanentemente a franquia
-              <span className="font-bold"> {franchiseToDelete?.name}</span> e todos os seus dados associados.
+              <span className="font-bold"> {franchiseToDelete?.name}</span>. A conta do proprietário não será removida.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

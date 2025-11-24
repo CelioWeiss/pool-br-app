@@ -1,6 +1,7 @@
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
-export interface User {
+export interface UserInfo {
   id: string;
   firstName: string;
   lastName: string;
