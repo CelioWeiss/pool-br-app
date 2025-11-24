@@ -1,19 +1,20 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Technician } from '@/lib/types';
+import type { Technician, Client } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, X } from 'lucide-react';
 
 interface NewClientFormProps {
   technicians: Technician[];
   onClientCreated: () => void;
+  client?: Client | null;
 }
 
 const daysOfWeek = [
@@ -26,10 +27,19 @@ const daysOfWeek = [
   { id: 'domingo', label: 'Domingo' },
 ];
 
-export function NewClientForm({ technicians, onClientCreated }: NewClientFormProps) {
+export function NewClientForm({ technicians, onClientCreated, client = null }: NewClientFormProps) {
     const { toast } = useToast();
     const [selectedDays, setSelectedDays] = useState<string[]>([]);
     const [addresses, setAddresses] = useState<string[]>(['']);
+    
+    useEffect(() => {
+        if (client) {
+            // This is a simplified version. In a real app, you'd handle multiple addresses and days.
+            setAddresses(client.address ? [client.address] : ['']);
+            // Assuming visitDays would be part of the client object
+            // setSelectedDays(client.visitDays || []);
+        }
+    }, [client]);
 
     const handleDayChange = (dayId: string) => {
         setSelectedDays(prev => 
@@ -66,11 +76,20 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
         technicianId: formData.get('technicianId'),
         visitDays: selectedDays,
     };
-    console.log("Novo cliente:", clientData);
-    toast({
-        title: "Cliente Criado!",
-        description: "O novo cliente foi adicionado com sucesso.",
-    });
+
+    if (client) {
+        console.log("Cliente atualizado:", { ...client, ...clientData });
+        toast({
+            title: "Cliente Atualizado!",
+            description: "Os dados do cliente foram atualizados com sucesso.",
+        });
+    } else {
+        console.log("Novo cliente:", clientData);
+        toast({
+            title: "Cliente Criado!",
+            description: "O novo cliente foi adicionado com sucesso.",
+        });
+    }
     onClientCreated();
   };
 
@@ -78,17 +97,17 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
     <form onSubmit={handleSubmit} className="grid gap-6 py-4">
       <div className="grid gap-4">
         <Label htmlFor="name">Nome</Label>
-        <Input id="name" name="name" required />
+        <Input id="name" name="name" required defaultValue={client?.name}/>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
          <div className="grid gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required />
+            <Input id="email" name="email" type="email" required defaultValue={""} />
         </div>
         <div className="grid gap-2">
             <Label htmlFor="phone">Telefone</Label>
-            <Input id="phone" name="phone" required />
+            <Input id="phone" name="phone" required defaultValue={""} />
         </div>
       </div>
 
@@ -117,7 +136,7 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
 
        <div className="grid gap-4">
         <Label htmlFor="contractType">Contrato</Label>
-        <Select name="contractType" required>
+        <Select name="contractType" required defaultValue={client?.contractType}>
             <SelectTrigger>
                 <SelectValue placeholder="Selecione o tipo" />
             </SelectTrigger>
@@ -131,7 +150,7 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
       <div className="grid grid-cols-2 gap-4">
         <div className="grid gap-2">
           <Label htmlFor="monthlyFee">Mensalidade</Label>
-          <Input id="monthlyFee" name="monthlyFee" type="number" placeholder="R$" required />
+          <Input id="monthlyFee" name="monthlyFee" type="number" placeholder="R$" required defaultValue={client?.poolSize} />
         </div>
          <div className="grid gap-2">
           <Label htmlFor="dueDate">Vencimento</Label>
@@ -140,7 +159,7 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
       </div>
       <div className="grid gap-2">
         <Label htmlFor="technicianId">Técnico</Label>
-         <Select name="technicianId">
+         <Select name="technicianId" defaultValue={client?.assignedTechnicianId || undefined}>
             <SelectTrigger>
                 <SelectValue placeholder="Selecione um técnico" />
             </SelectTrigger>
