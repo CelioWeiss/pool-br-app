@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Users, Wrench, Calendar } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getCountFromServer, doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
 const StatCard = ({
@@ -34,34 +34,6 @@ const StatCard = ({
   </Card>
 );
 
-// Temporary function to seed the master user
-async function seedMasterUser(firestore: any) {
-    const masterUserId = 'master-admin-01';
-    const userRef = doc(firestore, 'users', masterUserId);
-    const userSnap = await getDoc(userRef);
-
-    if (!userSnap.exists()) {
-        console.log("Master user not found, creating one...");
-        const masterUser = {
-            id: masterUserId,
-            firstName: 'Master',
-            lastName: 'Admin',
-            email: 'master@poolbr.com',
-            role: 'master',
-            franchiseId: null,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-        };
-        try {
-            await setDoc(userRef, masterUser);
-            console.log("Master user created successfully.");
-        } catch (error) {
-            console.error("Error creating master user:", error);
-        }
-    }
-}
-
-
 export default function DashboardPage() {
   const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
@@ -74,12 +46,6 @@ export default function DashboardPage() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Seed master user on component mount
-  useEffect(() => {
-    if (firestore) {
-      seedMasterUser(firestore);
-    }
-  }, [firestore]);
 
   useEffect(() => {
     async function fetchStats() {
