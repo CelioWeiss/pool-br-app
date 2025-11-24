@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { ProfileSelector } from '@/components/auth/profile-selector';
+import { LoginForm } from '@/components/auth/login-form';
 import Image from 'next/image';
 import { useFirestore } from '@/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -10,7 +10,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 // Temporary function to seed the master user
 async function seedMasterUser(firestore: any) {
     if (!firestore) return;
-    const masterUserId = 'master-admin-01';
+    const masterUserId = 'master-admin-01'; // This ID needs a corresponding user in Firebase Auth
     const userRef = doc(firestore, 'users', masterUserId);
     
     try {
@@ -18,6 +18,8 @@ async function seedMasterUser(firestore: any) {
 
         if (!userSnap.exists()) {
             console.log("Master user not found, creating one...");
+            // IMPORTANT: You must create a user in Firebase Authentication with the UID 'master-admin-01'
+            // and the email 'master@poolbr.com' for this to work.
             const masterUser = {
                 id: masterUserId,
                 firstName: 'Master',
@@ -29,7 +31,7 @@ async function seedMasterUser(firestore: any) {
                 createdAt: new Date().toISOString(),
             };
             await setDoc(userRef, masterUser);
-            console.log("Master user created successfully.");
+            console.log("Master user created successfully in Firestore.");
         }
     } catch (error) {
          console.error("Error seeding master user:", error);
@@ -40,9 +42,12 @@ async function seedMasterUser(firestore: any) {
 export default function Home() {
   const firestore = useFirestore();
 
-  // Seed master user on component mount if it doesn't exist
+  // Seed master user on component mount if it doesn't exist.
+  // Note: This only creates the Firestore document. The actual user must exist in Firebase Auth.
   useEffect(() => {
-    seedMasterUser(firestore);
+    if (firestore) {
+      seedMasterUser(firestore);
+    }
   }, [firestore]);
 
 
@@ -62,7 +67,7 @@ export default function Home() {
         </p>
       </div>
       <div className="w-full max-w-sm mt-10">
-        <ProfileSelector />
+        <LoginForm />
       </div>
     </main>
   );
