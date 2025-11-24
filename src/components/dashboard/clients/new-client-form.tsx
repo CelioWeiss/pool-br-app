@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import type { Technician, Client, NewClientData, DayOfWeek } from '@/lib/types';
+import type { Technician, Client, NewClientData } from '@/lib/types';
 import { PlusCircle, X } from 'lucide-react';
 import { DialogFooter } from '@/components/ui/dialog';
 
@@ -17,21 +16,11 @@ interface NewClientFormProps {
   client?: Client | null;
 }
 
-const daysOfWeek: { id: DayOfWeek; label: string }[] = [
-  { id: 'segunda', label: 'Segunda' },
-  { id: 'terca', label: 'Terça' },
-  { id: 'quarta', label: 'Quarta' },
-  { id: 'quinta', label: 'Quinta' },
-  { id: 'sexta', label: 'Sexta' },
-  { id: 'sabado', label: 'Sábado' },
-];
-
 export function NewClientForm({ technicians, onSave, onCancel, client = null }: NewClientFormProps) {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
-    const [contractType, setContractType] = useState<string | undefined>(undefined);
-    const [poolDetails, setPoolDetails] = useState(''); // Changed from monthlyFee
+    const [poolDetails, setPoolDetails] = useState('');
     const [technicianId, setTechnicianId] = useState<string | undefined>(undefined);
     const [addresses, setAddresses] = useState<string[]>(['']);
     
@@ -40,11 +29,16 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
             setName(client.name);
             setEmail(client.contactEmail || '');
             setPhone(client.contactPhone || '');
-            setAddresses(client.address ? [client.address] : ['']);
-            // contractType logic might need adjustment based on final data model
-            // setContractType(client.contractType); 
+            setAddresses(client.address ? client.address.split('; ') : ['']);
             setPoolDetails(client.poolDetails || '');
             setTechnicianId(client.technicianId || undefined);
+        } else {
+            setName('');
+            setEmail('');
+            setPhone('');
+            setAddresses(['']);
+            setPoolDetails('');
+            setTechnicianId(undefined);
         }
     }, [client]);
 

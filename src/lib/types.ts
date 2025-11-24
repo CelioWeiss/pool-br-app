@@ -46,7 +46,7 @@ export type NewClientData = Omit<Client, 'id' | 'franchiseId'>;
 
 export interface Technician {
   id: string;
-  userId: string;
+  userId?: string; // userId from auth, can be optional if created before user logs in
   franchiseId: string;
   firstName: string;
   lastName: string;
