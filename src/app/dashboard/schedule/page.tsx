@@ -1,36 +1,52 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { appointments, clients, technicians } from '@/lib/data';
 import type { Appointment } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Calendar as CalendarIcon, Check, Clock, PlusCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, startOfMonth, isSameDay } from 'date-fns';
+import { Calendar as CalendarIcon, PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
-
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
 
 export default function SchedulePage() {
-  const { user, hasRole } = useAuth();
+  const { userInfo, hasRole } = useAuth();
+  const firestore = useFirestore();
   const [date, setDate] = useState<Date | undefined>(new Date());
   
   if (!hasRole(['owner', 'technician'])) {
     return <p>Acesso negado.</p>;
   }
 
-  const userAppointments = appointments.filter(a => 
-    hasRole('owner') ? a.franchiseId === user?.franchiseId : a.technicianId === user?.id.replace('user-', 'tech-')
-  );
+  const appointmentsQuery = useMemoFirebase(() => {
+    if (!userInfo?.franchiseId) return null;
 
-  const appointmentDates = userAppointments.map(a => new Date(a.date));
+    let q = collection(firestore, 'franchises', userInfo.franchiseId, 'appointments');
 
-  const selectedAppointments = date 
-    ? userAppointments.filter(a => isSameDay(new Date(a.date), date))
-    : [];
+    if (hasRole('technician')) {
+      // In a real app, you would likely store the user ID on the technician document
+      // and query based on that. For now, we assume technician ID is derived.
+      // This is a simplification.
+      const techId = userInfo.id; 
+      return query(q, where('technicianId', '==', techId));
+    }
+    
+    return q;
+  }, [firestore, userInfo?.franchiseId, userInfo?.id, hasRole]);
+
+  const { data: userAppointments, isLoading } = useCollection<Appointment>(appointmentsQuery);
+
+  const appointmentDates = useMemo(() => userAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [userAppointments]);
+
+  const selectedAppointments = useMemo(() => {
+    if (!date || !userAppointments) return [];
+    return userAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), date));
+  }, [date, userAppointments]);
+
 
   return (
     <div className="space-y-8">
@@ -79,7 +95,7 @@ export default function SchedulePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <DailySchedule appointments={selectedAppointments} />
+            <DailySchedule appointments={selectedAppointments} isLoading={isLoading} />
           </CardContent>
         </Card>
       </div>

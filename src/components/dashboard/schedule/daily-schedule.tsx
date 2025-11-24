@@ -1,16 +1,17 @@
 "use client";
 
-import type { Appointment } from '@/lib/types';
-import { clients, technicians } from '@/lib/data';
+import { useMemo } from 'react';
+import type { Appointment, Client, Technician } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Check, X, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import { useAuth } from '@/hooks/use-auth';
 
-const AppointmentItem = ({ appointment }: { appointment: Appointment }) => {
-  const client = clients.find(c => c.id === appointment.clientId);
-  const technician = technicians.find(t => t.id === appointment.technicianId);
+const AppointmentItem = ({ appointment, client, technician }: { appointment: Appointment, client?: Client, technician?: Technician }) => {
 
   const statusInfo = {
     scheduled: { icon: Clock, color: "bg-blue-500", label: "Agendado" },
@@ -24,14 +25,14 @@ const AppointmentItem = ({ appointment }: { appointment: Appointment }) => {
   return (
     <div className="flex items-start gap-4 p-4 border-b last:border-b-0">
       <div className="flex flex-col items-center justify-center h-full">
-         <span className="text-lg font-bold">{format(new Date(appointment.date), "HH:mm")}</span>
+         <span className="text-lg font-bold">{format(new Date(appointment.scheduledDateTime), "HH:mm")}</span>
       </div>
       <div className="flex-1">
         <div className="flex justify-between items-start">
             <div>
-                <p className="font-semibold">{client?.name}</p>
+                <p className="font-semibold">{client?.name || 'Cliente não encontrado'}</p>
                 <p className="text-sm text-muted-foreground">{client?.address}</p>
-                <p className="text-sm text-muted-foreground">Técnico: {technician?.name}</p>
+                <p className="text-sm text-muted-foreground">Técnico: {technician?.firstName || 'N/A'}</p>
             </div>
             <Badge variant="secondary" className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className={`h-2 w-2 rounded-full ${currentStatus.color}`} />
@@ -45,7 +46,34 @@ const AppointmentItem = ({ appointment }: { appointment: Appointment }) => {
 };
 
 
-export function DailySchedule({ appointments }: { appointments: Appointment[] }) {
+export function DailySchedule({ appointments, isLoading }: { appointments: Appointment[], isLoading: boolean }) {
+  const { userInfo } = useAuth();
+  const firestore = useFirestore();
+
+  const clientsQuery = useMemoFirebase(() => {
+    if (!userInfo?.franchiseId) return null;
+    return collection(firestore, 'franchises', userInfo.franchiseId, 'clients');
+  }, [firestore, userInfo?.franchiseId]);
+  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
+  
+  const techniciansQuery = useMemoFirebase(() => {
+      if (!userInfo?.franchiseId) return null;
+      return collection(firestore, 'franchises', userInfo.franchiseId, 'technicians');
+  }, [firestore, userInfo?.franchiseId]);
+  const { data: technicians, isLoading: isLoadingTechs } = useCollection<Technician>(techniciansQuery);
+
+  const clientsMap = useMemo(() => new Map(clients?.map(c => [c.id, c])), [clients]);
+  const techniciansMap = useMemo(() => new Map(technicians?.map(t => [t.id, t])), [technicians]);
+
+
+  if (isLoading || isLoadingClients || isLoadingTechs) {
+      return (
+         <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
+            <p>Carregando agendamentos...</p>
+        </div>
+      )
+  }
+
   if (appointments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
@@ -55,12 +83,17 @@ export function DailySchedule({ appointments }: { appointments: Appointment[] })
     )
   }
 
-  const sortedAppointments = [...appointments].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sortedAppointments = [...appointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
 
   return (
     <div className="divide-y">
       {sortedAppointments.map(appt => (
-        <AppointmentItem key={appt.id} appointment={appt} />
+        <AppointmentItem 
+            key={appt.id} 
+            appointment={appt} 
+            client={clientsMap.get(appt.clientId)}
+            technician={techniciansMap.get(appt.technicianId)}
+        />
       ))}
     </div>
   );

@@ -9,24 +9,16 @@ import { AppHeader } from '@/components/dashboard/header';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isUserLoading } = useAuth();
   const router = useRouter();
-  const [isChecking, setIsChecking] = React.useState(true);
 
   useEffect(() => {
-    // A slight delay to allow auth state to populate from potential async sources
-    const timer = setTimeout(() => {
-      if (!user) {
-        router.replace('/');
-      } else {
-        setIsChecking(false);
-      }
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [user, router]);
+    if (!isUserLoading && !user) {
+      router.replace('/');
+    }
+  }, [user, isUserLoading, router]);
   
-  if (isChecking) {
+  if (isUserLoading || !user) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Spinner size="large" />
@@ -37,12 +29,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <SidebarProvider>
       <AppSidebar />
-      <div className="flex-1">
+      <SidebarInset>
         <AppHeader />
         <main className="p-4 sm:p-6 lg:p-8">
           {children}
         </main>
-      </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }

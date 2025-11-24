@@ -31,32 +31,23 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [contractType, setContractType] = useState<string | undefined>(undefined);
-    const [monthlyFee, setMonthlyFee] = useState<string>('');
-    const [dueDate, setDueDate] = useState<string>('');
+    const [poolDetails, setPoolDetails] = useState(''); // Changed from monthlyFee
     const [technicianId, setTechnicianId] = useState<string | undefined>(undefined);
-    const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([]);
     const [addresses, setAddresses] = useState<string[]>(['']);
     
     useEffect(() => {
         if (client) {
             setName(client.name);
-            setEmail(client.email || '');
-            setPhone(client.phone || '');
+            setEmail(client.contactEmail || '');
+            setPhone(client.contactPhone || '');
             setAddresses(client.address ? [client.address] : ['']);
-            setContractType(client.contractType);
-            setMonthlyFee(client.poolSize?.toString() || ''); // Assuming monthly fee was stored in poolSize
-            setDueDate(client.dueDate?.toString() || '');
-            setTechnicianId(client.assignedTechnicianId || undefined);
-            setSelectedDays(client.visitDays || []);
+            // contractType logic might need adjustment based on final data model
+            // setContractType(client.contractType); 
+            setPoolDetails(client.poolDetails || '');
+            setTechnicianId(client.technicianId || undefined);
         }
     }, [client]);
 
-    const handleDayChange = (dayId: DayOfWeek) => {
-        setSelectedDays(prev => 
-            prev.includes(dayId) ? prev.filter(d => d !== dayId) : [...prev, dayId]
-        );
-    }
-    
     const handleAddressChange = (index: number, value: string) => {
         const newAddresses = [...addresses];
         newAddresses[index] = value;
@@ -78,14 +69,13 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
         event.preventDefault();
         const clientData: NewClientData = {
             name,
-            email,
-            phone,
-            address: addresses.join(', '), // For simplicity, joining addresses. A better model would handle multiple addresses.
-            contractType: contractType as any,
-            poolSize: Number(monthlyFee), // Re-using poolSize for monthlyFee
-            dueDate: Number(dueDate),
-            assignedTechnicianId: technicianId || null,
-            visitDays: selectedDays,
+            contactEmail: email,
+            contactName: name, // Assuming contact name is the client name for now
+            contactPhone: phone,
+            address: addresses.join('; '), // Use a separator for multiple addresses
+            poolDetails: poolDetails,
+            technicianId: technicianId || null,
+            createdAt: new Date().toISOString(),
         };
         onSave(clientData);
     };
@@ -93,17 +83,17 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
     return (
         <form onSubmit={handleSubmit} className="grid gap-4 pt-4 max-h-[70vh] overflow-y-auto px-1">
             <div className="grid gap-2">
-                <Label htmlFor="name">Nome</Label>
+                <Label htmlFor="name">Nome do Cliente</Label>
                 <Input id="name" value={name} onChange={e => setName(e.target.value)} required />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Email de Contato</Label>
                     <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="phone">Telefone</Label>
+                    <Label htmlFor="phone">Telefone de Contato</Label>
                     <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} required />
                 </div>
             </div>
@@ -130,63 +120,26 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
                     Adicionar Endereço
                 </Button>
             </div>
-
+            
             <div className="grid gap-2">
-                <Label htmlFor="contractType">Contrato</Label>
-                <Select value={contractType} onValueChange={setContractType} required>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="mensal">Mensal</SelectItem>
-                        <SelectItem value="quinzenal">Quinzenal</SelectItem>
-                        <SelectItem value="avulso">Avulso</SelectItem>
-                    </SelectContent>
-                </Select>
+                <Label htmlFor="poolDetails">Detalhes da Piscina</Label>
+                <Input id="poolDetails" placeholder="Ex: 50,000L, fibra" value={poolDetails} onChange={e => setPoolDetails(e.target.value)} required />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                <Label htmlFor="monthlyFee">Mensalidade</Label>
-                <Input id="monthlyFee" type="number" placeholder="R$" value={monthlyFee} onChange={e => setMonthlyFee(e.target.value)} required />
-                </div>
-                <div className="grid gap-2">
-                <Label htmlFor="dueDate">Vencimento</Label>
-                <Input id="dueDate" type="number" placeholder="Dia do mês" min="1" max="31" value={dueDate} onChange={e => setDueDate(e.target.value)} required />
-                </div>
-            </div>
+          
             <div className="grid gap-2">
-                <Label htmlFor="technicianId">Técnico</Label>
+                <Label htmlFor="technicianId">Técnico Responsável</Label>
                 <Select value={technicianId} onValueChange={setTechnicianId}>
                     <SelectTrigger>
                         <SelectValue placeholder="Selecione um técnico" />
                     </SelectTrigger>
                     <SelectContent>
                         {technicians.map(tech => (
-                            <SelectItem key={tech.id} value={tech.id}>{tech.name}</SelectItem>
+                            <SelectItem key={tech.id} value={tech.id}>{tech.firstName} {tech.lastName}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
-            <div className="grid gap-2">
-                    <Label>Dias de Visita</Label>
-                    <div className="grid grid-cols-3 gap-2 rounded-md border p-4">
-                        {daysOfWeek.map(day => (
-                            <div key={day.id} className="flex items-center space-x-2">
-                                <Checkbox 
-                                    id={day.id} 
-                                    checked={selectedDays.includes(day.id)}
-                                    onCheckedChange={() => handleDayChange(day.id)}
-                                />
-                                <label
-                                    htmlFor={day.id}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                >
-                                    {day.label}
-                                </label>
-                            </div>
-                        ))}
-                    </div>
-            </div>
+            
             <DialogFooter className="mt-4">
                 <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
                 <Button type="submit">Salvar Cliente</Button>

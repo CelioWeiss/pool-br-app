@@ -6,14 +6,40 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DialogFooter } from '@/components/ui/dialog';
 import type { NewFranchiseData } from '@/lib/types';
-import { users } from '@/lib/data';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { states, cities } from '@/lib/brazil-locations';
+import { useToast } from '@/hooks/use-toast';
+import { setDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 
 interface NewFranchiseFormProps {
   onSave: (data: NewFranchiseData) => void;
   onCancel: () => void;
 }
+
+// THIS IS A TEMPORARY WORKAROUND FOR DEMO PURPOSES
+// In a real app, user creation would be a separate, secure process.
+async function createPlaceholderUser(firestore: any, ownerName: string, email: string, franchiseId: string) {
+    const userId = `user-placeholder-${Date.now()}`;
+    const userRef = doc(firestore, 'users', userId);
+    const [firstName, lastName] = ownerName.split(' ');
+
+    const newUser = {
+        id: userId,
+        franchiseId: franchiseId,
+        firstName: firstName || '',
+        lastName: lastName || '',
+        email: email,
+        role: 'owner',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+    };
+    
+    setDocumentNonBlocking(userRef, newUser, { merge: false });
+    return userId;
+}
+
 
 export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
     const [franchiseName, setFranchiseName] = useState('');
@@ -22,33 +48,40 @@ export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
     const [email, setEmail] = useState('');
     const [selectedState, setSelectedState] = useState<string | undefined>(undefined);
     const [selectedCity, setSelectedCity] = useState<string | undefined>(undefined);
+    const { toast } = useToast();
+    const firestore = useFirestore();
+
 
     const handleStateChange = (stateAbbr: string) => {
         setSelectedState(stateAbbr);
         setSelectedCity(undefined); // Reset city when state changes
     };
 
-    const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
+        
+        if (!selectedCity || !selectedState) {
+            toast({
+                variant: 'destructive',
+                title: 'Erro',
+                description: 'Por favor, selecione estado e cidade.'
+            })
+            return;
+        }
 
-        // In a real app, you would create a new user or link an existing one.
-        // For now, we'll create a placeholder user and use its ID.
-        const ownerId = `user-owner-${Date.now()}`;
-        const newOwner = {
-            id: ownerId,
-            name: ownerName,
-            email: email,
-            role: 'owner' as const,
-            franchiseId: '', // Will be set later
-            avatarUrl: ''
-        };
-        // This is a temporary solution for the demo. In a real app, you'd have a proper user management system.
-        users.push(newOwner);
+        // Placeholder for creating the user and getting the ID
+        // In a real app, this would be a more complex flow, likely involving cloud functions
+        // for secure user creation and role assignment.
+        const tempFranchiseId = `franchise-placeholder-${Date.now()}`;
+        const ownerId = await createPlaceholderUser(firestore, ownerName, email, tempFranchiseId);
 
         const franchiseData: NewFranchiseData = {
             name: franchiseName,
+            address: `${selectedCity}, ${selectedState}`,
             ownerId: ownerId,
-            region: `${selectedCity}, ${selectedState}`,
+            contactEmail: email,
+            contactPhone: phone,
+            createdAt: new Date().toISOString(),
         };
         onSave(franchiseData);
     };

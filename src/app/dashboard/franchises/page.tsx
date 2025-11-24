@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { franchises } from '@/lib/data';
-import type { NewFranchiseData } from '@/lib/types';
+import type { NewFranchiseData, Franchise } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,24 +11,26 @@ import { PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { NewFranchiseForm } from '@/components/dashboard/franchises/new-franchise-form';
 import { useToast } from '@/hooks/use-toast';
+import { useFirestore, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 export default function FranchisesPage() {
   const { hasRole } = useAuth();
+  const firestore = useFirestore();
   const { toast } = useToast();
   const [isNewFranchiseDialogOpen, setIsNewFranchiseDialogOpen] = useState(false);
-  const [franchiseList, setFranchiseList] = useState(franchises);
+
+  const franchisesQuery = useMemoFirebase(() => collection(firestore, 'franchises'), [firestore]);
+  const { data: franchiseList, isLoading } = useCollection<Franchise>(franchisesQuery);
 
   if (!hasRole('master')) {
-    // Or a redirect, or an "Access Denied" component
     return <p>Acesso negado.</p>;
   }
 
   const handleSaveFranchise = (data: NewFranchiseData) => {
-    const newFranchise = {
-      ...data,
-      id: `franchise-${Date.now()}`,
-    };
-    setFranchiseList(prev => [...prev, newFranchise]);
+    const franchisesCol = collection(firestore, 'franchises');
+    addDocumentNonBlocking(franchisesCol, data);
+    
     toast({
       title: "Franquia Criada!",
       description: `A franquia ${data.name} foi adicionada com sucesso.`,
@@ -79,7 +80,12 @@ export default function FranchisesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {franchiseList.map((franchise) => (
+              {isLoading && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">Carregando franquias...</TableCell>
+                  </TableRow>
+              )}
+              {!isLoading && franchiseList && franchiseList.map((franchise) => (
                 <TableRow key={franchise.id}>
                   <TableCell className="font-medium">{franchise.name}</TableCell>
                   <TableCell>{franchise.region}</TableCell>
@@ -91,6 +97,11 @@ export default function FranchisesPage() {
                   </TableCell>
                 </TableRow>
               ))}
+               {!isLoading && (!franchiseList || franchiseList.length === 0) && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">Nenhuma franquia encontrada.</TableCell>
+                  </TableRow>
+                )}
             </TableBody>
           </Table>
         </CardContent>

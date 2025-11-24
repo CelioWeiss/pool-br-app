@@ -2,18 +2,23 @@ export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface User {
   id: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   role: UserRole;
   franchiseId: string | null;
-  avatarUrl: string;
+  isActive: boolean;
+  createdAt: string; // ISO string
 }
 
 export interface Franchise {
   id: string;
   name: string;
   ownerId: string;
-  region: string;
+  address: string;
+  contactEmail: string;
+  contactPhone: string;
+  createdAt: string; // ISO string
 }
 
 export type NewFranchiseData = Omit<Franchise, 'id'>
@@ -25,26 +30,30 @@ export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 's
 export interface Client {
   id: string;
   name: string;
-  email: string;
-  phone: string;
   address: string;
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
   franchiseId: string;
-  assignedTechnicianId: string | null;
-  contractType: ContractType;
-  poolSize: number; // in liters, but we're using it for monthly fee for now
-  dueDate: number;
-  visitDays: DayOfWeek[];
+  poolDetails: string;
+  technicianId: string | null;
+  createdAt: string; // ISO string
 }
 
-export type NewClientData = Omit<Client, 'id' | 'franchiseId'>
+export type NewClientData = Omit<Client, 'id' | 'franchiseId'>;
 
 export interface Technician {
   id: string;
-  name: string;
+  userId: string;
   franchiseId: string;
-  currentLocation: { lat: number; lng: number };
+  firstName: string;
+  lastName: string;
   phone: string;
-  avatarUrl: string;
+  email: string;
+  isActive: boolean;
+  createdAt: string; // ISO string
+  locationLatitude?: number;
+  locationLongitude?: number;
 }
 
 export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';
@@ -54,23 +63,21 @@ export interface Appointment {
   clientId: string;
   technicianId: string;
   franchiseId: string;
-  date: string; // ISO string
+  scheduledDateTime: string; // ISO string
   status: AppointmentStatus;
-  notes?: string;
-  serviceReport?: ServiceReport;
+  serviceReportId?: string;
 }
 
 export interface ServiceReport {
   id: string;
+  franchiseId: string;
   appointmentId: string;
+  technicianId: string;
+  reportDateTime: string; // ISO string
   chlorineLevel: number;
   phLevel: number;
-  alcalinity: number;
-  servicesPerformed: string[];
-  photoUrl: string;
-  analysis?: {
-    analysisResult: string;
-    issuesIdentified: string;
-    complianceStatus: string;
-  };
+  servicesPerformed: string;
+  photoUrls: string[];
+  notes: string;
+  createdAt: string; // ISO string
 }

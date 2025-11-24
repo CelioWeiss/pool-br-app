@@ -32,11 +32,12 @@ const menuItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { user, hasRole, logout } = useAuth();
+  const { userInfo, hasRole, logout } = useAuth();
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
+  const avatarUrl = PlaceHolderImages.find(p => p.id.startsWith('avatar'))?.imageUrl;
 
 
-  if (!user) return null;
+  if (!userInfo) return null;
 
   return (
     <Sidebar>
@@ -46,8 +47,8 @@ export function AppSidebar() {
               <Image
                 src={logo.imageUrl} 
                 alt="Pool BR Logo"
-                width={40}
-                height={40}
+                width={32}
+                height={32}
                 className="object-contain"
                 data-ai-logo
               />
@@ -81,12 +82,12 @@ export function AppSidebar() {
       <div className="p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3">
           <Avatar>
-            <AvatarImage src={user.avatarUrl} alt={user.name} />
-            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+            <AvatarImage src={avatarUrl} alt={userInfo.firstName} />
+            <AvatarFallback>{userInfo.firstName.charAt(0)}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col text-sm truncate">
-            <span className="font-semibold text-sidebar-foreground">{user.name}</span>
-            <span className="text-xs text-sidebar-foreground/70">{user.role}</span>
+            <span className="font-semibold text-sidebar-foreground">{userInfo.firstName} {userInfo.lastName}</span>
+            <span className="text-xs text-sidebar-foreground/70">{userInfo.role}</span>
           </div>
           <Button variant="ghost" size="icon" className="ml-auto text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={logout}>
             <LogOut size={18}/>
