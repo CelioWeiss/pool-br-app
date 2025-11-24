@@ -53,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let redirect = '/dashboard'; // Default dashboard
         if (userInfo.role === 'technician') {
           redirect = '/dashboard/schedule';
+        } else if (userInfo.role === 'client') {
+            redirect = '/dashboard';
         }
         router.replace(redirect);
       }
@@ -74,11 +76,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const loggedInUser = userCredential.user;
 
       if (!loggedInUser) {
-        setIsLoggingIn(false);
         throw new Error("Usuário não retornado pelo Firebase.");
       }
 
-      // 2 — BUSCAR PERFIL NO FIRESTORE (with contextual error handling)
+      // 2 — BUSCAR PERFIL NO FIRESTORE (from /users collection)
       const profileRef = doc(firestore, "users", loggedInUser.uid);
       
       const profileSnap = await getDoc(profileRef).catch(serverError => {
@@ -87,14 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             path: profileRef.path,
         });
         errorEmitter.emit('permission-error', contextualError);
-        // Throw the original error to be caught by the outer try/catch
-        throw serverError;
+        throw serverError; // Let the outer catch handle it.
       });
-
 
       if (!profileSnap.exists()) {
         await signOut(auth); // Log out user if profile doesn't exist
-        setIsLoggingIn(false);
         return { ok: false, error: "Perfil não encontrado no Firestore. Entre em contato com o suporte." };
       }
 
@@ -103,16 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 3 — VERIFICA SE TEM ROLE DEFINIDA
       if (!data.role) {
          await signOut(auth); // Log out user if role is missing
-         setIsLoggingIn(false);
         return { ok: false, error: "O usuário não possui uma função atribuída (role undefined)." };
       }
       
-      setIsLoggingIn(false);
-      return { ok: true, redirect: '/dashboard' };
+      // onAuthStateChanged will handle the redirect via the useEffect hook
+      return { ok: true };
 
     } catch (err: any) {
-      setIsLoggingIn(false);
-
       // TRATAMENTO COMPLETO DE ERROS DO FIREBASE AUTH
       const errorMap: Record<string, string> = {
         "auth/invalid-email": "E-mail inválido.",
@@ -123,11 +118,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "auth/user-disabled": "Este usuário foi desativado.",
       };
       
-      // Don't show a generic message if it was a permission error we already handled
-      if (err.name === 'FirebaseError' && err.code === 'permission-denied') {
-          return { ok: false, error: "Erro de permissão ao buscar perfil de usuário." };
-      }
-
       const errorMessage = errorMap[err.code] || err.message || "Erro desconhecido.";
       setAuthError(err); 
 
@@ -135,6 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ok: false,
         error: errorMessage,
       };
+    } finally {
+        setIsLoggingIn(false);
     }
   }, [firestore]);
 
