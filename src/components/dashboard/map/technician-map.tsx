@@ -2,9 +2,9 @@
 
 import React, { useEffect } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
-import { Polyline } from '@vis.gl/react-google-maps/routes';
-import { technicians, appointments, clients } from '@/lib/data';
 import { Wrench } from 'lucide-react';
+import type { Technician, Appointment, Client } from '@/lib/types';
+
 
 function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
     const map = useMap();
@@ -29,7 +29,7 @@ function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
 }
 
 
-export function TechnicianMap({ apiKey }: { apiKey: string }) {
+export function TechnicianMap({ apiKey, technicians, appointments, clients }: { apiKey: string, technicians: Technician[], appointments: Appointment[], clients: Client[] }) {
   const mapCenter = { lat: -23.55052, lng: -46.633308 }; // São Paulo center
 
   const technicianAppointments = (techId: string) => 
@@ -37,10 +37,8 @@ export function TechnicianMap({ apiKey }: { apiKey: string }) {
       .filter(a => a.technicianId === techId && (a.status === 'scheduled' || a.status === 'in_progress'))
       .map(a => {
         const client = clients.find(c => c.id === a.clientId);
-        if (!client) return null;
-        // Simple string-to-coordinate conversion for demo purposes
-        const [lat, lng] = client.address.includes('Paulista') ? [-23.561334, -46.656544] : [-23.60, -46.68];
-        return { lat, lng };
+        if (!client || !client.locationLatitude || !client.locationLongitude) return null;
+        return { lat: client.locationLatitude, lng: client.locationLongitude };
       })
       .filter(Boolean) as { lat: number, lng: number }[];
 
@@ -57,12 +55,16 @@ export function TechnicianMap({ apiKey }: { apiKey: string }) {
         disableDefaultUI={true}
       >
         {technicians.map((tech, index) => {
-          const route = [tech.currentLocation, ...technicianAppointments(tech.id)];
+          if (!tech.locationLatitude || !tech.locationLongitude) return null;
+
+          const currentLocation = { lat: tech.locationLatitude, lng: tech.locationLongitude };
+          const route = [currentLocation, ...technicianAppointments(tech.id)];
+          
           return (
             <React.Fragment key={tech.id}>
-              <AdvancedMarker position={tech.currentLocation} title={tech.name}>
+              <AdvancedMarker position={currentLocation} title={`${tech.firstName} ${tech.lastName}`}>
                 <div className="flex flex-col items-center">
-                    <span className="text-xs font-bold bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-full shadow mb-1">{tech.name}</span>
+                    <span className="text-xs font-bold bg-white/80 backdrop-blur-sm px-2 py-0.5 rounded-full shadow mb-1">{tech.firstName}</span>
                     <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{backgroundColor: techColors[index % techColors.length]}}>
                         <Wrench className="w-4 h-4 text-white"/>
                     </div>

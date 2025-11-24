@@ -9,37 +9,11 @@ import type { NewFranchiseData } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { states, cities } from '@/lib/brazil-locations';
 import { useToast } from '@/hooks/use-toast';
-import { setDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
 
 interface NewFranchiseFormProps {
   onSave: (data: NewFranchiseData) => void;
   onCancel: () => void;
 }
-
-// THIS IS A TEMPORARY WORKAROUND FOR DEMO PURPOSES
-// In a real app, user creation would be a separate, secure process.
-async function createPlaceholderUser(firestore: any, ownerName: string, email: string, franchiseId: string) {
-    const userId = `user-placeholder-${Date.now()}`;
-    const userRef = doc(firestore, 'users', userId);
-    const [firstName, lastName] = ownerName.split(' ');
-
-    const newUser = {
-        id: userId,
-        franchiseId: franchiseId,
-        firstName: firstName || '',
-        lastName: lastName || '',
-        email: email,
-        role: 'owner',
-        isActive: true,
-        createdAt: new Date().toISOString(),
-    };
-    
-    setDocumentNonBlocking(userRef, newUser, { merge: false });
-    return userId;
-}
-
 
 export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
     const [franchiseName, setFranchiseName] = useState('');
@@ -49,8 +23,6 @@ export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
     const [selectedState, setSelectedState] = useState<string | undefined>(undefined);
     const [selectedCity, setSelectedCity] = useState<string | undefined>(undefined);
     const { toast } = useToast();
-    const firestore = useFirestore();
-
 
     const handleStateChange = (stateAbbr: string) => {
         setSelectedState(stateAbbr);
@@ -69,11 +41,8 @@ export function NewFranchiseForm({ onSave, onCancel }: NewFranchiseFormProps) {
             return;
         }
 
-        // Placeholder for creating the user and getting the ID
-        // In a real app, this would be a more complex flow, likely involving cloud functions
-        // for secure user creation and role assignment.
-        const tempFranchiseId = `franchise-placeholder-${Date.now()}`;
-        const ownerId = await createPlaceholderUser(firestore, ownerName, email, tempFranchiseId);
+        const ownerId = `owner-placeholder-${Date.now()}`;
+        const [firstName, lastName] = ownerName.split(' ');
 
         const franchiseData: NewFranchiseData = {
             name: franchiseName,

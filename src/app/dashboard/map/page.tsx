@@ -1,4 +1,6 @@
+
 import { TechnicianMap } from '@/components/dashboard/map/technician-map';
+import { technicians, appointments, clients } from '@/lib/data';
 
 export default function MapPage() {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -23,7 +25,7 @@ export default function MapPage() {
           <p className="text-muted-foreground">Acompanhe a localização dos técnicos em tempo real.</p>
         </div>
       <div className="h-[75vh] w-full overflow-hidden rounded-xl shadow-lg">
-        <TechnicianMap apiKey={apiKey} />
+        <TechnicianMap apiKey={apiKey} technicians={technicians} appointments={appointments} clients={clients} />
       </div>
     </div>
   );

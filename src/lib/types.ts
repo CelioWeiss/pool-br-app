@@ -38,6 +38,8 @@ export interface Client {
   poolDetails: string;
   technicianId: string | null;
   createdAt: string; // ISO string
+  locationLatitude?: number;
+  locationLongitude?: number;
 }
 
 export type NewClientData = Omit<Client, 'id' | 'franchiseId'>;
@@ -63,7 +65,7 @@ export interface Appointment {
   clientId: string;
   technicianId: string;
   franchiseId: string;
-  scheduledDateTime: string; // ISO string
+ScheduledDateTime: string; // ISO string
   status: AppointmentStatus;
   serviceReportId?: string;
 }

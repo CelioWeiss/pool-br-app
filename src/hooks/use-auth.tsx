@@ -4,19 +4,17 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { getAuth, signOut, signInWithEmailAndPassword, AuthError } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
-
+import { useUser } from '@/firebase';
+import { getAuth, signOut, signInWithEmailAndPassword, signInAnonymously, AuthError } from 'firebase/auth';
+import { users as demoUsers } from '@/lib/data';
 
 interface AuthContextType {
-  user: any | null;
-  userInfo: UserInfo | null;
+  user: any | null; // Firebase Auth user
+  userInfo: UserInfo | null; // Demo user profile
   isUserLoading: boolean;
   isLoggingIn: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; redirect?: string }>;
+  anonymousLoginAs: (user: UserInfo) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   authError: AuthError | null;
@@ -26,20 +24,13 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isUserLoading: isFirebaseUserLoading } = useUser();
-  const firestore = useFirestore();
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   
-  const userDocRef = useMemoFirebase(() => {
-    if (!user?.uid) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [firestore, user?.uid]);
-  
-  const { data: userInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
-
-  const isUserLoading = isFirebaseUserLoading || (!!user && isUserInfoLoading);
+  const isUserLoading = isFirebaseUserLoading || isLoggingIn;
 
   useEffect(() => {
     if (isUserLoading) return;
@@ -53,8 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let redirect = '/dashboard'; // Default dashboard
         if (userInfo.role === 'technician') {
           redirect = '/dashboard/schedule';
-        } else if (userInfo.role === 'client') {
-            redirect = '/dashboard';
         }
         router.replace(redirect);
       }
@@ -71,44 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getAuth();
     
     try {
-      // 1 — LOGIN NO FIREBASE AUTH
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const loggedInUser = userCredential.user;
-
-      if (!loggedInUser) {
-        throw new Error("Usuário não retornado pelo Firebase.");
+      await signInWithEmailAndPassword(auth, email, password);
+      // Let onAuthStateChanged handle the user object and useEffect handle redirection
+      // Find and set the corresponding demo user
+      const demoUser = demoUsers.find(u => u.email === email);
+      if (demoUser) {
+        setUserInfo(demoUser);
+        return { ok: true };
       }
-
-      // 2 — BUSCAR PERFIL NO FIRESTORE (from /users collection)
-      const profileRef = doc(firestore, "users", loggedInUser.uid);
-      
-      const profileSnap = await getDoc(profileRef).catch(serverError => {
-         const contextualError = new FirestorePermissionError({
-            operation: 'get',
-            path: profileRef.path,
-        });
-        errorEmitter.emit('permission-error', contextualError);
-        throw serverError; // Let the outer catch handle it.
-      });
-
-      if (!profileSnap.exists()) {
-        await signOut(auth); // Log out user if profile doesn't exist
-        return { ok: false, error: "Perfil não encontrado no Firestore. Entre em contato com o suporte." };
-      }
-
-      const data = profileSnap.data();
-
-      // 3 — VERIFICA SE TEM ROLE DEFINIDA
-      if (!data.role) {
-         await signOut(auth); // Log out user if role is missing
-        return { ok: false, error: "O usuário não possui uma função atribuída (role undefined)." };
-      }
-      
-      // onAuthStateChanged will handle the redirect via the useEffect hook
-      return { ok: true };
-
+      return { ok: false, error: "Perfil de demonstração não encontrado." };
     } catch (err: any) {
-      // TRATAMENTO COMPLETO DE ERROS DO FIREBASE AUTH
       const errorMap: Record<string, string> = {
         "auth/invalid-email": "E-mail inválido.",
         "auth/user-not-found": "Usuário não encontrado.",
@@ -117,22 +78,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "auth/too-many-requests": "Muitas tentativas. Aguarde e tente novamente.",
         "auth/user-disabled": "Este usuário foi desativado.",
       };
-      
       const errorMessage = errorMap[err.code] || err.message || "Erro desconhecido.";
-      setAuthError(err); 
-
-      return {
-        ok: false,
-        error: errorMessage,
-      };
+      setAuthError(err);
+      return { ok: false, error: errorMessage };
     } finally {
         setIsLoggingIn(false);
     }
-  }, [firestore]);
+  }, []);
+
+  const anonymousLoginAs = useCallback(async (demoUser: UserInfo) => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    const auth = getAuth();
+    try {
+        await signInAnonymously(auth);
+        setUserInfo(demoUser);
+        // Redirection will be handled by the useEffect
+    } catch (err: any) {
+        setAuthError(err);
+        console.error("Anonymous login failed", err);
+    } finally {
+        setIsLoggingIn(false);
+    }
+  }, []);
 
   const logout = useCallback(() => {
     const auth = getAuth();
     signOut(auth).then(() => {
+        setUserInfo(null); // Clear local user profile
         router.push('/');
     });
   }, [router]);
@@ -149,10 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isUserLoading,
     isLoggingIn,
     login,
+    anonymousLoginAs,
     logout,
     hasRole,
     authError,
-  }), [user, userInfo, isUserLoading, isLoggingIn, login, logout, hasRole, authError]);
+  }), [user, userInfo, isUserLoading, isLoggingIn, login, anonymousLoginAs, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>

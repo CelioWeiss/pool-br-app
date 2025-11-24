@@ -5,42 +5,34 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Appointment } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { appointments as initialAppointments } from '@/lib/data';
 
 export default function SchedulePage() {
   const { userInfo, hasRole } = useAuth();
-  const firestore = useFirestore();
   const [date, setDate] = useState<Date | undefined>(new Date());
   
+  const userAppointments = useMemo(() => {
+    if (!userInfo) return [];
+    if (hasRole('owner')) {
+      return initialAppointments;
+    }
+    if (hasRole('technician')) {
+      return initialAppointments.filter(a => a.technicianId === userInfo.id);
+    }
+    return [];
+  }, [userInfo, hasRole]);
+
+
   if (!hasRole(['owner', 'technician'])) {
     return <p>Acesso negado.</p>;
   }
 
-  const appointmentsQuery = useMemoFirebase(() => {
-    if (!userInfo?.franchiseId) return null;
-
-    let q = collection(firestore, 'franchises', userInfo.franchiseId, 'appointments');
-
-    if (hasRole('technician')) {
-      // In a real app, you would likely store the user ID on the technician document
-      // and query based on that. For now, we assume technician ID is derived.
-      // This is a simplification.
-      const techId = userInfo.id; 
-      return query(q, where('technicianId', '==', techId));
-    }
-    
-    return q;
-  }, [firestore, userInfo?.franchiseId, userInfo?.id, hasRole]);
-
-  const { data: userAppointments, isLoading } = useCollection<Appointment>(appointmentsQuery);
-
-  const appointmentDates = useMemo(() => userAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [userAppointments]);
+  const appointmentDates = useMemo(() => userAppointments.map(a => new Date(a.scheduledDateTime)) || [], [userAppointments]);
 
   const selectedAppointments = useMemo(() => {
     if (!date || !userAppointments) return [];
@@ -95,7 +87,7 @@ export default function SchedulePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <DailySchedule appointments={selectedAppointments} isLoading={isLoading} />
+            <DailySchedule appointments={selectedAppointments} />
           </CardContent>
         </Card>
       </div>

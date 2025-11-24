@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import type { NewFranchiseData, Franchise } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -11,25 +11,24 @@ import { PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { NewFranchiseForm } from '@/components/dashboard/franchises/new-franchise-form';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, addDocumentNonBlocking, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { franchises as initialFranchises } from '@/lib/data';
 
 export default function FranchisesPage() {
   const { hasRole } = useAuth();
-  const firestore = useFirestore();
   const { toast } = useToast();
+  const [franchiseList, setFranchiseList] = useState<Franchise[]>(initialFranchises);
   const [isNewFranchiseDialogOpen, setIsNewFranchiseDialogOpen] = useState(false);
-
-  const franchisesQuery = useMemoFirebase(() => collection(firestore, 'franchises'), [firestore]);
-  const { data: franchiseList, isLoading } = useCollection<Franchise>(franchisesQuery);
 
   if (!hasRole('master')) {
     return <p>Acesso negado.</p>;
   }
 
   const handleSaveFranchise = (data: NewFranchiseData) => {
-    const franchisesCol = collection(firestore, 'franchises');
-    addDocumentNonBlocking(franchisesCol, data);
+    const newFranchise: Franchise = {
+      id: `fr-${Date.now()}`,
+      ...data,
+    }
+    setFranchiseList(prev => [...prev, newFranchise]);
     
     toast({
       title: "Franquia Criada!",
@@ -74,21 +73,16 @@ export default function FranchisesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome da Franquia</TableHead>
-                <TableHead>Região</TableHead>
+                <TableHead>Endereço</TableHead>
                 <TableHead>Proprietário (ID)</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center">Carregando franquias...</TableCell>
-                  </TableRow>
-              )}
-              {!isLoading && franchiseList && franchiseList.map((franchise) => (
+              {franchiseList.map((franchise) => (
                 <TableRow key={franchise.id}>
                   <TableCell className="font-medium">{franchise.name}</TableCell>
-                  <TableCell>{franchise.region}</TableCell>
+                  <TableCell>{franchise.address}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{franchise.ownerId}</Badge>
                   </TableCell>
@@ -97,7 +91,7 @@ export default function FranchisesPage() {
                   </TableCell>
                 </TableRow>
               ))}
-               {!isLoading && (!franchiseList || franchiseList.length === 0) && (
+               {franchiseList.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center">Nenhuma franquia encontrada.</TableCell>
                   </TableRow>

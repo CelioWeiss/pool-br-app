@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,41 +11,29 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
 import type { ContractType, Client, NewClientData, Technician } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, addDocumentNonBlocking, setDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { clients as initialClients, technicians as initialTechnicians } from '@/lib/data';
 
 export default function ClientsPage() {
-  const { user, hasRole, userInfo } = useAuth();
-  const firestore = useFirestore();
+  const { hasRole } = useAuth();
   const { toast } = useToast();
+
+  const [clientList, setClientList] = useState<Client[]>(initialClients);
+  const [franchiseTechnicians] = useState<Technician[]>(initialTechnicians);
 
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-
-  const clientsQuery = useMemoFirebase(() => {
-    if (!userInfo?.franchiseId) return null;
-    return collection(firestore, 'franchises', userInfo.franchiseId, 'clients');
-  }, [firestore, userInfo?.franchiseId]);
-  
-  const { data: clientList, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
-
-  const techniciansQuery = useMemoFirebase(() => {
-      if (!userInfo?.franchiseId) return null;
-      return collection(firestore, 'franchises', userInfo.franchiseId, 'technicians');
-  }, [firestore, userInfo?.franchiseId]);
-
-  const { data: franchiseTechnicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansQuery);
 
   if (!hasRole('owner')) {
     return <p>Acesso negado.</p>;
   }
 
   const getTechnicianName = (id: string | null) => {
-    if (!franchiseTechnicians) return 'N/A';
-    return franchiseTechnicians.find(t => t.id === id)?.name || 'N/A';
+    if (!id) return 'N/A';
+    const technician = franchiseTechnicians.find(t => t.id === id);
+    return technician ? `${technician.firstName} ${technician.lastName}` : 'N/A';
   }
 
-  const contractVariant: Record<ContractType, "default" | "secondary" | "destructive" | "outline"> = {
+  const contractVariant: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
     mensal: 'default',
     quinzenal: 'secondary',
     avulso: 'destructive',
@@ -53,25 +41,19 @@ export default function ClientsPage() {
   };
 
   const handleSaveClient = (clientData: NewClientData) => {
-    if (!userInfo?.franchiseId) {
-        toast({
-            variant: "destructive",
-            title: "Erro",
-            description: "ID da franquia não encontrado.",
-        });
-        return;
-    }
-
     if (editingClient) {
-        const clientRef = doc(firestore, 'franchises', userInfo.franchiseId, 'clients', editingClient.id);
-        setDocumentNonBlocking(clientRef, clientData, { merge: true });
+        setClientList(prev => prev.map(c => c.id === editingClient.id ? { ...editingClient, ...clientData } : c));
         toast({
             title: "Cliente Atualizado!",
             description: `Os dados de ${clientData.name} foram atualizados.`,
         });
     } else {
-        const clientsCol = collection(firestore, 'franchises', userInfo.franchiseId, 'clients');
-        addDocumentNonBlocking(clientsCol, { ...clientData, franchiseId: userInfo.franchiseId });
+        const newClient: Client = {
+            id: `client-${Date.now()}`,
+            franchiseId: 'franchise-1', // Mock franchise ID
+            ...clientData
+        };
+        setClientList(prev => [...prev, newClient]);
         toast({
             title: "Cliente Criado!",
             description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
@@ -84,6 +66,7 @@ export default function ClientsPage() {
   
   const handleEditClick = (client: Client) => {
     setEditingClient(client);
+    setIsNewClientDialogOpen(true); // Open the same dialog for editing
   }
   
   const handleCloseDialog = () => {
@@ -98,21 +81,22 @@ export default function ClientsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Gerenciamento de Clientes</h1>
           <p className="text-muted-foreground">Adicione e gerencie os clientes da sua franquia.</p>
         </div>
-        <Dialog open={isNewClientDialogOpen} onOpenChange={(isOpen) => { if(!isOpen) handleCloseDialog()}}>
+        <Dialog open={isNewClientDialogOpen} onOpenChange={handleCloseDialog}>
           <DialogTrigger asChild>
-            <Button onClick={() => setIsNewClientDialogOpen(true)}>
+            <Button onClick={() => { setEditingClient(null); setIsNewClientDialogOpen(true); }}>
               <PlusCircle className="mr-2 h-4 w-4" />
               Novo Cliente
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Adicionar Novo Cliente</DialogTitle>
+              <DialogTitle>{editingClient ? 'Editar Cliente' : 'Adicionar Novo Cliente'}</DialogTitle>
               <DialogDescription>
-                Preencha os dados abaixo para cadastrar um novo cliente.
+                {editingClient ? 'Atualize os dados do cliente.' : 'Preencha os dados abaixo para cadastrar um novo cliente.'}
               </DialogDescription>
             </DialogHeader>
             <NewClientForm 
+              client={editingClient}
               technicians={franchiseTechnicians || []} 
               onSave={handleSaveClient}
               onCancel={handleCloseDialog}
@@ -133,30 +117,22 @@ export default function ClientsPage() {
                 <TableHead>Nome</TableHead>
                 <TableHead>Endereço</TableHead>
                 <TableHead>Técnico</TableHead>
-                <TableHead>Contrato</TableHead>
+                <TableHead>Detalhes da Piscina</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoadingClients && (
-                <TableRow>
-                    <TableCell colSpan={5} className="text-center">Carregando clientes...</TableCell>
-                </TableRow>
-              )}
-              {!isLoadingClients && clientList && clientList.map((client) => (
+              {clientList.length > 0 ? clientList.map((client) => (
                 <TableRow key={client.id}>
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell>{client.address}</TableCell>
-                  <TableCell>{getTechnicianName(client.assignedTechnicianId)}</TableCell>
-                  <TableCell>
-                    <Badge variant={client.contractType ? contractVariant[client.contractType] : 'outline'}>{client.contractType || 'N/A'}</Badge>
-                  </TableCell>
+                  <TableCell>{getTechnicianName(client.technicianId)}</TableCell>
+                  <TableCell>{client.poolDetails}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={() => handleEditClick(client)}>Editar</Button>
                   </TableCell>
                 </TableRow>
-              ))}
-               {!isLoadingClients && (!clientList || clientList.length === 0) && (
+              )) : (
                 <TableRow>
                     <TableCell colSpan={5} className="text-center">Nenhum cliente encontrado.</TableCell>
                 </TableRow>
@@ -165,23 +141,6 @@ export default function ClientsPage() {
           </Table>
         </CardContent>
       </Card>
-
-       <Dialog open={!!editingClient} onOpenChange={(isOpen) => !isOpen && handleCloseDialog()}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Editar Cliente</DialogTitle>
-              <DialogDescription>
-                Atualize os dados do cliente.
-              </DialogDescription>
-            </DialogHeader>
-            <NewClientForm 
-                client={editingClient}
-                technicians={franchiseTechnicians || []} 
-                onSave={handleSaveClient}
-                onCancel={handleCloseDialog}
-            />
-          </DialogContent>
-        </Dialog>
     </div>
   );
 }

@@ -14,7 +14,7 @@ export function LoginForm() {
   const { login, isLoggingIn } = useAuth();
   const router = useRouter();
   const [email, setEmail] = React.useState('master@poolbr.com');
-  const [password, setPassword] = React.useState('');
+  const [password, setPassword] = React.useState(''); // Senha em branco por padrão
   const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -31,7 +31,6 @@ export function LoginForm() {
     } else if (result.redirect) {
       router.push(result.redirect);
     }
-    // No need for an else, the AuthProvider's useEffect will handle redirection
   };
 
   return (
