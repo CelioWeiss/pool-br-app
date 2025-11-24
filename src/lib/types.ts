@@ -55,6 +55,7 @@ export interface Appointment {
   date: string; // ISO string
   status: AppointmentStatus;
   notes?: string;
+  serviceReport?: ServiceReport;
 }
 
 export interface ServiceReport {
@@ -62,7 +63,7 @@ export interface ServiceReport {
   appointmentId: string;
   chlorineLevel: number;
   phLevel: number;
-alcalinity: number;
+  alcalinity: number;
   servicesPerformed: string[];
   photoUrl: string;
   analysis?: {

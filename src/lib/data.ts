@@ -1,6 +1,6 @@
 import type { User, Franchise, Client, Technician, Appointment, DayOfWeek } from './types';
 import { PlaceHolderImages } from './placeholder-images';
-import { add, nextDay, setHours, setMinutes, setSeconds, setMilliseconds, formatISO } from 'date-fns';
+import { add, nextDay, setHours, setMinutes, setSeconds, setMilliseconds, formatISO, subWeeks } from 'date-fns';
 
 export const users: User[] = [
   { id: 'user-master-1', name: 'Master Admin', email: 'master@poolbr.com', role: 'master', franchiseId: null, avatarUrl: PlaceHolderImages.find(p => p.id === 'avatar1')?.imageUrl || '' },
@@ -16,7 +16,7 @@ export const franchises: Franchise[] = [
   { id: 'franchise-mg', name: 'Pool BR - Belo Horizonte', ownerId: 'user-owner-3', region: 'Belo Horizonte, MG' },
 ];
 
-export const clients: Client[] = [
+export let clients: Client[] = [
   { id: 'client-1', name: 'Condomínio Plaza', email: 'plaza@email.com', phone: '11999999999', address: 'Av. Paulista, 1000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 50000, dueDate: 10, visitDays: ['terca', 'sexta'] },
   { id: 'client-2', name: 'Residencial Morumbi', email: 'morumbi@email.com', phone: '11999999998', address: 'Rua dos Bobos, 0', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 25000, dueDate: 5, visitDays: ['segunda', 'quinta'] },
   { id: 'client-3', name: 'Clube Pinheiros', email: 'pinheiros@email.com', phone: '11999999997', address: 'Av. Faria Lima, 2000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-2', contractType: 'quinzenal', poolSize: 120000, dueDate: 15, visitDays: ['quarta'] },
@@ -72,11 +72,34 @@ const generateAppointments = (clientId: string, technicianId: string, visitDays:
 };
 
 
-export let appointments: Appointment[] = [
+let initialAppointments: Appointment[] = [
     ...generateAppointments('client-1', 'tech-1', ['terca', 'sexta'], 'franchise-sp'),
     ...generateAppointments('client-2', 'tech-1', ['segunda', 'quinta'], 'franchise-sp'),
     ...generateAppointments('client-3', 'tech-2', ['quarta'], 'franchise-sp'),
 ];
+
+// Add a completed appointment with a service report for demonstration
+const pastDate = subWeeks(new Date(), 1);
+initialAppointments.push({
+    id: `appt-client-1-past-1`,
+    clientId: 'client-1',
+    technicianId: 'tech-1',
+    franchiseId: 'franchise-sp',
+    date: formatISO(setHours(pastDate, 10)),
+    status: 'completed',
+    serviceReport: {
+        id: 'report-1',
+        appointmentId: 'appt-client-1-past-1',
+        chlorineLevel: 2.8,
+        phLevel: 7.5,
+        alcalinity: 110,
+        servicesPerformed: ['Aspiração do fundo', 'Limpeza das bordas', 'Aplicação de clarificante'],
+        photoUrl: PlaceHolderImages.find(p => p.id === 'pool-photo-1')?.imageUrl || '',
+    }
+});
+
+
+export let appointments: Appointment[] = initialAppointments;
 
 
 export function addAppointmentsForClient(clientId: string, technicianId: string, visitDays: DayOfWeek[], franchiseId: string) {
