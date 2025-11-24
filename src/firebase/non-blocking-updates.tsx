@@ -22,7 +22,7 @@ export function setDocumentNonBlocking(docRef: DocumentReference, data: any, opt
       'permission-error',
       new FirestorePermissionError({
         path: docRef.path,
-        operation: options.merge ? 'update' : 'create',
+        operation: 'write', // or 'create'/'update' based on options
         requestResourceData: data,
       })
     )
@@ -37,7 +37,7 @@ export function setDocumentNonBlocking(docRef: DocumentReference, data: any, opt
  * Returns the Promise for the new doc ref, but typically not awaited by caller.
  */
 export function addDocumentNonBlocking(colRef: CollectionReference, data: any) {
-  const promise = addDoc(col_ref, data)
+  const promise = addDoc(colRef, data)
     .catch(error => {
       errorEmitter.emit(
         'permission-error',
