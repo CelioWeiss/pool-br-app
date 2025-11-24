@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
-import { getAuth, signOut } from 'firebase/auth';
+import { getAuth, signInAnonymously, signOut, updateProfile } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
 
 
@@ -14,6 +14,7 @@ interface AuthContextType {
   userInfo: UserInfo | null;
   isUserLoading: boolean;
   login: (email: string, pass: string) => Promise<void>;
+  anonymousLoginAs: (targetUser: UserInfo) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   authError: Error | null;
@@ -26,37 +27,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const firestore = useFirestore();
   const [authError, setAuthError] = useState<Error | null>(null);
 
-  const userDocRef = useMemoFirebase(() => {
+  // HACK: For anonymous "impersonation", we check local storage.
+  const impersonatedId = typeof window !== 'undefined' ? localStorage.getItem('impersonatedUserId') : null;
+  
+  const finalUserDocRef = useMemoFirebase(() => {
+    if (impersonatedId) {
+        return doc(firestore, 'users', impersonatedId);
+    }
     if (!user) return null;
     return doc(firestore, 'users', user.uid);
-  }, [firestore, user]);
-
-  const { data: userInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
+  }, [firestore, user, impersonatedId]);
+  
+  const { data: finalUserInfo, isLoading: isFinalUserInfoLoading } = useDoc<UserInfo>(finalUserDocRef);
   
   const router = useRouter();
   const pathname = usePathname();
   
   useEffect(() => {
-    // Wait until loading is fully complete before redirecting
-    if (isUserLoading || isUserInfoLoading) {
+    const totalLoading = isUserLoading || isFinalUserInfoLoading;
+    if (totalLoading) {
       return;
     }
     
     const isAuthPage = pathname === '/';
     const isDashboardPage = pathname.startsWith('/dashboard');
 
-    if (user && userInfo) {
-      // If user is logged in and on the login page, redirect to dashboard
+    if (user && finalUserInfo) {
       if (isAuthPage) {
         router.replace('/dashboard');
       }
     } else {
-      // If user is not logged in and trying to access dashboard, redirect to login
       if (isDashboardPage) {
         router.replace('/');
       }
     }
-  }, [user, userInfo, isUserLoading, isUserInfoLoading, router, pathname]);
+  }, [user, finalUserInfo, isUserLoading, isFinalUserInfoLoading, router, pathname]);
   
   useEffect(() => {
     setAuthError(userError);
@@ -64,33 +69,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, pass: string) => {
     const auth = getAuth();
-    // Non-blocking call
     initiateEmailSignIn(auth, email, pass);
   }, []);
 
+  const anonymousLoginAs = useCallback(async (targetUser: UserInfo) => {
+    const auth = getAuth();
+    try {
+      await signInAnonymously(auth);
+      // This is a workaround: we store the ID of the user we want to be.
+      localStorage.setItem('impersonatedUserId', targetUser.id);
+      // Force a reload or redirect to ensure the new state is picked up
+      router.push('/dashboard');
+    } catch (e) {
+      console.error("Anonymous login failed", e);
+    }
+  }, [router]);
+
+
   const logout = useCallback(() => {
     const auth = getAuth();
+    localStorage.removeItem('impersonatedUserId');
     signOut(auth).then(() => {
-      // Ensure redirect happens after sign-out is complete.
       router.push('/');
     });
   }, [router]);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
-    if (!userInfo) return false;
+    if (!finalUserInfo) return false;
     const rolesToCheck = Array.isArray(roles) ? roles : [roles];
-    return rolesToCheck.includes(userInfo.role);
-  }, [userInfo]);
+    return rolesToCheck.includes(finalUserInfo.role);
+  }, [finalUserInfo]);
 
   const value = useMemo(() => ({
     user,
-    userInfo,
-    isUserLoading: isUserLoading || isUserInfoLoading,
+    userInfo: finalUserInfo,
+    isUserLoading: isUserLoading || isFinalUserInfoLoading,
     login,
+    anonymousLoginAs,
     logout,
     hasRole,
     authError,
-  }), [user, userInfo, isUserLoading, isUserInfoLoading, login, logout, hasRole, authError]);
+  }), [user, finalUserInfo, isUserLoading, isFinalUserInfoLoading, login, anonymousLoginAs, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>
