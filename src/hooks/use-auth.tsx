@@ -5,12 +5,9 @@ import React, { createContext, useContext, useState, ReactNode, useMemo, useCall
 import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser } from '@/firebase';
-import { getAuth, signOut, signInWithEmailAndPassword, signInAnonymously, AuthError } from 'firebase/auth';
-import { users as demoUsers } from '@/lib/data';
+import { getAuth, signOut, signInWithEmailAndPassword, AuthError } from 'firebase/auth';
 import { doc, getDoc } from "firebase/firestore";
 import { useFirestore } from '@/firebase/provider';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
 
 interface AuthContextType {
   user: any | null; // Firebase Auth user
@@ -18,7 +15,6 @@ interface AuthContextType {
   isUserLoading: boolean;
   isLoggingIn: boolean;
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; redirect?: string }>;
-  anonymousLoginAs: (user: UserInfo) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   authError: AuthError | null;
@@ -38,6 +34,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isUserLoading = isFirebaseUserLoading || isLoggingIn;
 
   useEffect(() => {
+    // This effect now correctly handles loading userInfo from Firestore after Firebase user is loaded
+    const fetchUserInfo = async () => {
+      if (user && !userInfo && firestore) {
+        const profileRef = doc(firestore, "users", user.uid);
+        try {
+          const profileSnap = await getDoc(profileRef);
+          if (profileSnap.exists()) {
+            const data = profileSnap.data() as UserInfo;
+            if (data.role) {
+              setUserInfo(data);
+            } else {
+              console.error("User profile is missing role. Logging out.");
+              logout();
+            }
+          } else {
+            console.error("User profile not found in Firestore. Logging out.");
+            logout();
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+          logout();
+        }
+      } else if (!user) {
+        setUserInfo(null); // Clear user info if firebase user is null
+      }
+    };
+
+    fetchUserInfo();
+  }, [user, firestore, userInfo]); // Dependency on `user` is key
+
+  useEffect(() => {
     if (isUserLoading) return;
     
     const isAuthPage = pathname === '/';
@@ -46,6 +73,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (isLoggedIn) {
       if (isAuthPage) {
         let redirect = '/dashboard';
+        if (userInfo.role === 'technician') {
+          redirect = '/dashboard/schedule';
+        }
         router.replace(redirect);
       }
     } else {
@@ -61,35 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getAuth();
     
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const authenticatedUser = userCredential.user;
-
-      if (!authenticatedUser || !firestore) {
-        throw new Error("Usuário ou Firestore não disponível.");
-      }
-
-      const profileRef = doc(firestore, "users", authenticatedUser.uid);
-      const profileSnap = await getDoc(profileRef);
-
-      if (!profileSnap.exists()) {
-        await signOut(auth); // Log out user if profile doesn't exist
-        throw new Error("Perfil não encontrado no Firestore. Entre em contato com o suporte.");
-      }
-
-      const data = profileSnap.data() as UserInfo;
-
-      if (!data.role) {
-        throw new Error("O usuário não possui uma função atribuída. (role undefined)");
-      }
-      
-      setUserInfo(data);
-
-      let redirect = '/dashboard';
-      if (data.role === 'technician') {
-        redirect = '/dashboard/schedule';
-      }
-      
-      return { ok: true, redirect };
+      await signInWithEmailAndPassword(auth, email, password);
+      // The user state will be updated by onAuthStateChanged, and the useEffect above will handle fetching user info and redirection.
+      // We don't need to manually set user info or redirect here.
+      return { ok: true };
 
     } catch (err: any) {
       const errorMap: Record<string, string> = {
@@ -104,32 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (err.code?.startsWith('auth/')) {
         setAuthError(err);
-      } else if (firestore && err.message.includes('Firestore')) {
-          const profileRef = doc(firestore, "users", auth.currentUser?.uid || 'unknown-uid');
-          const contextualError = new FirestorePermissionError({
-            operation: 'get',
-            path: profileRef.path,
-          });
-          errorEmitter.emit('permission-error', contextualError);
       }
 
+      // No need to create a FirestorePermissionError here, as the primary error is with Auth.
       return { ok: false, error: errorMessage };
-    } finally {
-        setIsLoggingIn(false);
-    }
-  }, [firestore]);
-
-  const anonymousLoginAs = useCallback(async (demoUser: UserInfo) => {
-    setIsLoggingIn(true);
-    setAuthError(null);
-    const auth = getAuth();
-    try {
-        await signInAnonymously(auth);
-        setUserInfo(demoUser);
-        // Redirection will be handled by the useEffect
-    } catch (err: any) {
-        setAuthError(err);
-        console.error("Anonymous login failed", err);
     } finally {
         setIsLoggingIn(false);
     }
@@ -155,11 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isUserLoading,
     isLoggingIn,
     login,
-    anonymousLoginAs,
     logout,
     hasRole,
     authError,
-  }), [user, userInfo, isUserLoading, isLoggingIn, login, anonymousLoginAs, logout, hasRole, authError]);
+  }), [user, userInfo, isUserLoading, isLoggingIn, login, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>
