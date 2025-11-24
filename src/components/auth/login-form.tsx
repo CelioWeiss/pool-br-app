@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,26 +11,28 @@ import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
 
 export function LoginForm() {
-  const { login, authError, isLoggingIn } = useAuth();
+  const { login, isLoggingIn } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = React.useState('master@poolbr.com');
   const [password, setPassword] = React.useState('');
   const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(email, password);
-  };
-  
-  React.useEffect(() => {
-    if(authError) {
-       toast({
+
+    const result = await login(email, password);
+
+    if (!result.ok) {
+      toast({
         variant: "destructive",
         title: "Erro de Login",
-        description: "Email ou senha inválidos. Verifique suas credenciais e tente novamente.",
+        description: result.error,
       });
+    } else if (result.redirect) {
+      router.push(result.redirect);
     }
-  }, [authError, toast]);
-
+    // No need for an else, the AuthProvider's useEffect will handle redirection
+  };
 
   return (
     <Card className="shadow-2xl">

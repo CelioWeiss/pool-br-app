@@ -5,17 +5,17 @@ import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { getAuth, signOut, signInWithEmailAndPassword, AuthError } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: any | null;
   userInfo: UserInfo | null;
   isUserLoading: boolean;
   isLoggingIn: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; redirect?: string }>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
-  authError: AuthError | null;
+  authError: AuthError | null; // This can be removed or refactored if not used in toasts anymore
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,8 +38,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isUserLoading = isFirebaseUserLoading || (!!user && isUserInfoLoading);
 
   useEffect(() => {
-    // This effect handles redirection for users who are already logged in
-    // or who get logged out.
     if (isUserLoading) return;
     
     const isAuthPage = pathname === '/';
@@ -47,7 +45,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isLoggedIn) {
       if (isAuthPage) {
-        router.replace('/dashboard');
+        // Determine redirect based on role, similar to the login function logic
+        let redirect = '/dashboard'; // Default dashboard
+        if (userInfo.role === 'master') {
+          redirect = '/dashboard';
+        } else if (userInfo.role === 'owner' && userInfo.franchiseId) {
+          redirect = '/dashboard';
+        } else if (userInfo.role === 'technician') {
+          redirect = '/dashboard/schedule';
+        } else if (userInfo.role === 'client') {
+          redirect = '/dashboard';
+        }
+        router.replace(redirect);
       }
     } else {
       if (pathname.startsWith('/dashboard')) {
@@ -56,38 +65,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, userInfo, isUserLoading, router, pathname]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const auth = getAuth();
-    setAuthError(null);
+  const login = useCallback(async (email: string, password: string): Promise<{ ok: boolean; error?: string; redirect?: string }> => {
     setIsLoggingIn(true);
+    const auth = getAuth();
+    
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // Let the onAuthStateChanged listener pick up the user and redirect via the useEffect.
-    } catch (e: any) {
-      setAuthError(e);
-      setIsLoggingIn(false); // Stop loading on error
+      // 1 — LOGIN NO FIREBASE AUTH
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const loggedInUser = userCredential.user;
+
+      if (!loggedInUser) {
+        throw new Error("Usuário não retornado pelo Firebase.");
+      }
+
+      // 2 — BUSCAR PERFIL NO FIRESTORE
+      const profileRef = doc(firestore, "users", loggedInUser.uid);
+      const profileSnap = await getDoc(profileRef);
+
+      if (!profileSnap.exists()) {
+        await signOut(auth); // Log out user if profile doesn't exist
+        throw new Error("Perfil não encontrado no Firestore. Entre em contato com o suporte.");
+      }
+
+      const data = profileSnap.data();
+
+      // 3 — VERIFICA SE TEM ROLE DEFINIDA
+      if (!data.role) {
+         await signOut(auth); // Log out user if role is missing
+        throw new Error("O usuário não possui uma função atribuída (role undefined).");
+      }
+      
+      // The useEffect will handle redirection based on the new `userInfo` state.
+      // We just need to signal success.
+      setIsLoggingIn(false);
+      return { ok: true, redirect: '/dashboard' };
+
+    } catch (err: any) {
+      console.error("Erro no login:", err);
+      setIsLoggingIn(false);
+
+      // TRATAMENTO COMPLETO DE ERROS DO FIREBASE AUTH
+      const errorMap: Record<string, string> = {
+        "auth/invalid-email": "E-mail inválido.",
+        "auth/user-not-found": "Usuário não encontrado.",
+        "auth/wrong-password": "Senha incorreta.",
+        "auth/invalid-credential": "E-mail ou senha incorretos.",
+        "auth/too-many-requests": "Muitas tentativas. Aguarde e tente novamente.",
+        "auth/user-disabled": "Este usuário foi desativado.",
+      };
+      
+      const errorMessage = errorMap[err.code] || err.message || "Erro desconhecido.";
+      setAuthError(err); // Keep original error if needed elsewhere
+
+      return {
+        ok: false,
+        error: errorMessage,
+      };
     }
-    // isLoggingIn will be set to false by the loading effect once the user is fetched.
-  }, [router]);
+  }, [firestore]);
 
   const logout = useCallback(() => {
     const auth = getAuth();
-    signOut(auth);
-  }, []);
+    signOut(auth).then(() => {
+        router.push('/');
+    });
+  }, [router]);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
     if (!userInfo) return false;
     const rolesToCheck = Array.isArray(roles) ? roles : [roles];
     return rolesToCheck.includes(userInfo.role);
   }, [userInfo]);
-
-  // When the overall user loading state is resolved, we are no longer "logging in".
-  useEffect(() => {
-    if (!isUserLoading) {
-      setIsLoggingIn(false);
-    }
-  }, [isUserLoading]);
-
+  
   const value = useMemo(() => ({
     user,
     userInfo,
