@@ -17,16 +17,24 @@ export interface Franchise {
 }
 
 export type ContractType = 'mensal' | 'quinzenal' | 'avulso';
+export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';
+
 
 export interface Client {
   id: string;
   name: string;
+  email: string;
+  phone: string;
   address: string;
   franchiseId: string;
   assignedTechnicianId: string | null;
   contractType: ContractType;
-  poolSize: number; // in liters
+  poolSize: number; // in liters, but we're using it for monthly fee for now
+  dueDate: number;
+  visitDays: DayOfWeek[];
 }
+
+export type NewClientData = Omit<Client, 'id' | 'franchiseId'>
 
 export interface Technician {
   id: string;
@@ -54,7 +62,7 @@ export interface ServiceReport {
   appointmentId: string;
   chlorineLevel: number;
   phLevel: number;
-  alkalinity: number;
+alcalinity: number;
   servicesPerformed: string[];
   photoUrl: string;
   analysis?: {

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { clients, technicians } from '@/lib/data';
+import { clients, technicians, addAppointmentsForClient, removeAppointmentsForClient } from '@/lib/data';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -10,18 +10,20 @@ import { Badge } from '@/components/ui/badge';
 import { PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
-import type { ContractType, Client } from '@/lib/types';
+import type { ContractType, Client, NewClientData } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ClientsPage() {
   const { user, hasRole } = useAuth();
+  const { toast } = useToast();
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [clientList, setClientList] = useState(clients.filter(c => c.franchiseId === user?.franchiseId));
   
   if (!hasRole('owner')) {
     return <p>Acesso negado.</p>;
   }
 
-  const franchiseClients = clients.filter(c => c.franchiseId === user?.franchiseId);
   const franchiseTechnicians = technicians.filter(t => t.franchiseId === user?.franchiseId);
 
 
@@ -35,8 +37,38 @@ export default function ClientsPage() {
     avulso: 'destructive',
   };
 
-  const handleClientCreated = () => {
-    // Here you would refresh the client list, for now, just close the dialog
+  const handleSaveClient = (clientData: NewClientData) => {
+    if (editingClient) {
+        // Update existing client
+        const updatedClients = clientList.map(c => 
+            c.id === editingClient.id ? { ...c, ...clientData } : c
+        );
+        setClientList(updatedClients);
+        removeAppointmentsForClient(editingClient.id);
+        if (clientData.assignedTechnicianId && clientData.visitDays) {
+            addAppointmentsForClient(editingClient.id, clientData.assignedTechnicianId, clientData.visitDays, user?.franchiseId || '');
+        }
+        toast({
+            title: "Cliente Atualizado!",
+            description: `Os dados de ${clientData.name} foram atualizados.`,
+        });
+    } else {
+        // Add new client
+        const newClient: Client = {
+            id: `client-${Date.now()}`,
+            franchiseId: user?.franchiseId || '',
+            ...clientData
+        };
+        setClientList(prev => [...prev, newClient]);
+        if (newClient.assignedTechnicianId && newClient.visitDays) {
+             addAppointmentsForClient(newClient.id, newClient.assignedTechnicianId, newClient.visitDays, newClient.franchiseId);
+        }
+        toast({
+            title: "Cliente Criado!",
+            description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
+        });
+    }
+    
     setIsNewClientDialogOpen(false);
     setEditingClient(null);
   }
@@ -45,8 +77,9 @@ export default function ClientsPage() {
     setEditingClient(client);
   }
   
-  const handleCloseEditDialog = () => {
+  const handleCloseDialog = () => {
     setEditingClient(null);
+    setIsNewClientDialogOpen(false);
   }
 
   return (
@@ -63,14 +96,18 @@ export default function ClientsPage() {
               Novo Cliente
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Adicionar Novo Cliente</DialogTitle>
               <DialogDescription>
                 Preencha os dados abaixo para cadastrar um novo cliente.
               </DialogDescription>
             </DialogHeader>
-            <NewClientForm technicians={franchiseTechnicians} onClientCreated={handleClientCreated}/>
+            <NewClientForm 
+              technicians={franchiseTechnicians} 
+              onSave={handleSaveClient}
+              onCancel={handleCloseDialog}
+            />
           </DialogContent>
         </Dialog>
       </div>
@@ -92,7 +129,7 @@ export default function ClientsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {franchiseClients.map((client) => (
+              {clientList.map((client) => (
                 <TableRow key={client.id}>
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell>{client.address}</TableCell>
@@ -110,8 +147,8 @@ export default function ClientsPage() {
         </CardContent>
       </Card>
 
-       <Dialog open={!!editingClient} onOpenChange={(isOpen) => !isOpen && handleCloseEditDialog()}>
-          <DialogContent className="sm:max-w-[425px]">
+       <Dialog open={!!editingClient} onOpenChange={(isOpen) => !isOpen && handleCloseDialog()}>
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Editar Cliente</DialogTitle>
               <DialogDescription>
@@ -121,7 +158,8 @@ export default function ClientsPage() {
             <NewClientForm 
                 client={editingClient}
                 technicians={franchiseTechnicians} 
-                onClientCreated={handleClientCreated}
+                onSave={handleSaveClient}
+                onCancel={handleCloseDialog}
             />
           </DialogContent>
         </Dialog>

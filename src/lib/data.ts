@@ -1,5 +1,6 @@
-import type { User, Franchise, Client, Technician, Appointment } from './types';
+import type { User, Franchise, Client, Technician, Appointment, DayOfWeek } from './types';
 import { PlaceHolderImages } from './placeholder-images';
+import { add, nextDay, setHours, setMinutes, setSeconds, setMilliseconds, formatISO } from 'date-fns';
 
 export const users: User[] = [
   { id: 'user-master-1', name: 'Master Admin', email: 'master@poolbr.com', role: 'master', franchiseId: null, avatarUrl: PlaceHolderImages.find(p => p.id === 'avatar1')?.imageUrl || '' },
@@ -16,10 +17,10 @@ export const franchises: Franchise[] = [
 ];
 
 export const clients: Client[] = [
-  { id: 'client-1', name: 'Condomínio Plaza', address: 'Av. Paulista, 1000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 50000 },
-  { id: 'client-2', name: 'Residencial Morumbi', address: 'Rua dos Bobos, 0', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 25000 },
-  { id: 'client-3', name: 'Clube Pinheiros', address: 'Av. Faria Lima, 2000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-2', contractType: 'quinzenal', poolSize: 120000 },
-  { id: 'client-4', name: 'Hotel Copacabana', address: 'Av. Atlântica, 1702', franchiseId: 'franchise-rj', assignedTechnicianId: null, contractType: 'avulso', poolSize: 75000 },
+  { id: 'client-1', name: 'Condomínio Plaza', email: 'plaza@email.com', phone: '11999999999', address: 'Av. Paulista, 1000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 50000, dueDate: 10, visitDays: ['terca', 'sexta'] },
+  { id: 'client-2', name: 'Residencial Morumbi', email: 'morumbi@email.com', phone: '11999999998', address: 'Rua dos Bobos, 0', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-1', contractType: 'mensal', poolSize: 25000, dueDate: 5, visitDays: ['segunda', 'quinta'] },
+  { id: 'client-3', name: 'Clube Pinheiros', email: 'pinheiros@email.com', phone: '11999999997', address: 'Av. Faria Lima, 2000', franchiseId: 'franchise-sp', assignedTechnicianId: 'tech-2', contractType: 'quinzenal', poolSize: 120000, dueDate: 15, visitDays: ['quarta'] },
+  { id: 'client-4', name: 'Hotel Copacabana', email: 'copa@email.com', phone: '21999999999', address: 'Av. Atlântica, 1702', franchiseId: 'franchise-rj', assignedTechnicianId: null, contractType: 'avulso', poolSize: 75000, dueDate: 1, visitDays: [] },
 ];
 
 export const technicians: Technician[] = [
@@ -28,13 +29,65 @@ export const technicians: Technician[] = [
   { id: 'tech-3', name: 'Daniela Rocha', franchiseId: 'franchise-rj', currentLocation: { lat: -22.969_778, lng: -43.186_822 }, phone: '(21) 99999-8888', avatarUrl: PlaceHolderImages.find(p => p.id === 'avatar6')?.imageUrl || '' },
 ];
 
-export const appointments: Appointment[] = [
-  { id: 'appt-1', clientId: 'client-1', technicianId: 'tech-1', franchiseId: 'franchise-sp', date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), status: 'scheduled' },
-  { id: 'appt-2', clientId: 'client-2', technicianId: 'tech-1', franchiseId: 'franchise-sp', date: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), status: 'scheduled' },
-  { id: 'appt-3', clientId: 'client-3', technicianId: 'tech-2', franchiseId: 'franchise-sp', date: new Date().toISOString(), status: 'in_progress' },
-  { id: 'appt-4', clientId: 'client-1', technicianId: 'tech-1', franchiseId: 'franchise-sp', date: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(), status: 'completed' },
-  { id: 'appt-5', clientId: 'client-2', technicianId: 'tech-1', franchiseId: 'franchise-sp', date: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString(), status: 'completed' },
+const dayOfWeekMap: Record<DayOfWeek, number> = {
+  domingo: 0,
+  segunda: 1,
+  terca: 2,
+  quarta: 3,
+  quinta: 4,
+  sexta: 5,
+  sabado: 6,
+};
+
+// Function to generate appointments for the next 4 weeks
+const generateAppointments = (clientId: string, technicianId: string, visitDays: DayOfWeek[], franchiseId: string): Appointment[] => {
+    const newAppointments: Appointment[] = [];
+    const today = new Date();
+    let visitCount = 0;
+
+    for (let week = 0; week < 4; week++) {
+        for (const day of visitDays) {
+            const dayIndex = dayOfWeekMap[day];
+            let visitDate = nextDay(today, dayIndex);
+            visitDate = add(visitDate, { weeks: week });
+            
+            // Set a default time, e.g., 9 AM plus some staggering
+            visitDate = setHours(visitDate, 9 + visitCount * 2);
+            visitDate = setMinutes(visitDate, 0);
+            visitDate = setSeconds(visitDate, 0);
+            visitDate = setMilliseconds(visitDate, 0);
+
+            newAppointments.push({
+                id: `appt-${clientId}-${week}-${day}`,
+                clientId,
+                technicianId,
+                franchiseId,
+                date: formatISO(visitDate),
+                status: 'scheduled',
+            });
+            visitCount++;
+        }
+    }
+    return newAppointments;
+};
+
+
+export let appointments: Appointment[] = [
+    ...generateAppointments('client-1', 'tech-1', ['terca', 'sexta'], 'franchise-sp'),
+    ...generateAppointments('client-2', 'tech-1', ['segunda', 'quinta'], 'franchise-sp'),
+    ...generateAppointments('client-3', 'tech-2', ['quarta'], 'franchise-sp'),
 ];
+
+
+export function addAppointmentsForClient(clientId: string, technicianId: string, visitDays: DayOfWeek[], franchiseId: string) {
+    const newAppointments = generateAppointments(clientId, technicianId, visitDays, franchiseId);
+    appointments.push(...newAppointments);
+}
+
+export function removeAppointmentsForClient(clientId: string) {
+    appointments = appointments.filter(a => a.clientId !== clientId);
+}
+
 
 // Helper to get today's appointments for a technician
 export const getTechnicianSchedule = (technicianId: string) => {
