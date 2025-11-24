@@ -1,0 +1,151 @@
+/**
+ * Core Philosophy: This ruleset enforces a franchise-based security model. A user's access to resources
+ * like clients, technicians, and appointments is determined by their membership in a specific franchise.
+ * Data is strictly segregated between franchises. Franchise owners have special administrative rights
+ * over their own franchise's primary document.
+ *
+ * Data Structure: The database has two top-level collections: '/users' for individual user profiles and
+ * '/franchises' for franchise entities. All operational data (clients, technicians, appointments, etc.)
+ * is nested within a specific franchise document (e.g., /franchises/{franchiseId}/clients/{clientId}).
+ * This hierarchical structure creates a strong, enforceable security boundary around each franchise.
+ *
+ * Key Security Decisions:
+ * - User Data Privacy: Users can only read and modify their own profile data located at /users/{userId}.
+ *   Listing all users is explicitly disabled to protect user privacy.
+ * - Franchise Ownership: The /franchises/{franchiseId} document contains an `ownerId` field. Only the user
+ *   matching this ID can modify or delete the franchise document, ensuring clear administrative control.
+ * - Franchise Membership: Access to a franchise's subcollections (like clients or technicians) is granted
+ *   to any user whose profile document (/users/{userId}) contains a `franchiseId` matching the franchise
+ *   they are trying to access. This check requires a `get()` call to the user's profile.
+ * - Default Posture: All access is denied by default. Rules explicitly grant permissions on a case-by-case basis.
+ *
+ * Denormalization for Authorization: To ensure fast and secure access checks, the `franchiseId` is denormalized
+ * (copied) onto every document within a franchise's subcollections (e.g., a Client document has its own
+ * `franchiseId` field). The rules strictly enforce that this denormalized ID matches the ID in the document path
+ * upon creation and that it cannot be changed, guaranteeing data integrity and preventing documents from being
+ * moved between franchises.
+ *
+ * Structural Segregation: Nesting operational data under /franchises/{franchiseId} is a deliberate choice. It
+ * allows for secure and efficient list operations (e.g., a franchise member can safely list all clients
+ * for their franchise) without risk of exposing data from other franchises.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for reusable logic
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Retrieves the requesting user's profile data. Used to check franchise membership.
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Checks if the signed-in user belongs to the specified franchise.
+    function isFranchiseMember(franchiseId) {
+      return isSignedIn() && getUserData().franchiseId == franchiseId;
+    }
+
+    /**
+     * @description Manages franchise documents. Creation is open to any user, who becomes the owner.
+     *              Only the owner can modify or delete their franchise. Franchise members can read details.
+     * @path /franchises/{franchiseId}
+     * @allow (get) An authenticated user with `franchiseId: 'f123'` in their profile can read `/franchises/f123`.
+     * @deny (update) A user who is not the `ownerId` of the franchise document cannot update it.
+     * @principle Enforces strict document ownership for writes and franchise membership for reads.
+     */
+    match /franchises/{franchiseId} {
+      allow get: if isFranchiseMember(franchiseId);
+      allow list: if false;
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isOwner(resource.data.ownerId) && resource != null && request.resource.data.ownerId == resource.data.ownerId;
+      allow delete: if isOwner(resource.data.ownerId) && resource != null;
+    }
+
+    /**
+     * @description Manages user profiles. Users can create, read, and update their own profile.
+     *              Listing all users is forbidden to protect user privacy.
+     * @path /users/{userId}
+     * @allow (create, get, update) A user with `auth.uid: 'u123'` can create, get, and update `/users/u123`.
+     * @deny (get) A user with `auth.uid: 'u456'` cannot get or update `/users/u123`.
+     * @principle Restricts access to a user's own data tree, enforcing privacy.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && resource != null && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(userId) && resource != null;
+    }
+
+    /**
+     * @description Manages clients, which are nested under a franchise. Only members of the franchise can
+     *              access or manage client data for that franchise.
+     * @path /franchises/{franchiseId}/clients/{clientId}
+     * @allow (list) A user whose profile has `franchiseId: 'f123'` can list clients at `/franchises/f123/clients`.
+     * @deny (create) A user from franchise 'f456' cannot create a client under `/franchises/f123/clients`.
+     * @principle Enforces franchise-level data segregation through path-based authorization.
+     */
+    match /franchises/{franchiseId}/clients/{clientId} {
+      allow get: if isFranchiseMember(franchiseId);
+      allow list: if isFranchiseMember(franchiseId);
+      allow create: if isFranchiseMember(franchiseId) && request.resource.data.franchiseId == franchiseId;
+      allow update: if isFranchiseMember(franchiseId) && resource != null && request.resource.data.franchiseId == resource.data.franchiseId;
+      allow delete: if isFranchiseMember(franchiseId) && resource != null;
+    }
+
+    /**
+     * @description Manages technicians, nested under a franchise. Only members of the franchise can
+     *              access or manage technician data for that franchise.
+     * @path /franchises/{franchiseId}/technicians/{technicianId}
+     * @allow (get) A user whose profile has `franchiseId: 'f123'` can get a doc at `/franchises/f123/technicians/t789`.
+     * @deny (update) A user from franchise 'f456' cannot update a technician under `/franchises/f123`.
+     * @principle Enforces franchise-level data segregation and validates relational integrity.
+     */
+    match /franchises/{franchiseId}/technicians/{technicianId} {
+      allow get: if isFranchiseMember(franchiseId);
+      allow list: if isFranchiseMember(franchiseId);
+      allow create: if isFranchiseMember(franchiseId) && request.resource.data.franchiseId == franchiseId;
+      allow update: if isFranchiseMember(franchiseId) && resource != null && request.resource.data.franchiseId == resource.data.franchiseId;
+      allow delete: if isFranchiseMember(franchiseId) && resource != null;
+    }
+
+    /**
+     * @description Manages appointments, nested under a franchise. Only members of the franchise can
+     *              access or manage appointment data for that franchise.
+     * @path /franchises/{franchiseId}/appointments/{appointmentId}
+     * @allow (create) A user whose profile has `franchiseId: 'f123'` can create an appointment at `/franchises/f123/appointments`.
+     * @deny (delete) A user who is not a member of franchise 'f123' cannot delete an appointment within it.
+     * @principle Enforces franchise-level data segregation and validates relational integrity.
+     */
+    match /franchises/{franchiseId}/appointments/{appointmentId} {
+      allow get: if isFranchiseMember(franchiseId);
+      allow list: if isFranchiseMember(franchiseId);
+      allow create: if isFranchiseMember(franchiseId) && request.resource.data.franchiseId == franchiseId;
+      allow update: if isFranchiseMember(franchiseId) && resource != null && request.resource.data.franchiseId == resource.data.franchiseId;
+      allow delete: if isFranchiseMember(franchiseId) && resource != null;
+    }
+
+    /**
+     * @description Manages service reports, nested under a franchise. Only members of the franchise can
+     *              access or manage service reports for that franchise.
+     * @path /franchises/{franchiseId}/serviceReports/{serviceReportId}
+     * @allow (list) A user whose profile has `franchiseId: 'f123'` can list docs at `/franchises/f123/serviceReports`.
+     * @deny (get) A user from franchise 'f456' cannot get a service report from franchise 'f123'.
+     * @principle Enforces franchise-level data segregation through path-based authorization.
+     */
+    match /franchises/{franchiseId}/serviceReports/{serviceReportId} {
+      allow get: if isFranchiseMember(franchiseId);
+      allow list: if isFranchiseMember(franchiseId);
+      allow create: if isFranchiseMember(franchiseId) && request.resource.data.franchiseId == franchiseId;
+      allow update: if isFranchiseMember(franchiseId) && resource != null && request.resource.data.franchiseId == resource.data.franchiseId;
+      allow delete: if isFranchiseMember(franchiseId) && resource != null;
+    }
+  }
+}
