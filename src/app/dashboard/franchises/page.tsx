@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import type { NewFranchiseData, Franchise, UserInfo } from '@/lib/types';
+import type { Franchise, UserInfo } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { NewFranchiseForm } from '@/components/dashboard/franchises/new-franchise-form';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useAuth as useFirebaseAuth, useMemoFirebase } from '@/firebase';
-import { collection, doc, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useCollection } from '@/firebase';
 import { Spinner } from '@/components/ui/spinner';

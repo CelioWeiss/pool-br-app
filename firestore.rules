@@ -68,6 +68,14 @@ service cloud.firestore {
     function getUserRole() {
       return getUserData().role;
     }
+    
+    /**
+     * Retrieves the franchise document data.
+     */
+    function getFranchiseData(franchiseId) {
+        return get(/databases/$(database)/documents/franchises/$(franchiseId)).data;
+    }
+
 
     /**
      * Checks if a user is a registered member of a given franchise.
@@ -76,6 +84,14 @@ service cloud.firestore {
      */
     function isFranchiseMember(franchiseId) {
       return isSignedIn() && getUserData().franchiseId == franchiseId;
+    }
+
+    /**
+     * Checks if the user is the direct owner of the franchise by checking the
+     * ownerId field on the franchise document itself.
+     */
+    function isDirectFranchiseOwner(franchiseId) {
+        return isSignedIn() && request.auth.uid == getFranchiseData(franchiseId).ownerId;
     }
 
     /**
@@ -166,7 +182,7 @@ service cloud.firestore {
      * @path /franchises/{franchiseId}/clients/{clientId}
      */
     match /franchises/{franchiseId}/clients/{clientId} {
-      allow get, list: if isFranchiseMember(franchiseId);
+      allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
       allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
       allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
     }
@@ -174,13 +190,15 @@ service cloud.firestore {
     /**
      * @description Controls access to Technician documents within a franchise.
      * Any member of the franchise can read technician data, but only staff can modify it.
+     * Now also allows the direct owner of the franchise to read the list.
      * @path /franchises/{franchiseId}/technicians/{technicianId}
      */
     match /franchises/{franchiseId}/technicians/{technicianId} {
-      allow get, list: if isFranchiseMember(franchiseId);
-      allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-      allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
+      allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
+      allow create: if (isFranchiseStaff(franchiseId) || isDirectFranchiseOwner(franchiseId)) && hasCorrectFranchiseIdOnCreate(franchiseId);
+      allow update, delete: if isSignedIn() && resource != null && (isFranchiseStaff(franchiseId) || isDirectFranchiseOwner(franchiseId)) && hasImmutableFranchiseId();
     }
+
 
     /**
      * @description Controls access to Appointment documents within a franchise.
