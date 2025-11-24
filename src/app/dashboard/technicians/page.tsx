@@ -23,7 +23,6 @@ export default function TechniciansPage() {
   const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const auth = getAuth();
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -50,6 +49,8 @@ export default function TechniciansPage() {
     if (!firestore || !franchiseId) return;
     setIsSaving(true);
     
+    const auth = getAuth();
+
     try {
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
