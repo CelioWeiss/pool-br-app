@@ -4,17 +4,18 @@ import React, { createContext, useContext, useState, ReactNode, useMemo, useCall
 import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { getAuth, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, signOut, signInWithEmailAndPassword, AuthError } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
 
 interface AuthContextType {
   user: any | null;
   userInfo: UserInfo | null;
   isUserLoading: boolean;
+  isLoggingIn: boolean; // Specific state for login action
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
-  authError: Error | null;
+  authError: AuthError | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,7 +23,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { user, isUserLoading: isFirebaseUserLoading, userError } = useUser();
   const firestore = useFirestore();
-  const [authError, setAuthError] = useState<Error | null>(null);
+  const [authError, setAuthError] = useState<AuthError | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false); // State for login process
   const router = useRouter();
   const pathname = usePathname();
   
@@ -36,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isUserLoading = isFirebaseUserLoading || (!!user && isUserInfoLoading);
 
   useEffect(() => {
-    if (isUserLoading) return;
+    if (isUserLoading || isLoggingIn) return; // Wait for all loading to finish
     
     const isAuthPage = pathname === '/';
     const isLoggedIn = !!user && !!userInfo;
@@ -50,31 +52,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.replace('/');
       }
     }
-  }, [user, userInfo, isUserLoading, router, pathname]);
+  }, [user, userInfo, isUserLoading, isLoggingIn, router, pathname]);
   
   useEffect(() => {
     if (userError) {
-      setAuthError(userError);
+      setAuthError(userError as AuthError);
     }
   }, [userError]);
 
   const login = useCallback(async (email: string, password: string) => {
     const auth = getAuth();
     setAuthError(null);
+    setIsLoggingIn(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged will handle the rest
+      // onAuthStateChanged and the useEffect above will handle redirection.
     } catch (e: any) {
       setAuthError(e);
+    } finally {
+      setIsLoggingIn(false);
     }
   }, []);
 
   const logout = useCallback(() => {
     const auth = getAuth();
     signOut(auth).then(() => {
-      router.push('/');
+      // The useEffect hook will handle redirection to '/'
     });
-  }, [router]);
+  }, []);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
     if (!userInfo) return false;
@@ -86,11 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     userInfo,
     isUserLoading,
+    isLoggingIn,
     login,
     logout,
     hasRole,
     authError,
-  }), [user, userInfo, isUserLoading, login, logout, hasRole, authError]);
+  }), [user, userInfo, isUserLoading, isLoggingIn, login, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
 
 export function LoginForm() {
-  const { login, authError, isUserLoading } = useAuth();
+  const { login, authError, isLoggingIn } = useAuth();
   const [email, setEmail] = React.useState('master@poolbr.com');
   const [password, setPassword] = React.useState('password'); // Default for demo
   const { toast } = useToast();
@@ -25,7 +25,7 @@ export function LoginForm() {
        toast({
         variant: "destructive",
         title: "Erro de Login",
-        description: "Email ou senha inválidos. Verifique suas credenciais.",
+        description: "Email ou senha inválidos. Verifique suas credenciais e tente novamente.",
       });
     }
   }, [authError, toast]);
@@ -48,7 +48,7 @@ export function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isUserLoading}
+              disabled={isLoggingIn}
             />
           </div>
           <div className="space-y-2">
@@ -60,11 +60,11 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={isUserLoading}
+              disabled={isLoggingIn}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={!email || !password || isUserLoading}>
-            {isUserLoading ? (
+          <Button type="submit" className="w-full" disabled={!email || !password || isLoggingIn}>
+            {isLoggingIn ? (
               <>
                 <Spinner size="small" className="mr-2" />
                 Entrando...
