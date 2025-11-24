@@ -1,3 +1,4 @@
+
 /**
  * # Firestore Security Rules
  *
@@ -10,37 +11,24 @@
  * ## Data Structure
  * The data is organized hierarchically. All operational data like users, clients,
  * and appointments is nested within a top-level `/franchises/{franchiseId}` collection.
- * This structure provides natural, path-based security boundaries for each franchise.
+ * There's also a top-level `/users` collection for profile lookups on login.
  *
  * ## Key Security Decisions
- * - **Franchise Isolation**: All rules are scoped to a specific franchise ID from the
+ * - **Franchise Isolation**: Most rules are scoped to a specific franchise ID from the
  *   request path. This is the primary security boundary.
  * - **Database-Based Access Control (DBAC)**: A user's permissions are derived from
- *   the `role` field in their document located at `/franchises/{franchiseId}/users/{userId}`.
- *   This requires a `get()` call to the user's own document to determine their permissions for
- *   other resources within the franchise.
- * - **Franchise Creation**: To resolve the circular dependency of needing to be a "master user"
- *   within a franchise to create a new one, this ruleset simplifies franchise creation.
- *   Any authenticated user can create a new franchise, and they are automatically
- *   assigned as the `ownerId` of that new franchise.
+ *   the `role` field in their document located at `/users/{userId}`.
+ * - **Franchise Creation**: Any authenticated user can create a new franchise, and
+ *   they are automatically assigned as the `ownerId` of that new franchise.
  * - **Default Read Access**: Within a franchise, all authenticated members of that
- *   franchise are granted read access (`get`, `list`) to franchise-level data
- *   (clients, appointments, etc.). Write access is more restrictive and typically limited
- *   to 'owner' or 'technician' roles.
+ *   franchise are granted read access to franchise-level data. Write access is more restrictive.
+ * - **User Profile Access**: A user can always read their own profile from the top-level `/users`
+ *   collection. This is crucial for the login flow to verify the user's role.
  *
  * ## Denormalization for Authorization
- * To create simpler and more performant rules, the `franchiseId` is denormalized
- * (copied) onto every document within a franchise's subcollections (e.g., clients,
- * appointments). This allows rules to validate relational integrity on write operations
- * without performing costly extra reads. For example, a rule can verify that a new
- * client document has the correct `franchiseId` property matching its location in the
- * database.
- *
- * ## Structural Segregation
- * By nesting entity types (clients, technicians, etc.) in their own dedicated
- * subcollections under a franchise, we ensure that all documents within a given
- * path share the same fundamental security context. This eliminates the need for
- * complex, query-based rules and leads to a more secure and performant system.
+ * The `franchiseId` is denormalized (copied) onto every document within a franchise's
+ * subcollections. This allows rules to validate relational integrity on write operations
+ * without performing costly extra reads.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -67,28 +55,27 @@ service cloud.firestore {
     }
 
     /**
-     * Retrieves the user's profile document data from within a specific franchise.
+     * Retrieves the user's profile document data from the top-level users collection.
      * This is the core of the role-based access control system.
-     * @param franchiseId The franchise context for the user lookup.
      */
-    function getUserData(franchiseId) {
-      return get(/databases/$(database)/documents/franchises/$(franchiseId)/users/$(request.auth.uid)).data;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    /**
+     * Retrieves the role of the current user.
+     */
+    function getUserRole() {
+      return getUserData().role;
     }
 
     /**
      * Checks if a user is a registered member of a given franchise.
+     * It checks the user's document in the top-level users collection.
      * @param franchiseId The franchise to check membership in.
      */
     function isFranchiseMember(franchiseId) {
-      return isSignedIn() && exists(/databases/$(database)/documents/franchises/$(franchiseId)/users/$(request.auth.uid));
-    }
-
-    /**
-     * Retrieves the role of the current user within a specific franchise.
-     * @param franchiseId The franchise context to get the role from.
-     */
-    function getUserRole(franchiseId) {
-      return getUserData(franchiseId).role;
+      return isSignedIn() && getUserData().franchiseId == franchiseId;
     }
 
     /**
@@ -96,7 +83,7 @@ service cloud.firestore {
      * @param franchiseId The franchise context to check the role in.
      */
     function isFranchiseOwner(franchiseId) {
-      return isFranchiseMember(franchiseId) && getUserRole(franchiseId) == 'owner';
+      return isFranchiseMember(franchiseId) && getUserRole() == 'owner';
     }
 
     /**
@@ -105,7 +92,7 @@ service cloud.firestore {
      * @param franchiseId The franchise context to check the role in.
      */
     function isFranchiseStaff(franchiseId) {
-      let role = getUserRole(franchiseId);
+      let role = getUserRole();
       return isFranchiseMember(franchiseId) && (role == 'owner' || role == 'technician');
     }
 
@@ -146,13 +133,27 @@ service cloud.firestore {
     // -------------------------------------------------------------------------
 
     /**
+     * @description Top-level user collection. Stores user profiles.
+     * A user can always read their own profile, which is essential for login.
+     * A user can create their own profile.
+     * A user can update their own profile.
+     * Listing all users is restricted to 'master' role.
+     * @path /users/{userId}
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isSignedIn() && getUserRole() == 'master';
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      // Delete might be restricted to master or self.
+      allow delete: if isOwner(userId) || getUserRole() == 'master';
+    }
+
+    /**
      * @description Controls access to Franchise documents.
      * Franchise information is public to read, but creating, updating, and
      * deleting a franchise is restricted.
      * @path /franchises/{franchiseId}
-     * @allow (get) Any user, signed in or not, can read a franchise document.
-     * @deny (create) A user tries to create a franchise but doesn't set themselves as the owner.
-     * @principle Public read with owner-only writes. Any signed-in user can create a franchise and become its owner.
      */
     match /franchises/{franchiseId} {
       allow get, list: if true;
@@ -161,28 +162,9 @@ service cloud.firestore {
     }
 
     /**
-     * @description Controls access to User documents within a franchise.
-     * Users can manage their own profile. Franchise owners can manage any user profile in their franchise.
-     * @path /franchises/{franchiseId}/users/{userId}
-     * @allow (update) An authenticated user updates their own profile document.
-     * @deny (list) A regular user (technician/client) tries to list all users in the franchise.
-     * @principle Restricts access to a user's own data tree, with elevated privileges for franchise owners.
-     */
-    match /franchises/{franchiseId}/users/{userId} {
-      allow get: if isSignedIn() && (isOwner(userId) || isFranchiseOwner(franchiseId));
-      allow list: if isSignedIn() && isFranchiseOwner(franchiseId);
-      allow create: if isOwner(userId) && hasCorrectFranchiseIdOnCreate(franchiseId) && hasCorrectIdOnCreate(userId);
-      allow update: if isSignedIn() && resource != null && isOwner(userId) && hasImmutableFranchiseId() && hasImmutableId();
-      allow delete: if isSignedIn() && resource != null && isFranchiseOwner(franchiseId);
-    }
-
-    /**
      * @description Controls access to Client documents within a franchise.
      * Any member of the franchise can read client data, but only staff (owners, technicians) can modify it.
      * @path /franchises/{franchiseId}/clients/{clientId}
-     * @allow (create) A franchise owner or technician creates a new client document.
-     * @deny (update) A user from another franchise attempts to update a client.
-     * @principle Shared access for reads, role-based access for writes, within a franchise boundary.
      */
     match /franchises/{franchiseId}/clients/{clientId} {
       allow get, list: if isFranchiseMember(franchiseId);
@@ -194,9 +176,6 @@ service cloud.firestore {
      * @description Controls access to Technician documents within a franchise.
      * Any member of the franchise can read technician data, but only staff can modify it.
      * @path /franchises/{franchiseId}/technicians/{technicianId}
-     * @allow (get) A client user in the franchise reads a technician's profile.
-     * @deny (create) A client user tries to create a new technician document.
-     * @principle Shared access for reads, role-based access for writes, within a franchise boundary.
      */
     match /franchises/{franchiseId}/technicians/{technicianId} {
       allow get, list: if isFranchiseMember(franchiseId);
@@ -208,9 +187,6 @@ service cloud.firestore {
      * @description Controls access to Appointment documents within a franchise.
      * Any member of the franchise can read appointment data, but only staff can modify it.
      * @path /franchises/{franchiseId}/appointments/{appointmentId}
-     * @allow (list) Any authenticated member of the franchise lists all appointments.
-     * @deny (delete) A user who is not a member of the franchise tries to delete an appointment.
-     * @principle Shared access for reads, role-based access for writes, within a franchise boundary.
      */
     match /franchises/{franchiseId}/appointments/{appointmentId} {
       allow get, list: if isFranchiseMember(franchiseId);
@@ -222,9 +198,6 @@ service cloud.firestore {
      * @description Controls access to Service Report documents within a franchise.
      * Any member of the franchise can read reports, but only staff can modify them.
      * @path /franchises/{franchiseId}/serviceReports/{serviceReportId}
-     * @allow (create) A technician creates a new service report for an appointment.
-     * @deny (update) A client user tries to modify an existing service report.
-     * @principle Shared access for reads, role-based access for writes, within a franchise boundary.
      */
     match /franchises/{franchiseId}/serviceReports/{serviceReportId} {
       allow get, list: if isFranchiseMember(franchiseId);
@@ -232,5 +205,6 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
     }
 
+    // Rules for subcollections of users inside franchises were removed as the `users` collection is now top-level.
   }
 }

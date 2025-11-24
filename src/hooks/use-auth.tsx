@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
@@ -15,7 +16,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; redirect?: string }>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
-  authError: AuthError | null; // This can be removed or refactored if not used in toasts anymore
+  authError: AuthError | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,16 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (isLoggedIn) {
       if (isAuthPage) {
-        // Determine redirect based on role, similar to the login function logic
+        // Determine redirect based on role
         let redirect = '/dashboard'; // Default dashboard
-        if (userInfo.role === 'master') {
-          redirect = '/dashboard';
-        } else if (userInfo.role === 'owner' && userInfo.franchiseId) {
-          redirect = '/dashboard';
-        } else if (userInfo.role === 'technician') {
+        if (userInfo.role === 'technician') {
           redirect = '/dashboard/schedule';
-        } else if (userInfo.role === 'client') {
-          redirect = '/dashboard';
         }
         router.replace(redirect);
       }
@@ -75,6 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const loggedInUser = userCredential.user;
 
       if (!loggedInUser) {
+        setIsLoggingIn(false);
         throw new Error("Usuário não retornado pelo Firebase.");
       }
 
@@ -84,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!profileSnap.exists()) {
         await signOut(auth); // Log out user if profile doesn't exist
+        setIsLoggingIn(false);
         throw new Error("Perfil não encontrado no Firestore. Entre em contato com o suporte.");
       }
 
@@ -92,11 +89,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 3 — VERIFICA SE TEM ROLE DEFINIDA
       if (!data.role) {
          await signOut(auth); // Log out user if role is missing
+         setIsLoggingIn(false);
         throw new Error("O usuário não possui uma função atribuída (role undefined).");
       }
       
-      // The useEffect will handle redirection based on the new `userInfo` state.
-      // We just need to signal success.
+      // onAuthStateChanged will eventually pick up the user and redirect
+      // but we can also redirect imperatively here.
       setIsLoggingIn(false);
       return { ok: true, redirect: '/dashboard' };
 
