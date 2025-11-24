@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import type { UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 
 interface AuthContextType {
@@ -37,13 +37,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const router = useRouter();
 
+
+  // Automatically create user profile if it doesn't exist on login
+  useEffect(() => {
+    if (firestore && firebaseUser && !userInfo && !isUserInfoLoading) {
+      const userRef = doc(firestore, "users", firebaseUser.uid);
+      getDoc(userRef).then(docSnap => {
+        if (!docSnap.exists()) {
+          const email = firebaseUser.email || "";
+          const nameParts = firebaseUser.displayName?.split(' ') || [email.split('@')[0], ''];
+          const isMaster = email === 'master@poolbr.com';
+
+          const newUserInfo: UserInfo = {
+            id: firebaseUser.uid,
+            firstName: nameParts[0],
+            lastName: nameParts.slice(1).join(' '),
+            email: email,
+            role: isMaster ? 'master' : 'owner', // Default to owner, special case for master
+            franchiseId: null, // Should be assigned later for non-master users
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          };
+          setDoc(userRef, newUserInfo);
+        }
+      });
+    }
+  }, [firestore, firebaseUser, userInfo, isUserInfoLoading]);
+
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
     setIsLoggingIn(true);
     setAuthError(null);
     const auth = getAuth();
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      // onIdTokenChanged and useDoc will handle the rest
       setIsLoggingIn(false);
       return { ok: true, redirect: '/dashboard' };
     } catch (err: any) {
@@ -55,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
     }
-  }, [router]);
+  }, []);
 
   const logout = useCallback(() => {
     const auth = getAuth();

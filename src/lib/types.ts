@@ -1,4 +1,5 @@
 
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -43,7 +44,16 @@ export interface Client {
   locationLongitude?: number;
 }
 
-export type NewClientData = Omit<Client, 'id' | 'franchiseId'>;
+export interface NewClientData {
+    name: string;
+    contactEmail: string;
+    contactName: string;
+    contactPhone: string;
+    address: string;
+    poolDetails: string;
+    technicianId: string | null;
+    createdAt: string;
+}
 
 export interface Technician {
   id: string;
