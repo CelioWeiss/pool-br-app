@@ -40,18 +40,22 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border justify-center">
-        <div className="p-2">
+       <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center gap-2 p-2">
             {logo && (
               <Image
                 src={logo.imageUrl} 
                 alt="Pool BR Logo"
-                width={150}
-                height={75}
+                width={40}
+                height={40}
                 className="object-contain"
                 data-ai-logo
               />
             )}
+            <div className="flex flex-col">
+              <span className="text-lg font-bold tracking-tight text-sidebar-foreground">Pool BR</span>
+              <span className="text-xs text-sidebar-foreground/70 -mt-1">Limpeza e Manutenção</span>
+            </div>
         </div>
       </SidebarHeader>
 
