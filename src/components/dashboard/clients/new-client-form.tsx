@@ -56,25 +56,25 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
   };
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="name" className="text-right">
+    <form onSubmit={handleSubmit} className="grid gap-6 py-4">
+      <div className="grid grid-cols-1 gap-2">
+        <Label htmlFor="name">
           Nome
         </Label>
-        <Input id="name" name="name" className="col-span-3" required />
+        <Input id="name" name="name" required />
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="address" className="text-right">
+      <div className="grid grid-cols-1 gap-2">
+        <Label htmlFor="address">
           Endereço
         </Label>
-        <Textarea id="address" name="address" className="col-span-3" required />
+        <Textarea id="address" name="address" required />
       </div>
-       <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="contractType" className="text-right">
+       <div className="grid grid-cols-1 gap-2">
+        <Label htmlFor="contractType">
             Contrato
         </Label>
         <Select name="contractType" required>
-            <SelectTrigger className="col-span-3">
+            <SelectTrigger>
                 <SelectValue placeholder="Selecione o tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -84,24 +84,26 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
             </SelectContent>
         </Select>
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="monthlyFee" className="text-right">
-          Mensalidade
-        </Label>
-        <Input id="monthlyFee" name="monthlyFee" type="number" placeholder="R$" className="col-span-3" required />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-2">
+          <Label htmlFor="monthlyFee">
+            Mensalidade
+          </Label>
+          <Input id="monthlyFee" name="monthlyFee" type="number" placeholder="R$" required />
+        </div>
+         <div className="grid grid-cols-1 gap-2">
+          <Label htmlFor="dueDate">
+            Vencimento
+          </Label>
+          <Input id="dueDate" name="dueDate" type="number" placeholder="Dia do mês" min="1" max="31" required />
+        </div>
       </div>
-       <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="dueDate" className="text-right">
-          Vencimento
-        </Label>
-        <Input id="dueDate" name="dueDate" type="number" placeholder="Dia do mês" min="1" max="31" className="col-span-3" required />
-      </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label htmlFor="technicianId" className="text-right">
+      <div className="grid grid-cols-1 gap-2">
+        <Label htmlFor="technicianId">
           Técnico
         </Label>
          <Select name="technicianId">
-            <SelectTrigger className="col-span-3">
+            <SelectTrigger>
                 <SelectValue placeholder="Selecione um técnico" />
             </SelectTrigger>
             <SelectContent>
@@ -111,11 +113,11 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
             </SelectContent>
         </Select>
       </div>
-       <div className="grid grid-cols-4 items-start gap-4">
-            <Label className="text-right pt-2">
+       <div className="grid grid-cols-1 gap-2">
+            <Label>
                 Dias de Visita
             </Label>
-            <div className="col-span-3 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2 rounded-md border p-4">
                 {daysOfWeek.map(day => (
                     <div key={day.id} className="flex items-center space-x-2">
                         <Checkbox 
@@ -132,7 +134,7 @@ export function NewClientForm({ technicians, onClientCreated }: NewClientFormPro
                 ))}
             </div>
       </div>
-      <div className="col-start-4 col-span-1">
+      <div className="flex justify-end">
         <Button type="submit">Salvar Cliente</Button>
       </div>
     </form>
