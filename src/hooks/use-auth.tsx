@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { User as UserInfo, UserRole } from '@/lib/types';
-import { useUser, useFirestore, useDoc, useMemoFirebase, initiateEmailSignIn } from '@/firebase';
-import { getAuth, signOut } from 'firebase/auth';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { getAuth, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc } from 'firebase/firestore';
 
 interface AuthContextType {
@@ -20,25 +20,25 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { user, isUserLoading, userError } = useUser();
+  const { user, isUserLoading: isFirebaseUserLoading, userError } = useUser();
   const firestore = useFirestore();
   const [authError, setAuthError] = useState<Error | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   
   const userDocRef = useMemoFirebase(() => {
-    if (!user || pathname === '/') return null;
+    if (!user?.uid) return null;
     return doc(firestore, 'users', user.uid);
-  }, [firestore, user, pathname]);
+  }, [firestore, user?.uid]);
   
   const { data: userInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
 
+  const isUserLoading = isFirebaseUserLoading || (!!user && isUserInfoLoading);
+
   useEffect(() => {
-    const totalLoading = isUserLoading || isUserInfoLoading;
-    if (totalLoading) return;
+    if (isUserLoading) return;
     
     const isAuthPage = pathname === '/';
-    const isDashboardPage = pathname.startsWith('/dashboard');
     const isLoggedIn = !!user && !!userInfo;
 
     if (isLoggedIn) {
@@ -46,11 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         router.replace('/dashboard');
       }
     } else {
-      if (isDashboardPage) {
+      if (pathname.startsWith('/dashboard')) {
         router.replace('/');
       }
     }
-  }, [user, userInfo, isUserLoading, isUserInfoLoading, router, pathname]);
+  }, [user, userInfo, isUserLoading, router, pathname]);
   
   useEffect(() => {
     if (userError) {
@@ -62,11 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getAuth();
     setAuthError(null);
     try {
-      // We are not awaiting this to avoid blocking, the onAuthStateChanged listener will handle the redirect
-      initiateEmailSignIn(auth, email, password);
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged will handle the rest
     } catch (e: any) {
+      console.error("Login failed:", e);
       setAuthError(e);
-      throw e; // re-throw to be caught by the form
     }
   }, []);
 
@@ -86,12 +86,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo(() => ({
     user,
     userInfo,
-    isUserLoading: isUserLoading || isUserInfoLoading,
+    isUserLoading,
     login,
     logout,
     hasRole,
     authError,
-  }), [user, userInfo, isUserLoading, isUserInfoLoading, login, logout, hasRole, authError]);
+  }), [user, userInfo, isUserLoading, login, logout, hasRole, authError]);
 
   return (
     <AuthContext.Provider value={value}>

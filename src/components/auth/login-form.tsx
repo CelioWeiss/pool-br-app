@@ -9,26 +9,17 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
 export function LoginForm() {
-  const { login, authError } = useAuth();
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
+  const { login, authError, isUserLoading } = useAuth();
+  const [email, setEmail] = React.useState('master@poolbr.com');
+  const [password, setPassword] = React.useState('password'); // Default for demo
   const [isLoading, setIsLoading] = React.useState(false);
   const { toast } = useToast();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    try {
-      await login(email, password);
-      // The redirect is handled by the AuthProvider
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Erro de Login",
-        description: error.message || "Falha ao tentar fazer login.",
-      });
-      setIsLoading(false);
-    }
+    await login(email, password);
+    // Don't set isLoading to false here, let the redirect happen
   };
   
   React.useEffect(() => {
@@ -36,11 +27,13 @@ export function LoginForm() {
        toast({
         variant: "destructive",
         title: "Erro de Login",
-        description: "Email ou senha inválidos.",
+        description: "Email ou senha inválidos. Verifique suas credenciais.",
       });
-      setIsLoading(false);
+      setIsLoading(false); // Stop loading on error
     }
   }, [authError, toast]);
+
+  const internalIsLoading = isLoading || isUserLoading;
 
   return (
     <Card className="shadow-2xl">
@@ -59,7 +52,7 @@ export function LoginForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              disabled={isLoading}
+              disabled={internalIsLoading}
             />
           </div>
           <div className="space-y-2">
@@ -71,11 +64,11 @@ export function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              disabled={isLoading}
+              disabled={internalIsLoading}
             />
           </div>
-          <Button type="submit" className="w-full" disabled={!email || !password || isLoading}>
-            {isLoading ? 'Entrando...' : 'Entrar'}
+          <Button type="submit" className="w-full" disabled={!email || !password || internalIsLoading}>
+            {internalIsLoading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
       </CardContent>
