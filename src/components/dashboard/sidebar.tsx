@@ -18,6 +18,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['master', 'owner', 'technician', 'client'] },
@@ -32,6 +33,8 @@ const menuItems = [
 export function AppSidebar() {
   const pathname = usePathname();
   const { user, hasRole, logout } = useAuth();
+  const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
+
 
   if (!user) return null;
 
@@ -39,32 +42,34 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border justify-center">
         <div className="p-2">
-            <Image
-              src="/logo-white.png" // TODO: Substitua por uma versão do seu logo para fundos escuros
-              alt="Pool BR Logo"
-              width={150}
-              height={75}
-              className="object-contain"
-              data-ai-logo
-            />
+            {logo && (
+              <Image
+                src={logo.imageUrl} 
+                alt="Pool BR Logo"
+                width={150}
+                height={75}
+                className="object-contain"
+                data-ai-logo
+              />
+            )}
         </div>
       </SidebarHeader>
 
       <SidebarContent className="flex-1 p-2">
         <SidebarMenu>
           {menuItems.filter(item => hasRole(item.roles)).map(item => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton
-                asChild
-                isActive={pathname === item.href}
-                tooltip={item.label}
-              >
-                <Link href={item.href}>
-                  <item.icon />
-                  <span>{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+             <SidebarMenuItem key={item.href}>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === item.href}
+                  tooltip={item.label}
+                >
+                  <Link href={item.href}>
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
           ))}
         </SidebarMenu>
       </SidebarContent>

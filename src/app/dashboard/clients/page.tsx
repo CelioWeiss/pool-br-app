@@ -31,19 +31,20 @@ export default function ClientsPage() {
     return technicians.find(t => t.id === id)?.name || 'N/A';
   }
 
-  const contractVariant: Record<ContractType, "default" | "secondary" | "destructive"> = {
+  const contractVariant: Record<ContractType, "default" | "secondary" | "destructive" | "outline"> = {
     mensal: 'default',
     quinzenal: 'secondary',
     avulso: 'destructive',
+    'default': 'outline',
   };
 
   const handleSaveClient = (clientData: NewClientData) => {
     if (editingClient) {
         // Update existing client
         const updatedClients = clientList.map(c => 
-            c.id === editingClient.id ? { ...c, ...clientData } : c
+            c.id === editingClient.id ? { ...c, ...clientData, id: editingClient.id, franchiseId: editingClient.franchiseId } : c
         );
-        setClientList(updatedClients);
+        setClientList(updatedClients as Client[]);
         removeAppointmentsForClient(editingClient.id);
         if (clientData.assignedTechnicianId && clientData.visitDays) {
             addAppointmentsForClient(editingClient.id, clientData.assignedTechnicianId, clientData.visitDays, user?.franchiseId || '');
@@ -91,7 +92,7 @@ export default function ClientsPage() {
         </div>
         <Dialog open={isNewClientDialogOpen} onOpenChange={setIsNewClientDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button onClick={() => setEditingClient(null)}>
               <PlusCircle className="mr-2 h-4 w-4" />
               Novo Cliente
             </Button>

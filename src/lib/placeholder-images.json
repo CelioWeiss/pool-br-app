@@ -15,7 +15,7 @@
     {
       "id": "avatar3",
       "description": "Technician Bruno Alves",
-      "imageUrl": "https://images.unsplash.com/photo-1725866546799-4cc16f6cba23?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxtYW4lMjBzbWlsaW5nfGVufDB8fHx8MTc2Mzk3MjcxMXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://images.unsplash.com/photo-1725866546799-4cc16f6cba23?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxtYW4lMjBzbWlsaW5nfGVufDB8fHx8fDE3NjM5NzI3MTF8MA&ixlib=rb-4.1.0&q=80&w=1080",
       "imageHint": "man smiling"
     },
     {
@@ -27,7 +27,7 @@
     {
       "id": "avatar5",
       "description": "Client Família Silva",
-      "imageUrl": "https://images.unsplash.com/photo-1556566353-cdcb88a69f3c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxmYW1pbHklMjBob21lfGVufDB8fHx8MTc2Mzk4NzM4M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://images.unsplash.com/photo-1556566353-cdcb88a69f3c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxmYW1pbHklMjBob21lfGVufDB8fHx8fDE3NjM5ODczODN8MA&ixlib=rb-4.1.0&q=80&w=1080",
       "imageHint": "family home"
     },
     {
@@ -41,6 +41,18 @@
       "description": "Clean swimming pool",
       "imageUrl": "https://images.unsplash.com/photo-1562016600-ece13e8ba570?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxzd2ltbWluZyUyMHBvb2x8ZW58MHx8fHwxNzYzOTMyMzc0fDA&ixlib=rb-4.1.0&q=80&w=1080",
       "imageHint": "swimming pool"
+    },
+    {
+      "id": "logo-color",
+      "description": "Company color logo",
+      "imageUrl": "https://images.unsplash.com/photo-1542744173-05336fcc7ad4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxvZmZpY2UlMjBicmFkaW5nfGVufDB8fHx8MTc2NDA5MDUzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "company logo"
+    },
+    {
+      "id": "logo-white",
+      "description": "Company white logo",
+      "imageUrl": "https://images.unsplash.com/photo-1542744173-05336fcc7ad4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxvZmZpY2UlMjBicmFkaW5nfGVufDB8fHx8MTc2NDA5MDUzOHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "company logo"
     }
   ]
 }
