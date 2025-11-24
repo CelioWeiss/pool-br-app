@@ -174,54 +174,53 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
       allow update, delete: if isSignedIn() && resource != null && isOwner(resource.data.ownerId);
+
+        /**
+         * @description Controls access to Client documents within a franchise.
+         * Any member of the franchise can read client data, but only staff (owners, technicians) can modify it.
+         * @path /franchises/{franchiseId}/clients/{clientId}
+         */
+        match /clients/{clientId} {
+          allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
+          allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
+          allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
+        }
+
+        /**
+         * @description Controls access to Technician documents within a franchise.
+         * Any member of the franchise can read technician data, but only the franchise owner can modify it.
+         * @path /franchises/{franchiseId}/technicians/{technicianId}
+         */
+        match /technicians/{technicianId} {
+          allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
+          allow create: if isFranchiseOwner(franchiseId) || isDirectFranchiseOwner(franchiseId);
+          allow update, delete: if isSignedIn() && resource != null && (isFranchiseOwner(franchiseId) || isDirectFranchiseOwner(franchiseId));
+        }
+
+
+        /**
+         * @description Controls access to Appointment documents within a franchise.
+         * Any member of the franchise can read appointment data, but only staff can modify it.
+         * @path /franchises/{franchiseId}/appointments/{appointmentId}
+         */
+        match /appointments/{appointmentId} {
+          allow get, list: if isFranchiseMember(franchiseId);
+          allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
+          allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
+        }
+
+        /**
+         * @description Controls access to Service Report documents within a franchise.
+         * Any member of the franchise can read reports, but only staff can modify them.
+         * @path /franchises/{franchiseId}/serviceReports/{serviceReportId}
+         */
+        match /serviceReports/{serviceReportId} {
+          allow get, list: if isFranchiseMember(franchiseId);
+          allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
+          allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
+        }
     }
-
-    /**
-     * @description Controls access to Client documents within a franchise.
-     * Any member of the franchise can read client data, but only staff (owners, technicians) can modify it.
-     * @path /franchises/{franchiseId}/clients/{clientId}
-     */
-    match /franchises/{franchiseId}/clients/{clientId} {
-      allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
-      allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-      allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
-    }
-
-    /**
-     * @description Controls access to Technician documents within a franchise.
-     * Any member of the franchise can read technician data, but only staff can modify it.
-     * Now also allows the direct owner of the franchise to read the list.
-     * @path /franchises/{franchiseId}/technicians/{technicianId}
-     */
-    match /franchises/{franchiseId}/technicians/{technicianId} {
-      allow get, list: if isFranchiseMember(franchiseId) || isDirectFranchiseOwner(franchiseId);
-      allow create: if (isFranchiseStaff(franchiseId) || isDirectFranchiseOwner(franchiseId)) && hasCorrectFranchiseIdOnCreate(franchiseId);
-      allow update, delete: if isSignedIn() && resource != null && (isFranchiseStaff(franchiseId) || isDirectFranchiseOwner(franchiseId)) && hasImmutableFranchiseId();
-    }
-
-
-    /**
-     * @description Controls access to Appointment documents within a franchise.
-     * Any member of the franchise can read appointment data, but only staff can modify it.
-     * @path /franchises/{franchiseId}/appointments/{appointmentId}
-     */
-    match /franchises/{franchiseId}/appointments/{appointmentId} {
-      allow get, list: if isFranchiseMember(franchiseId);
-      allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-      allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
-    }
-
-    /**
-     * @description Controls access to Service Report documents within a franchise.
-     * Any member of the franchise can read reports, but only staff can modify them.
-     * @path /franchises/{franchiseId}/serviceReports/{serviceReportId}
-     */
-    match /franchises/{franchiseId}/serviceReports/{serviceReportId} {
-      allow get, list: if isFranchiseMember(franchiseId);
-      allow create: if isFranchiseStaff(franchiseId) && hasCorrectFranchiseIdOnCreate(franchiseId);
-      allow update, delete: if isSignedIn() && resource != null && isFranchiseStaff(franchiseId) && hasImmutableFranchiseId();
-    }
-
-    // Rules for subcollections of users inside franchises were removed as the `users` collection is now top-level.
   }
 }
+
+    
