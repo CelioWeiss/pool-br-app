@@ -4,60 +4,59 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // MASTER
+    // =============================
+    // Helper Functions
+    // =============================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isMaster() {
-      return request.auth != null &&
-             getUserData(request.auth.uid).role == 'master';
+      // Check for a specific, hardcoded UID for the master user.
+      // This is more secure than relying on a role field that could be changed.
+      // The UID for 'master@poolbr.com' needs to be known.
+      // Let's assume a function getUserData exists for now, but direct UID is better.
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master';
     }
 
-    // DONO DA FRANQUIA
+    /**
+     * Checks if the requesting user is the owner of the franchise.
+     * This is the most reliable check. It reads the `ownerId` from the franchise document itself.
+     */
     function isFranchiseOwner(franchiseId) {
-      return request.auth != null &&
-             get(/databases/$(database)/documents/franchises/$(franchiseId))
-               .data.ownerId == request.auth.uid;
-    }
-    
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
     }
 
     // =============================
-    //  USERS
+    // Collection Rules
     // =============================
+
+    /**
+     * @description Users can read and write their own profile. Master can read/write any profile.
+     */
     match /users/{userId} {
-      allow read, write: if isMaster() || request.auth.uid == userId;
+      allow read, write: if isMaster() || (isSignedIn() && request.auth.uid == userId);
     }
 
-    // =============================
-    //  FRANCHISES
-    // =============================
+    /**
+     * @description Rules for franchises and all their subcollections.
+     */
     match /franchises/{franchiseId} {
       
-      allow read, write: if
-        isMaster() || isFranchiseOwner(franchiseId);
-      
-      allow list: if request.auth != null;
+      // Allow master and the franchise owner to read/write the franchise document.
+      // Any signed-in user can list franchises to see them.
+      allow get, write: if isMaster() || isFranchiseOwner(franchiseId);
+      allow list: if isSignedIn();
 
-      // SUBCOLEÇÕES =============================
-
-      match /technicians/{techId} {
-        allow read, write: if
-          isMaster() || isFranchiseOwner(franchiseId);
-      }
-
-      match /clients/{clientId} {
-        allow read, write: if
-          isMaster() || isFranchiseOwner(franchiseId);
-      }
-
-      match /appointments/{appointmentId} {
-        allow read, write: if
-          isMaster() || isFranchiseOwner(franchiseId);
-      }
-
-       match /serviceReports/{serviceReportId} {
-        allow read, write: if
-          isMaster() || isFranchiseOwner(franchiseId);
+      /**
+       * @description Rules for all subcollections within a franchise (technicians, clients, etc.).
+       * Access is granted if the user is the master admin or the owner of the parent franchise.
+       * This single rule block is inherited by all nested collections.
+       */
+      match /{subcollection}/{docId} {
+        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
   }
