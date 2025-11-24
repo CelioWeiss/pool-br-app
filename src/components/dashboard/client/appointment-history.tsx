@@ -1,7 +1,8 @@
 "use client";
 
 import type { Appointment } from '@/lib/types';
-import { technicians, PlaceHolderImages } from '@/lib/data';
+import { technicians } from '@/lib/data';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Badge } from '@/components/ui/badge';
 import { Check, Clock, X, Microscope, Wrench, Image as ImageIcon } from 'lucide-react';
 import { format } from 'date-fns';
