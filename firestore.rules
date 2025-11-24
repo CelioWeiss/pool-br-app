@@ -135,7 +135,7 @@ service cloud.firestore {
     /**
      * @description Top-level user collection. Stores user profiles.
      * A user can always read their own profile, which is essential for login.
-     * A user can create their own profile.
+     * A user can create their own profile, or the seeding script can create it if the IDs match.
      * A user can update their own profile.
      * Listing all users is restricted to 'master' role.
      * @path /users/{userId}
@@ -143,9 +143,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isOwner(userId) || getUserRole() == 'master';
       allow list: if isSignedIn() && getUserRole() == 'master';
-      allow create: if isOwner(userId);
+      allow create: if isOwner(userId) || hasCorrectIdOnCreate(userId);
       allow update: if isOwner(userId);
-      // Delete might be restricted to master or self.
       allow delete: if isOwner(userId) || getUserRole() == 'master';
     }
 
