@@ -15,7 +15,10 @@ service cloud.firestore {
 
     function isFranchiseOwner(franchiseId) {
       // Retorna true se o UID do usuário corresponder ao ownerId no documento da franquia.
-      return request.auth != null && get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
+      // Adicionado .exists() para segurança.
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/franchises/$(franchiseId)) &&
+        get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
     }
 
     // =============================
@@ -37,22 +40,21 @@ service cloud.firestore {
       // Qualquer usuário autenticado pode listar as franquias (para um mapa, por exemplo).
       allow list: if request.auth != null;
 
-      // --- Subcollections: technicians ---
+      // --- Subcollections Seguras ---
       match /technicians/{technicianId} {
-        // O mestre ou o proprietário da franquia podem gerenciar técnicos.
-        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
 
-      // --- Subcollections: clients ---
       match /clients/{clientId} {
-        // O mestre ou o proprietário da franquia podem gerenciar clientes.
-        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
       
-      // --- Outras Subcoleções ---
-      // Esta regra se aplica a outras subcoleções como appointments, serviceReports, etc.
-      match /{subcollection}/{docId} {
-        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      match /appointments/{appointmentId} {
+        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+
+      match /serviceReports/{serviceReportId} {
+        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
   }
