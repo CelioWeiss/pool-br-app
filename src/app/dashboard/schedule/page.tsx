@@ -66,56 +66,65 @@ export default function SchedulePage() {
   const { data: manualAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
   // --- Logic for Combining Manual and Auto-Generated Appointments ---
-
-  const techniciansMap = useMemo(() => 
-    new Map(technicians?.map(t => [t.id, `${t.firstName} ${t.lastName}`]))
-  , [technicians]);
-  
   const allAppointments = useMemo(() => {
-    const generatedAppointments: Appointment[] = [];
-    
+    if (!clients || !technicians) return [];
+
     // 1. Generate appointments from client service days
-    if (clients) {
-      const start = startOfMonth(currentDate);
-      const end = endOfMonth(currentDate);
-      const daysInMonth = eachDayOfInterval({ start, end });
+    const generatedAppointments: Appointment[] = [];
+    const start = startOfMonth(currentDate);
+    const end = endOfMonth(currentDate);
+    const daysInMonth = eachDayOfInterval({ start, end });
 
-      for (const client of clients) {
-        if (client.serviceDays && client.serviceDays.length > 0) {
-          for (const day of daysInMonth) {
-            const dayOfWeekJs = getDay(day);
-            const serviceDaysAsNumbers = client.serviceDays.map(d => dayOfWeekMap[d]);
-
-            if (serviceDaysAsNumbers.includes(dayOfWeekJs)) {
-              generatedAppointments.push({
-                id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
-                clientId: client.id,
-                technicianId: client.technicianId || '',
-                franchiseId: client.franchiseId,
-                scheduledDateTime: day.toISOString(),
-                status: 'scheduled', 
-              });
-            }
+    for (const client of clients) {
+      if (client.serviceDays && client.serviceDays.length > 0 && client.technicianId) {
+        const serviceDaysAsNumbers = client.serviceDays.map(d => dayOfWeekMap[d]);
+        for (const day of daysInMonth) {
+          const dayOfWeekJs = getDay(day);
+          if (serviceDaysAsNumbers.includes(dayOfWeekJs)) {
+            generatedAppointments.push({
+              id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
+              clientId: client.id,
+              technicianId: client.technicianId,
+              franchiseId: client.franchiseId,
+              scheduledDateTime: day.toISOString(),
+              status: 'scheduled', 
+            });
           }
         }
       }
     }
     
-    // 2. Combine with manual appointments
-    const combined = [...(manualAppointments || []), ...generatedAppointments];
+    // 2. Combine with manual appointments, avoiding duplicates
+    const combinedAppointmentsMap = new Map<string, Appointment>();
+
+    // Add generated first, so manual can override if needed on the same day for the same client
+    for (const appt of generatedAppointments) {
+      const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
+      if (!combinedAppointmentsMap.has(key)) {
+        combinedAppointmentsMap.set(key, appt);
+      }
+    }
+    
+    for (const appt of (manualAppointments || [])) {
+        const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
+        combinedAppointmentsMap.set(key, appt); // Manual appointments always override auto-generated
+    }
+    
+    const combined = Array.from(combinedAppointmentsMap.values());
+
 
     // 3. Filter based on user role and selected technician
-    let filteredAppointments = combined;
-
     if (hasRole('technician') && userInfo?.id) {
-        filteredAppointments = combined.filter(a => a.technicianId === userInfo.id);
-    } else if (hasRole('owner') && selectedTechnicianId !== 'all') {
-        filteredAppointments = combined.filter(a => a.technicianId === selectedTechnicianId);
+      return combined.filter(a => a.technicianId === userInfo.id);
+    }
+    
+    if (hasRole('owner') && selectedTechnicianId !== 'all') {
+      return combined.filter(a => a.technicianId === selectedTechnicianId);
     }
 
-    return filteredAppointments;
+    return combined;
 
-  }, [clients, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
+  }, [clients, technicians, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
   
   const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
 
