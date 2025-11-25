@@ -113,19 +113,19 @@ export default function SchedulePage() {
         combinedAppointmentsMap.set(key, appt);
     }
     
-    let combined = Array.from(combinedAppointmentsMap.values());
+    const combinedList = Array.from(combinedAppointmentsMap.values());
 
 
     // 3. Filter based on user role and selected technician AFTER combining
     if (hasRole('technician') && userInfo?.id) {
-      return combined.filter(a => a.technicianId === userInfo.id);
+      return combinedList.filter(a => a.technicianId === userInfo.id);
     }
     
     if (hasRole('owner') && selectedTechnicianId !== 'all') {
-      return combined.filter(a => a.technicianId === selectedTechnicianId);
+      return combinedList.filter(a => a.technicianId === selectedTechnicianId);
     }
 
-    return combined;
+    return combinedList;
 
   }, [clients, technicians, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
   
@@ -241,3 +241,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
