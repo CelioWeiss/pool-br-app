@@ -15,9 +15,10 @@ service cloud.firestore {
     function isFranchiseOwner(franchiseId) {
       // Returns true if the user's UID matches the ownerId on the franchise document.
       // It also checks for document existence to prevent errors on get().data
-      let franchiseDoc = get(/databases/$(database)/documents/franchises/$(franchiseId));
+      let franchiseDocExists = exists(/databases/$(database)/documents/franchises/$(franchiseId));
       return request.auth != null &&
-        franchiseDoc.data.ownerId == request.auth.uid;
+        franchiseDocExists &&
+        get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
     }
 
     // =============================
