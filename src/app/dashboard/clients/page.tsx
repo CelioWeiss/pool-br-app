@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
 import type { Client, Technician, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, useAuth as useFirebaseAuth } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useAuth as useFirebaseAuth, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
@@ -59,36 +59,29 @@ export default function ClientsPage() {
   
     try {
       const batch = writeBatch(firestore);
+      let newUserId: string | null = null;
   
       if (editingClient) {
-        // Update existing client
         const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
-        const dataToUpdate = {
-            ...clientData,
-            franchiseId, 
-            password: undefined, // Don't update password here
+        const dataToUpdate: Partial<Client> = {
+            name: clientData.name,
+            address: clientData.address,
+            contactName: clientData.contactName,
+            contactPhone: clientData.contactPhone,
+            contactEmail: clientData.contactEmail,
+            poolDetails: clientData.poolDetails,
+            technicianId: clientData.technicianId,
         };
-        delete dataToUpdate.password;
-
         batch.update(clientRef, dataToUpdate);
 
-        await batch.commit();
-
-        toast({
-          title: "Cliente Atualizado!",
-          description: `Os dados de ${clientData.name} foram atualizados.`,
-        });
-
       } else {
-        // Create new client with auth user
         if (!clientData.password) {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
 
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
-        const newUserId = userCredential.user.uid;
+        newUserId = userCredential.user.uid;
 
-        // 1. Client document in franchise subcollection
         const clientRef = doc(collection(firestore, 'franchises', franchiseId, 'clients'));
         const newClient: Client = {
           id: clientRef.id,
@@ -105,7 +98,6 @@ export default function ClientsPage() {
         };
         batch.set(clientRef, newClient);
         
-        // 2. User profile document in root users collection
         const userRef = doc(firestore, 'users', newUserId);
         const [firstName, ...lastNameParts] = clientData.name.split(' ');
         const newUserProfile: UserInfo = {
@@ -119,20 +111,27 @@ export default function ClientsPage() {
             createdAt: new Date().toISOString(),
         };
         batch.set(userRef, newUserProfile);
-
-        await batch.commit();
-
-        toast({
-          title: "Cliente Criado!",
-          description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
-        });
       }
-  
-      setIsNewClientDialogOpen(false);
-      setEditingClient(null);
 
+      batch.commit().then(() => {
+        toast({
+          title: editingClient ? "Cliente Atualizado!" : "Cliente Criado!",
+          description: `Os dados de ${clientData.name} foram salvos com sucesso.`,
+        });
+        setIsNewClientDialogOpen(false);
+        setEditingClient(null);
+      }).catch((error: any) => {
+        const permissionError = new FirestorePermissionError({
+            path: `/franchises/${franchiseId}/clients`,
+            operation: editingClient ? 'update' : 'create',
+            requestResourceData: clientData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }).finally(() => {
+        setIsSaving(false);
+      });
+  
     } catch (error: any) {
-        console.error("Erro ao salvar cliente:", error);
         let description = "Ocorreu um erro ao salvar os dados do cliente.";
         if (error.code === 'auth/email-already-in-use') {
             description = "O e-mail fornecido já está em uso por outra conta.";
@@ -144,7 +143,6 @@ export default function ClientsPage() {
             title: "Erro ao Salvar",
             description: description,
         });
-    } finally {
         setIsSaving(false);
     }
   };
