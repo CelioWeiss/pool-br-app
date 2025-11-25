@@ -31,6 +31,7 @@ export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 's
 
 export interface Client {
   id: string;
+  userId: string; // Firebase Auth UID
   name: string;
   address: string;
   contactName: string;

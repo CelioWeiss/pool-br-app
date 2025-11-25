@@ -8,18 +8,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
-import type { Client, NewClientData, Technician } from '@/lib/types';
+import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
+import type { Client, Technician, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useAuth as useFirebaseAuth } from '@/firebase';
+import { collection, doc, writeBatch } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 
 
 export default function ClientsPage() {
-  const { userInfo, hasRole } = useAuth();
+  const { userInfo } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
+  const auth = useFirebaseAuth();
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -36,8 +38,11 @@ export default function ClientsPage() {
 
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  if (!hasRole('owner') || !franchiseId) {
+  const isOwner = userInfo?.role === 'owner';
+
+  if (!isOwner || !franchiseId) {
     return <p>Acesso negado.</p>;
   }
 
@@ -47,41 +52,101 @@ export default function ClientsPage() {
     return technician ? `${technician.firstName} ${technician.lastName}` : 'N/A';
   }
 
-  const handleSaveClient = (clientData: NewClientData) => {
-    if (!firestore || !franchiseId) return;
+  const handleSaveClient = async (clientData: NewClientFormData) => {
+    if (!firestore || !auth || !franchiseId) return;
   
-    if (editingClient) {
-      // Update existing client
-      const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
-      const dataToUpdate = {
-          ...clientData,
-          franchiseId, // ensure franchiseId is present
-      };
-      updateDocumentNonBlocking(clientRef, dataToUpdate);
-      toast({
-        title: "Cliente Atualizado!",
-        description: `Os dados de ${clientData.name} foram atualizados.`,
-      });
-    } else {
-      // Create new client
-      const clientsRef = collection(firestore, 'franchises', franchiseId, 'clients');
-      const newClientRef = doc(clientsRef); // Create a new doc with a generated ID
+    setIsSaving(true);
+  
+    try {
+      const batch = writeBatch(firestore);
+  
+      if (editingClient) {
+        // Update existing client
+        const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
+        const dataToUpdate = {
+            ...clientData,
+            franchiseId, 
+            password: undefined, // Don't update password here
+        };
+        delete dataToUpdate.password;
 
-      const dataToSave: Client = {
-        id: newClientRef.id,
-        ...clientData,
-        franchiseId: franchiseId,
-      };
+        batch.update(clientRef, dataToUpdate);
 
-      setDocumentNonBlocking(newClientRef, dataToSave, {});
-      toast({
-        title: "Cliente Criado!",
-        description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
-      });
+        await batch.commit();
+
+        toast({
+          title: "Cliente Atualizado!",
+          description: `Os dados de ${clientData.name} foram atualizados.`,
+        });
+
+      } else {
+        // Create new client with auth user
+        if (!clientData.password) {
+            throw new Error("A senha é obrigatória para novos clientes.");
+        }
+
+        const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
+        const newUserId = userCredential.user.uid;
+
+        // 1. Client document in franchise subcollection
+        const clientRef = doc(collection(firestore, 'franchises', franchiseId, 'clients'));
+        const newClient: Client = {
+          id: clientRef.id,
+          userId: newUserId,
+          franchiseId: franchiseId,
+          name: clientData.name,
+          address: clientData.address,
+          contactName: clientData.contactName,
+          contactPhone: clientData.contactPhone,
+          contactEmail: clientData.contactEmail,
+          poolDetails: clientData.poolDetails,
+          technicianId: clientData.technicianId,
+          createdAt: new Date().toISOString(),
+        };
+        batch.set(clientRef, newClient);
+        
+        // 2. User profile document in root users collection
+        const userRef = doc(firestore, 'users', newUserId);
+        const [firstName, ...lastNameParts] = clientData.name.split(' ');
+        const newUserProfile: UserInfo = {
+            id: newUserId,
+            franchiseId: franchiseId,
+            role: 'client',
+            firstName: firstName,
+            lastName: lastNameParts.join(' ') || '',
+            email: clientData.contactEmail,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+        };
+        batch.set(userRef, newUserProfile);
+
+        await batch.commit();
+
+        toast({
+          title: "Cliente Criado!",
+          description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
+        });
+      }
+  
+      setIsNewClientDialogOpen(false);
+      setEditingClient(null);
+
+    } catch (error: any) {
+        console.error("Erro ao salvar cliente:", error);
+        let description = "Ocorreu um erro ao salvar os dados do cliente.";
+        if (error.code === 'auth/email-already-in-use') {
+            description = "O e-mail fornecido já está em uso por outra conta.";
+        } else if (error.code === 'auth/weak-password') {
+            description = "A senha é muito fraca. Por favor, use pelo menos 6 caracteres.";
+        }
+        toast({
+            variant: "destructive",
+            title: "Erro ao Salvar",
+            description: description,
+        });
+    } finally {
+        setIsSaving(false);
     }
-
-    setIsNewClientDialogOpen(false);
-    setEditingClient(null);
   };
   
   const handleEditClick = (client: Client) => {
@@ -116,7 +181,7 @@ export default function ClientsPage() {
             <DialogHeader>
               <DialogTitle>{editingClient ? 'Editar Cliente' : 'Adicionar Novo Cliente'}</DialogTitle>
               <DialogDescription>
-                {editingClient ? 'Atualize os dados do cliente.' : 'Preencha os dados abaixo para cadastrar um novo cliente.'}
+                {editingClient ? 'Atualize os dados do cliente.' : 'Preencha os dados e crie o acesso do cliente ao portal.'}
               </DialogDescription>
             </DialogHeader>
             <NewClientForm 
@@ -124,6 +189,7 @@ export default function ClientsPage() {
               technicians={franchiseTechnicians || []} 
               onSave={handleSaveClient}
               onCancel={() => handleDialogChange(false)}
+              isSaving={isSaving}
             />
           </DialogContent>
         </Dialog>

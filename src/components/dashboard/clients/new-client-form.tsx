@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from 'react';
@@ -8,21 +9,32 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Technician, Client, NewClientData } from '@/lib/types';
 import { PlusCircle, X } from 'lucide-react';
 import { DialogFooter } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+
+export interface NewClientFormData extends NewClientData {
+    password?: string;
+}
 
 interface NewClientFormProps {
   technicians: Technician[];
-  onSave: (data: NewClientData) => void;
+  onSave: (data: NewClientFormData) => void;
   onCancel: () => void;
   client?: Client | null;
+  isSaving: boolean;
 }
 
-export function NewClientForm({ technicians, onSave, onCancel, client = null }: NewClientFormProps) {
+export function NewClientForm({ technicians, onSave, onCancel, client = null, isSaving }: NewClientFormProps) {
+    const { toast } = useToast();
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [poolDetails, setPoolDetails] = useState('');
     const [technicianId, setTechnicianId] = useState<string | undefined>(undefined);
     const [addresses, setAddresses] = useState<string[]>(['']);
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+
+    const isEditing = !!client;
     
     useEffect(() => {
         if (client) {
@@ -39,6 +51,8 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
             setAddresses(['']);
             setPoolDetails('');
             setTechnicianId(undefined);
+            setPassword('');
+            setConfirmPassword('');
         }
     }, [client]);
 
@@ -61,16 +75,31 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
-        const clientData: NewClientData = {
+
+        if (!isEditing && password !== confirmPassword) {
+            toast({
+                variant: 'destructive',
+                title: 'Erro',
+                description: 'As senhas não coincidem.'
+            });
+            return;
+        }
+
+        const clientData: NewClientFormData = {
             name,
             contactEmail: email,
-            contactName: name, // Assuming contact name is the client name for now
+            contactName: name,
             contactPhone: phone,
-            address: addresses.join('; '), // Use a separator for multiple addresses
+            address: addresses.join('; '),
             poolDetails: poolDetails,
             technicianId: technicianId || null,
-            createdAt: new Date().toISOString(),
+            createdAt: client?.createdAt || new Date().toISOString(),
         };
+
+        if (!isEditing) {
+            clientData.password = password;
+        }
+
         onSave(clientData);
     };
 
@@ -78,17 +107,17 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
         <form onSubmit={handleSubmit} className="grid gap-4 pt-4 max-h-[70vh] overflow-y-auto px-1">
             <div className="grid gap-2">
                 <Label htmlFor="name">Nome do Cliente</Label>
-                <Input id="name" value={name} onChange={e => setName(e.target.value)} required />
+                <Input id="name" value={name} onChange={e => setName(e.target.value)} required disabled={isSaving} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="email">Email de Contato</Label>
-                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving} />
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="phone">Telefone de Contato</Label>
-                    <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} required />
+                    <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} required disabled={isSaving} />
                 </div>
             </div>
 
@@ -101,15 +130,16 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
                     onChange={(e) => handleAddressChange(index, e.target.value)}
                     placeholder={`Endereço ${index + 1}`}
                     required
+                    disabled={isSaving}
                     />
                     {addresses.length > 1 && (
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeAddress(index)}>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeAddress(index)} disabled={isSaving}>
                         <X className="h-4 w-4" />
                     </Button>
                     )}
                 </div>
                 ))}
-                <Button type="button" variant="outline" size="sm" onClick={addAddress} className="mt-2 w-fit">
+                <Button type="button" variant="outline" size="sm" onClick={addAddress} className="mt-2 w-fit" disabled={isSaving}>
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Adicionar Endereço
                 </Button>
@@ -117,12 +147,12 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
             
             <div className="grid gap-2">
                 <Label htmlFor="poolDetails">Detalhes da Piscina</Label>
-                <Input id="poolDetails" placeholder="Ex: 50,000L, fibra" value={poolDetails} onChange={e => setPoolDetails(e.target.value)} required />
+                <Input id="poolDetails" placeholder="Ex: 50,000L, fibra" value={poolDetails} onChange={e => setPoolDetails(e.target.value)} required disabled={isSaving}/>
             </div>
           
             <div className="grid gap-2">
                 <Label htmlFor="technicianId">Técnico Responsável</Label>
-                <Select value={technicianId} onValueChange={setTechnicianId}>
+                <Select value={technicianId} onValueChange={setTechnicianId} disabled={isSaving}>
                     <SelectTrigger>
                         <SelectValue placeholder="Selecione um técnico" />
                     </SelectTrigger>
@@ -133,10 +163,26 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null }: 
                     </SelectContent>
                 </Select>
             </div>
+
+            {!isEditing && (
+                <fieldset className="border-t pt-4 space-y-4">
+                    <legend className="text-sm font-medium text-muted-foreground">Acesso ao Portal do Cliente</legend>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="password">Senha</Label>
+                            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isSaving}/>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                            <Input id="confirmPassword" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isSaving}/>
+                        </div>
+                    </div>
+                </fieldset>
+            )}
             
             <DialogFooter className="mt-4">
-                <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
-                <Button type="submit">Salvar Cliente</Button>
+                <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>Cancelar</Button>
+                <Button type="submit" disabled={isSaving}>{isSaving ? 'Salvando...' : 'Salvar Cliente'}</Button>
             </DialogFooter>
         </form>
     );
