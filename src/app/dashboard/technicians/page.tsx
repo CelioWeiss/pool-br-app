@@ -33,6 +33,7 @@ export default function TechniciansPage() {
   const { data: franchiseTechnicians, isLoading } = useCollection<Technician>(techniciansCollection);
 
   const [isNewTechnicianDialogOpen, setIsNewTechnicianDialogOpen] = useState(false);
+  const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   if (!hasRole('owner') || !franchiseId) {
@@ -44,62 +45,97 @@ export default function TechniciansPage() {
     const placeholder = PlaceHolderImages.find(p => p.id.startsWith('avatar'));
     return placeholder?.imageUrl;
   }
+  
+  const handleDialogChange = (open: boolean) => {
+    if (!open) {
+      setEditingTechnician(null);
+    }
+    setIsNewTechnicianDialogOpen(open);
+  }
+
+  const handleEditClick = (technician: Technician) => {
+    setEditingTechnician(technician);
+    setIsNewTechnicianDialogOpen(true);
+  }
 
   const handleSaveTechnician = async (data: NewTechnicianFormData) => {
     if (!firestore || !franchiseId) return;
     setIsSaving(true);
     
     const auth = getAuth();
+    const batch = writeBatch(firestore);
+    const [firstName, ...lastNameParts] = data.name.split(' ');
 
     try {
-      // 1. Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
-      const newUserId = userCredential.user.uid;
+      if (editingTechnician) {
+        // UPDATE existing technician
+        const technicianRef = doc(firestore, 'franchises', franchiseId, 'technicians', editingTechnician.id);
+        const technicianUpdateData: Partial<Technician> = {
+          firstName: firstName,
+          lastName: lastNameParts.join(' ') || '',
+          phone: data.phone,
+          email: data.email, // Note: email changes here won't affect Firebase Auth email
+        };
+        batch.update(technicianRef, technicianUpdateData);
+        
+        if (editingTechnician.userId) {
+            const userProfileRef = doc(firestore, 'users', editingTechnician.userId);
+            const userUpdateData: Partial<UserInfo> = {
+                firstName: firstName,
+                lastName: lastNameParts.join(' ') || '',
+                email: data.email,
+            };
+            batch.update(userProfileRef, userUpdateData);
+        }
 
-      // 2. Prepare batch write
-      const batch = writeBatch(firestore);
+      } else {
+        // CREATE new technician
+        // 1. Create user in Firebase Auth
+        const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password!);
+        const newUserId = userCredential.user.uid;
 
-      // 3. Create Technician document
-      const technicianRef = doc(collection(firestore, 'franchises', franchiseId, 'technicians'));
-      const [firstName, ...lastNameParts] = data.name.split(' ');
-      
-      const newTechnician: Technician = {
-        id: technicianRef.id,
-        userId: newUserId,
-        franchiseId: franchiseId,
-        firstName: firstName,
-        lastName: lastNameParts.join(' ') || '',
-        phone: data.phone,
-        email: data.email,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-      batch.set(technicianRef, newTechnician);
+        // 2. Create Technician document
+        const technicianRef = doc(collection(firestore, 'franchises', franchiseId, 'technicians'));
+        const newTechnician: Technician = {
+          id: technicianRef.id,
+          userId: newUserId,
+          franchiseId: franchiseId,
+          firstName: firstName,
+          lastName: lastNameParts.join(' ') || '',
+          phone: data.phone,
+          email: data.email,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        };
+        batch.set(technicianRef, newTechnician);
 
-      // 4. Create User Profile document
-      const userProfileRef = doc(firestore, 'users', newUserId);
-      const newUserProfile: Omit<UserInfo, 'id'> = {
-        firstName: firstName,
-        lastName: lastNameParts.join(' ') || '',
-        email: data.email,
-        role: 'technician',
-        franchiseId: franchiseId,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-      batch.set(userProfileRef, newUserProfile);
+        // 3. Create User Profile document
+        const userProfileRef = doc(firestore, 'users', newUserId);
+        const newUserProfile: UserInfo = {
+          id: newUserId,
+          firstName: firstName,
+          lastName: lastNameParts.join(' ') || '',
+          email: data.email,
+          role: 'technician',
+          franchiseId: franchiseId,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        };
+        batch.set(userProfileRef, newUserProfile);
+      }
 
-      // 5. Commit batch
+      // 4. Commit batch
       await batch.commit();
 
       toast({
-        title: "Técnico Criado!",
-        description: `O técnico ${data.name} foi adicionado à equipe.`,
+        title: editingTechnician ? "Técnico Atualizado!" : "Técnico Criado!",
+        description: `O técnico ${data.name} foi salvo com sucesso.`,
       });
-      setIsNewTechnicianDialogOpen(false);
+      handleDialogChange(false);
+
     } catch (error: any) {
-      console.error("Error creating technician:", error);
-      let description = "Ocorreu um erro ao salvar o novo técnico.";
+      console.error("Error saving technician:", error);
+      let description = "Ocorreu um erro ao salvar o técnico.";
       if (error.code === 'auth/email-already-in-use') {
         description = "Este e-mail já está em uso por outro usuário.";
       } else if (error.code === 'auth/weak-password') {
@@ -107,7 +143,7 @@ export default function TechniciansPage() {
       }
       toast({
         variant: 'destructive',
-        title: "Erro ao criar técnico",
+        title: "Erro ao salvar",
         description: description,
       });
     } finally {
@@ -123,7 +159,7 @@ export default function TechniciansPage() {
           <h1 className="text-3xl font-bold tracking-tight">Gerenciamento de Técnicos</h1>
           <p className="text-muted-foreground">Adicione e gerencie os técnicos da sua equipe.</p>
         </div>
-        <Dialog open={isNewTechnicianDialogOpen} onOpenChange={setIsNewTechnicianDialogOpen}>
+        <Dialog open={isNewTechnicianDialogOpen} onOpenChange={handleDialogChange}>
           <DialogTrigger asChild>
             <Button>
               <PlusCircle className="mr-2 h-4 w-4" />
@@ -132,14 +168,15 @@ export default function TechniciansPage() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Adicionar Novo Técnico</DialogTitle>
+              <DialogTitle>{editingTechnician ? 'Editar Técnico' : 'Adicionar Novo Técnico'}</DialogTitle>
               <DialogDescription>
-                Preencha os dados abaixo para cadastrar um novo técnico e criar seu acesso.
+                {editingTechnician ? 'Atualize os dados do técnico.' : 'Preencha os dados abaixo para cadastrar um novo técnico e criar seu acesso.'}
               </DialogDescription>
             </DialogHeader>
             <NewTechnicianForm
+              technician={editingTechnician}
               onSave={handleSaveTechnician}
-              onCancel={() => setIsNewTechnicianDialogOpen(false)}
+              onCancel={() => handleDialogChange(false)}
               isSaving={isSaving}
             />
           </DialogContent>
@@ -181,7 +218,7 @@ export default function TechniciansPage() {
                     <TableCell>{technician.phone}</TableCell>
                      <TableCell>{technician.email}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">Editar</Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEditClick(technician)}>Editar</Button>
                     </TableCell>
                   </TableRow>
                 )) : (

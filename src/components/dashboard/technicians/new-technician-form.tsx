@@ -1,28 +1,30 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
+import type { Technician } from '@/lib/types';
 
 export interface NewTechnicianFormData {
     name: string;
     email: string;
     phone: string;
-    password: string;
+    password?: string;
 }
 
 interface NewTechnicianFormProps {
   onSave: (data: NewTechnicianFormData) => void;
   onCancel: () => void;
   isSaving: boolean;
+  technician?: Technician | null;
 }
 
-export function NewTechnicianForm({ onSave, onCancel, isSaving }: NewTechnicianFormProps) {
+export function NewTechnicianForm({ onSave, onCancel, isSaving, technician = null }: NewTechnicianFormProps) {
     const [name, setName] = useState('');
     const [phone, setPhone] = useState('');
     const [email, setEmail] = useState('');
@@ -30,10 +32,27 @@ export function NewTechnicianForm({ onSave, onCancel, isSaving }: NewTechnicianF
     const [confirmPassword, setConfirmPassword] = useState('');
     const { toast } = useToast();
 
+    const isEditing = !!technician;
+
+    useEffect(() => {
+        if (technician) {
+            setName(`${technician.firstName} ${technician.lastName}`);
+            setPhone(technician.phone || '');
+            setEmail(technician.email || '');
+            setPassword('');
+            setConfirmPassword('');
+        } else {
+            setName('');
+            setPhone('');
+            setEmail('');
+        }
+    }, [technician]);
+
+
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
         
-        if (password !== confirmPassword) {
+        if (!isEditing && password !== confirmPassword) {
             toast({
                 variant: 'destructive',
                 title: 'Erro',
@@ -42,12 +61,12 @@ export function NewTechnicianForm({ onSave, onCancel, isSaving }: NewTechnicianF
             return;
         }
 
-        onSave({
-            name,
-            email,
-            phone,
-            password,
-        });
+        const data: NewTechnicianFormData = { name, email, phone };
+        if (!isEditing) {
+            data.password = password;
+        }
+
+        onSave(data);
     };
 
     return (
@@ -60,31 +79,33 @@ export function NewTechnicianForm({ onSave, onCancel, isSaving }: NewTechnicianF
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving}/>
+                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || isEditing}/>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="phone">Telefone</Label>
                     <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} required disabled={isSaving}/>
                 </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                    <Label htmlFor="password">Senha</Label>
-                    <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isSaving}/>
+            
+            {!isEditing && (
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="password">Senha</Label>
+                        <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isSaving}/>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+                        <Input id="confirmPassword" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isSaving}/>
+                    </div>
                 </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                    <Input id="confirmPassword" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isSaving}/>
-                </div>
-            </div>
+            )}
             
             <DialogFooter className="mt-4">
                 <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>Cancelar</Button>
                 <Button type="submit" disabled={isSaving}>
-                    {isSaving ? <><Spinner size="small" className="mr-2" /> Salvando...</> : "Salvar Técnico"}
+                    {isSaving ? <><Spinner size="small" className="mr-2" /> Salvando...</> : isEditing ? "Salvar Alterações" : "Salvar Técnico"}
                 </Button>
             </DialogFooter>
         </form>
     );
 }
-
