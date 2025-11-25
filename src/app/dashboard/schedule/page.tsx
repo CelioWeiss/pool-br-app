@@ -70,7 +70,7 @@ export default function SchedulePage() {
   const allAppointments = useMemo(() => {
     if (!clients || !technicians) return [];
 
-    // 1. Generate appointments from client service days
+    // 1. Generate appointments from client service days for the current month
     const generatedAppointments: Appointment[] = [];
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
@@ -82,7 +82,6 @@ export default function SchedulePage() {
         for (const day of daysInMonth) {
           const dayOfWeekJs = getDay(day);
           if (serviceDaysAsNumbers.includes(dayOfWeekJs)) {
-            // Set time to midday to avoid timezone issues making it the previous day
             const scheduledDateTime = setHours(day, 12);
             generatedAppointments.push({
               id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
@@ -97,10 +96,10 @@ export default function SchedulePage() {
       }
     }
     
-    // 2. Combine with manual appointments, avoiding duplicates
+    // 2. Combine with manual appointments, avoiding duplicates on the same day for the same client
     const combinedAppointmentsMap = new Map<string, Appointment>();
 
-    // Add generated first, so manual can override if needed on the same day for the same client
+    // Add generated first
     for (const appt of generatedAppointments) {
       const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
       if (!combinedAppointmentsMap.has(key)) {
@@ -108,15 +107,16 @@ export default function SchedulePage() {
       }
     }
     
+    // Manual appointments override auto-generated ones
     for (const appt of (manualAppointments || [])) {
         const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
-        combinedAppointmentsMap.set(key, appt); // Manual appointments always override auto-generated
+        combinedAppointmentsMap.set(key, appt);
     }
     
     let combined = Array.from(combinedAppointmentsMap.values());
 
 
-    // 3. Filter based on user role and selected technician
+    // 3. Filter based on user role and selected technician AFTER combining
     if (hasRole('technician') && userInfo?.id) {
       return combined.filter(a => a.technicianId === userInfo.id);
     }
