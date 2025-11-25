@@ -11,8 +11,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { NewClientForm } from '@/components/dashboard/clients/new-client-form';
 import type { Client, NewClientData, Technician } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 
 
@@ -47,49 +47,41 @@ export default function ClientsPage() {
     return technician ? `${technician.firstName} ${technician.lastName}` : 'N/A';
   }
 
-  const handleSaveClient = async (clientData: NewClientData) => {
+  const handleSaveClient = (clientData: NewClientData) => {
     if (!firestore || !franchiseId) return;
   
-    try {
-      if (editingClient) {
-        // Update existing client
-        const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
-        await updateDoc(clientRef, {
-            ...clientData,
-            franchiseId, // ensure franchiseId is present
-        });
-        toast({
-          title: "Cliente Atualizado!",
-          description: `Os dados de ${clientData.name} foram atualizados.`,
-        });
-      } else {
-        // Create new client
-        const clientsRef = collection(firestore, 'franchises', franchiseId, 'clients');
-        const newClientRef = doc(clientsRef); // Create a new doc with a generated ID
-  
-        const dataToSave: Client = {
-          id: newClientRef.id,
+    if (editingClient) {
+      // Update existing client
+      const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
+      const dataToUpdate = {
           ...clientData,
-          franchiseId: franchiseId,
-        };
-  
-        await setDoc(newClientRef, dataToSave);
-        toast({
-          title: "Cliente Criado!",
-          description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
-        });
-      }
-    } catch (error) {
-      console.error("Error saving client: ", error);
+          franchiseId, // ensure franchiseId is present
+      };
+      updateDocumentNonBlocking(clientRef, dataToUpdate);
       toast({
-        variant: "destructive",
-        title: "Erro ao salvar cliente",
-        description: "Ocorreu um erro ao salvar os dados do cliente.",
+        title: "Cliente Atualizado!",
+        description: `Os dados de ${clientData.name} foram atualizados.`,
       });
-    } finally {
-      setIsNewClientDialogOpen(false);
-      setEditingClient(null);
+    } else {
+      // Create new client
+      const clientsRef = collection(firestore, 'franchises', franchiseId, 'clients');
+      const newClientRef = doc(clientsRef); // Create a new doc with a generated ID
+
+      const dataToSave: Client = {
+        id: newClientRef.id,
+        ...clientData,
+        franchiseId: franchiseId,
+      };
+
+      setDocumentNonBlocking(newClientRef, dataToSave, {});
+      toast({
+        title: "Cliente Criado!",
+        description: `O cliente ${clientData.name} foi adicionado com sucesso.`,
+      });
     }
+
+    setIsNewClientDialogOpen(false);
+    setEditingClient(null);
   };
   
   const handleEditClick = (client: Client) => {
