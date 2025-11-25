@@ -50,12 +50,13 @@ export default function FranchisesPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, data.ownerEmail, data.password);
       const ownerUid = userCredential.user.uid;
 
-      // 2. Prepare Firestore batch write
+      // 2. Prepare Firestore batch write for atomicity
       const batch = writeBatch(firestore);
 
-      // 3. Create Franchise document with the correct ownerId
+      // 3. Define Franchise document reference and data
       const franchiseRef = doc(collection(firestore, 'franchises'));
-      const newFranchise: Omit<Franchise, 'id'> = {
+      const newFranchise: Franchise = {
+        id: franchiseRef.id,
         name: data.franchiseName,
         address: `${data.city}, ${data.state}`,
         ownerId: ownerUid, // CRITICAL: Use the created user's UID here.
@@ -63,9 +64,9 @@ export default function FranchisesPage() {
         contactPhone: data.ownerPhone,
         createdAt: new Date().toISOString(),
       };
-      batch.set(franchiseRef, { ...newFranchise, id: franchiseRef.id });
+      batch.set(franchiseRef, newFranchise);
 
-      // 4. Create User Profile document with the correct franchiseId
+      // 4. Define User Profile document reference and data
       const userProfileRef = doc(firestore, 'users', ownerUid);
       const [ownerFirstName, ...ownerLastNameParts] = data.ownerName.split(' ');
       const newUserProfile: UserInfo = {
@@ -80,7 +81,7 @@ export default function FranchisesPage() {
       };
       batch.set(userProfileRef, newUserProfile);
       
-      // 5. Commit batch write
+      // 5. Commit the atomic batch write
       await batch.commit();
 
       toast({

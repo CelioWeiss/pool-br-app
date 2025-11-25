@@ -8,14 +8,13 @@ service cloud.firestore {
     // Helper Functions
     // =============================
     function isMaster() {
-      // Retorna true se o usuário for um administrador mestre.
-      // A verificação é simples, mas para um app em produção, considere usar custom claims.
+      // This is a simple check, for a production app, consider using custom claims.
       return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master';
     }
 
     function isFranchiseOwner(franchiseId) {
-      // Retorna true se o UID do usuário corresponder ao ownerId no documento da franquia.
-      // Adicionado .exists() para segurança.
+      // Returns true if the user's UID matches the ownerId on the franchise document.
+      // It also checks for document existence to prevent errors.
       return request.auth != null &&
         exists(/databases/$(database)/documents/franchises/$(franchiseId)) &&
         get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
@@ -25,8 +24,7 @@ service cloud.firestore {
     // Collection: users
     // =============================
     match /users/{userId} {
-      // Um usuário pode ler e escrever seu próprio perfil.
-      // O administrador mestre pode ler e escrever qualquer perfil.
+      // A user can read/write their own profile. The master admin can read/write any user profile.
       allow read, write: if isMaster() || (request.auth != null && request.auth.uid == userId);
     }
 
@@ -34,26 +32,31 @@ service cloud.firestore {
     // Collection: franchises and Subcollections
     // =============================
     match /franchises/{franchiseId} {
-      // Permite leitura e escrita no próprio documento da franquia para o mestre ou o proprietário.
+      
+      // Allow master and the specific franchise owner to read/write the franchise document.
       allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
       
-      // Qualquer usuário autenticado pode listar as franquias (para um mapa, por exemplo).
+      // Any signed-in user can list franchises (e.g., for a "find a franchise" map).
       allow list: if request.auth != null;
 
-      // --- Subcollections Seguras ---
+      // --- Secure Subcollections ---
       match /technicians/{technicianId} {
+        // Allow master or the franchise owner to perform all actions on technicians.
         allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
 
       match /clients/{clientId} {
+         // Allow master or the franchise owner to perform all actions on clients.
         allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
       
       match /appointments/{appointmentId} {
+         // Allow master or the franchise owner to perform all actions on appointments.
         allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
 
       match /serviceReports/{serviceReportId} {
+         // Allow master or the franchise owner to perform all actions on service reports.
         allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
