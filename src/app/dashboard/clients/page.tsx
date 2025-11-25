@@ -62,18 +62,24 @@ export default function ClientsPage() {
       const batch = writeBatch(firestore);
       let newUserId: string | null = null;
   
+      // This is a partial type because some fields might be undefined from the form
+      const dataToSave: Partial<Client> = {
+          name: clientData.name,
+          address: clientData.address,
+          contactName: clientData.contactName,
+          contactPhone: clientData.contactPhone,
+          contactEmail: clientData.contactEmail,
+          poolDetails: clientData.poolDetails,
+          technicianId: clientData.technicianId,
+          monthlyFee: clientData.monthlyFee,
+          dueDay: clientData.dueDay,
+          contractType: clientData.contractType,
+          serviceDays: clientData.serviceDays,
+      };
+
       if (editingClient) {
         const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
-        const dataToUpdate: Partial<Client> = {
-            name: clientData.name,
-            address: clientData.address,
-            contactName: clientData.contactName,
-            contactPhone: clientData.contactPhone,
-            contactEmail: clientData.contactEmail,
-            poolDetails: clientData.poolDetails,
-            technicianId: clientData.technicianId,
-        };
-        batch.update(clientRef, dataToUpdate);
+        batch.update(clientRef, dataToSave);
 
       } else {
         if (!clientData.password) {
@@ -88,15 +94,9 @@ export default function ClientsPage() {
           id: clientRef.id,
           userId: newUserId,
           franchiseId: franchiseId,
-          name: clientData.name,
-          address: clientData.address,
-          contactName: clientData.contactName,
-          contactPhone: clientData.contactPhone,
-          contactEmail: clientData.contactEmail,
-          poolDetails: clientData.poolDetails,
-          technicianId: clientData.technicianId,
           createdAt: new Date().toISOString(),
-        };
+          ...dataToSave, // Spread the rest of the data
+        } as Client; // Cast to Client to ensure all fields are there
         batch.set(clientRef, newClient);
         
         const userRef = doc(firestore, 'users', newUserId);

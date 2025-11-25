@@ -43,9 +43,13 @@ export interface Client {
   createdAt: string; // ISO string
   locationLatitude?: number;
   locationLongitude?: number;
+  monthlyFee?: number;
+  dueDay?: number;
+  contractType?: ContractType;
+  serviceDays?: DayOfWeek[];
 }
 
-export interface NewClientData {
+export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'locationLatitude' | 'locationLongitude'>{
     name: string;
     contactEmail: string;
     contactName: string;
