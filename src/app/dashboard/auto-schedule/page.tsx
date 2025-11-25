@@ -6,14 +6,13 @@ import { useAuth } from '@/hooks/use-auth';
 import type { Client, Technician, DayOfWeek } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, User } from 'lucide-react';
 import { 
   format, 
   startOfMonth, 
   endOfMonth, 
   eachDayOfInterval, 
   getDay,
-  isSameMonth,
   addMonths,
   subMonths
 } from 'date-fns';
@@ -22,6 +21,7 @@ import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const dayOfWeekMap: Record<DayOfWeek, number> = {
   domingo: 0,
@@ -47,6 +47,7 @@ export default function AutoSchedulePage() {
   const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('all');
   
   const franchiseId = userInfo?.franchiseId;
 
@@ -71,9 +72,14 @@ export default function AutoSchedulePage() {
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start, end });
-    const appointments: GeneratedAppointment[] = [];
+    let appointments: GeneratedAppointment[] = [];
 
     for (const client of clients) {
+       // Filter by technician if one is selected
+      if (selectedTechnicianId !== 'all' && client.technicianId !== selectedTechnicianId) {
+        continue;
+      }
+
       if (client.serviceDays && client.serviceDays.length > 0) {
         for (const day of daysInMonth) {
           const dayOfWeekJs = getDay(day); // 0 for Sunday, 1 for Monday, etc.
@@ -95,7 +101,7 @@ export default function AutoSchedulePage() {
       }
     }
     return appointments.sort((a,b) => a.scheduledDate.getTime() - b.scheduledDate.getTime());
-  }, [clients, currentDate, techniciansMap]);
+  }, [clients, currentDate, techniciansMap, selectedTechnicianId]);
 
   const appointmentsByDay = useMemo(() => {
     const grouped: Record<string, GeneratedAppointment[]> = {};
@@ -119,7 +125,7 @@ export default function AutoSchedulePage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Agenda Automática</h1>
           <p className="text-muted-foreground">Previsão de agendamentos baseada nos dias de atendimento dos clientes.</p>
@@ -136,6 +142,24 @@ export default function AutoSchedulePage() {
             </Button>
         </div>
       </div>
+
+       <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          <User className="h-4 w-4 text-muted-foreground" />
+          <Label htmlFor="technician-filter">Filtrar por técnico</Label>
+        </div>
+        <Select value={selectedTechnicianId} onValueChange={setSelectedTechnicianId}>
+            <SelectTrigger id="technician-filter" className="w-[280px]">
+                <SelectValue placeholder="Selecione um técnico" />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">Todos os Técnicos</SelectItem>
+                {technicians?.map(tech => (
+                    <SelectItem key={tech.id} value={tech.id}>{tech.firstName} {tech.lastName}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+       </div>
 
       <Card>
         <CardHeader>
@@ -175,7 +199,7 @@ export default function AutoSchedulePage() {
           ) : (
              <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground h-48">
                 <Calendar className="h-12 w-12 mb-4" />
-                <p>Nenhum cliente com dias de atendimento definidos para este mês.</p>
+                <p>Nenhum cliente com dias de atendimento definidos para este mês ou para o técnico selecionado.</p>
                 <Button asChild variant="link">
                     <Link href="/dashboard/clients">Gerenciar Clientes</Link>
                 </Button>
