@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -217,7 +218,11 @@ export default function ClientsPage() {
               <TableBody>
                 {clientList && clientList.length > 0 ? clientList.map((client) => (
                   <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <Link href={`/dashboard/clients/${client.id}`} className="hover:underline text-primary">
+                        {client.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>{client.address}</TableCell>
                     <TableCell>{getTechnicianName(client.technicianId)}</TableCell>
                     <TableCell>{client.poolDetails}</TableCell>
