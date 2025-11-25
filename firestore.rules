@@ -18,14 +18,14 @@ service cloud.firestore {
       // Robust check: ensures document exists before trying to access its data.
       let franchiseDoc = get(/databases/$(database)/documents/franchises/$(franchiseId));
       return request.auth != null &&
-             franchiseDoc.exists() &&
+             franchiseDoc.exists == true &&
              franchiseDoc.data.ownerId == request.auth.uid;
     }
     
     function isUserInFranchise(franchiseId) {
         let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
         return request.auth != null &&
-               userDoc.exists() &&
+               userDoc.exists == true &&
                userDoc.data.franchiseId == franchiseId;
     }
     
