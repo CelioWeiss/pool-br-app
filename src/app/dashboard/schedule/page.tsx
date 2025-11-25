@@ -16,7 +16,7 @@ import {
   getDay,
   addMonths,
   subMonths,
-  setHours
+  set
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
@@ -82,7 +82,7 @@ export default function SchedulePage() {
         for (const day of daysInMonth) {
           const dayOfWeekJs = getDay(day);
           if (serviceDaysAsNumbers.includes(dayOfWeekJs)) {
-            const scheduledDateTime = setHours(day, 12);
+            const scheduledDateTime = set(day, { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
             generatedAppointments.push({
               id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
               clientId: client.id,
