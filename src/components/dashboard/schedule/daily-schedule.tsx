@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo } from 'react';
@@ -6,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Check, X, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
-import { clients, technicians } from '@/lib/data';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useAuth } from '@/hooks/use-auth';
+import { collection } from 'firebase/firestore';
+import { Spinner } from '@/components/ui/spinner';
 
 const AppointmentItem = ({ appointment, client, technician }: { appointment: Appointment, client?: Client, technician?: Technician }) => {
 
@@ -17,7 +21,7 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
     cancelled: { icon: X, color: "bg-red-500", label: "Cancelado" },
   };
 
-  const currentStatus = statusInfo[appointment.status];
+  const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
 
   return (
     <div className="flex items-start gap-4 p-4 border-b last:border-b-0">
@@ -37,17 +41,33 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
             </Badge>
         </div>
       </div>
-       <Button variant="outline" size="sm">Detalhes</Button>
+       <Button variant="outline" size="sm" disabled>Detalhes</Button>
     </div>
   );
 };
 
 
 export function DailySchedule({ appointments }: { appointments: Appointment[] }) {
+  const { userInfo } = useAuth();
+  const firestore = useFirestore();
 
-  const clientsMap = useMemo(() => new Map(clients.map(c => [c.id, c])), []);
-  const techniciansMap = useMemo(() => new Map(technicians.map(t => [t.id, t])), []);
+  const franchiseId = userInfo?.franchiseId;
 
+  const clientsCollection = useMemoFirebase(() => 
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
+  , [firestore, franchiseId]);
+
+  const techniciansCollection = useMemoFirebase(() =>
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
+  , [firestore, franchiseId]);
+
+  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
+  const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
+
+  const clientsMap = useMemo(() => new Map(clients?.map(c => [c.id, c])), [clients]);
+  const techniciansMap = useMemo(() => new Map(technicians?.map(t => [t.id, t])), [technicians]);
+  
+  const isLoading = isLoadingClients || isLoadingTechnicians;
 
   if (appointments.length === 0) {
     return (
@@ -55,6 +75,14 @@ export function DailySchedule({ appointments }: { appointments: Appointment[] })
         <Calendar className="h-12 w-12 mb-4" />
         <p>Nenhum atendimento para a data selecionada.</p>
       </div>
+    )
+  }
+
+  if(isLoading) {
+    return (
+        <div className="flex h-48 items-center justify-center">
+            <Spinner />
+        </div>
     )
   }
 

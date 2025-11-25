@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -10,29 +11,38 @@ import { format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
-import { appointments as initialAppointments } from '@/lib/data';
+import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function SchedulePage() {
   const { userInfo, hasRole } = useAuth();
+  const firestore = useFirestore();
   const [date, setDate] = useState<Date | undefined>(new Date());
   
-  const userAppointments = useMemo(() => {
-    if (!userInfo) return [];
-    if (hasRole('owner')) {
-      return initialAppointments;
-    }
-    if (hasRole('technician')) {
-      return initialAppointments.filter(a => a.technicianId === userInfo.id);
-    }
-    return [];
-  }, [userInfo, hasRole]);
+  const franchiseId = userInfo?.franchiseId;
 
+  const appointmentsQuery = useMemoFirebase(() => {
+    if (!firestore || !franchiseId) return null;
+    
+    const baseQuery = collection(firestore, 'franchises', franchiseId, 'appointments');
+
+    if (hasRole('owner')) {
+      return baseQuery;
+    }
+    if (hasRole('technician') && userInfo.id) {
+      return query(baseQuery, where('technicianId', '==', userInfo.id));
+    }
+    return null;
+  }, [firestore, franchiseId, userInfo, hasRole]);
+
+  const { data: userAppointments, isLoading } = useCollection<Appointment>(appointmentsQuery);
 
   if (!hasRole(['owner', 'technician'])) {
     return <p>Acesso negado.</p>;
   }
 
-  const appointmentDates = useMemo(() => userAppointments.map(a => new Date(a.scheduledDateTime)) || [], [userAppointments]);
+  const appointmentDates = useMemo(() => userAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [userAppointments]);
 
   const selectedAppointments = useMemo(() => {
     if (!date || !userAppointments) return [];
@@ -47,7 +57,7 @@ export default function SchedulePage() {
           <h1 className="text-3xl font-bold tracking-tight">Agenda de Serviços</h1>
           <p className="text-muted-foreground">Visualize e gerencie os agendamentos.</p>
         </div>
-        {hasRole('owner') && <Button>
+        {hasRole('owner') && <Button disabled>
           <PlusCircle className="mr-2 h-4 w-4" />
           Novo Agendamento
         </Button>}
@@ -83,11 +93,17 @@ export default function SchedulePage() {
                 Atendimentos para {date ? format(date, "dd 'de' MMMM", { locale: ptBR }) : 'Nenhuma data selecionada'}
             </CardTitle>
             <CardDescription>
-                {selectedAppointments.length > 0 ? `${selectedAppointments.length} serviço(s) agendado(s) para este dia.` : "Nenhum serviço agendado para este dia."}
+                {isLoading ? 'Carregando agendamentos...' : (selectedAppointments.length > 0 ? `${selectedAppointments.length} serviço(s) agendado(s) para este dia.` : "Nenhum serviço agendado para este dia.")}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <DailySchedule appointments={selectedAppointments} />
+             {isLoading ? (
+              <div className="flex h-48 items-center justify-center">
+                <Spinner />
+              </div>
+            ) : (
+              <DailySchedule appointments={selectedAppointments} />
+            )}
           </CardContent>
         </Card>
       </div>
