@@ -15,7 +15,8 @@ import {
   eachDayOfInterval,
   getDay,
   addMonths,
-  subMonths
+  subMonths,
+  setHours
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
@@ -81,12 +82,14 @@ export default function SchedulePage() {
         for (const day of daysInMonth) {
           const dayOfWeekJs = getDay(day);
           if (serviceDaysAsNumbers.includes(dayOfWeekJs)) {
+            // Set time to midday to avoid timezone issues making it the previous day
+            const scheduledDateTime = setHours(day, 12);
             generatedAppointments.push({
               id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
               clientId: client.id,
               technicianId: client.technicianId,
               franchiseId: client.franchiseId,
-              scheduledDateTime: day.toISOString(),
+              scheduledDateTime: scheduledDateTime.toISOString(),
               status: 'scheduled', 
             });
           }
@@ -110,7 +113,7 @@ export default function SchedulePage() {
         combinedAppointmentsMap.set(key, appt); // Manual appointments always override auto-generated
     }
     
-    const combined = Array.from(combinedAppointmentsMap.values());
+    let combined = Array.from(combinedAppointmentsMap.values());
 
 
     // 3. Filter based on user role and selected technician
