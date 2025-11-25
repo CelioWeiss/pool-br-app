@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -16,7 +17,6 @@ import {
   ClipboardList, 
   Map, 
   LogOut,
-  Sparkles,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -27,7 +27,6 @@ const menuItems = [
   { href: '/dashboard/clients', label: 'Clientes', icon: Users, roles: ['owner'] },
   { href: '/dashboard/technicians', label: 'Técnicos', icon: Wrench, roles: ['owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
-  { href: '/dashboard/auto-schedule', label: 'Agenda Automática', icon: Sparkles, roles: ['owner'] },
   { href: '/dashboard/service-report', label: 'Novo Relatório', icon: ClipboardList, roles: ['technician'] },
   { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner', 'technician'] },
 ];
