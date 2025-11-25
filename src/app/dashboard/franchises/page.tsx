@@ -55,8 +55,7 @@ export default function FranchisesPage() {
 
       // 3. Create Franchise document with the correct ownerId
       const franchiseRef = doc(collection(firestore, 'franchises'));
-      const newFranchise: Franchise = {
-        id: franchiseRef.id,
+      const newFranchise: Omit<Franchise, 'id'> = {
         name: data.franchiseName,
         address: `${data.city}, ${data.state}`,
         ownerId: ownerUid, // CRITICAL: Use the created user's UID here.
@@ -64,7 +63,7 @@ export default function FranchisesPage() {
         contactPhone: data.ownerPhone,
         createdAt: new Date().toISOString(),
       };
-      batch.set(franchiseRef, newFranchise);
+      batch.set(franchiseRef, { ...newFranchise, id: franchiseRef.id });
 
       // 4. Create User Profile document with the correct franchiseId
       const userProfileRef = doc(firestore, 'users', ownerUid);
@@ -227,5 +226,3 @@ export default function FranchisesPage() {
     </>
   );
 }
-
-    

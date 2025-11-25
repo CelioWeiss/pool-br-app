@@ -7,42 +7,22 @@ service cloud.firestore {
     // =============================
     // Helper Functions
     // =============================
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * Returns true if the user's role is 'master'.
-     * This checks for a specific, hardcoded master admin UID.
-     */
     function isMaster() {
-      return isSignedIn() && request.auth.uid == "master-admin-01";
+      // This is a simple check, for a production app, consider using custom claims.
+      return request.auth != null && request.auth.uid == "master-admin-01";
     }
 
-    /**
-     * Returns true if the user is the owner of the franchise specified by franchiseId.
-     * This checks the ownerId field on the franchise document itself.
-     */
     function isFranchiseOwner(franchiseId) {
-      return isSignedIn() && get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
+      // Returns true if the user's UID matches the ownerId on the franchise document.
+      return request.auth != null && get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
     }
-    
-    /**
-     * Returns true if the user is a member of the given franchise.
-     * This relies on a 'franchiseId' field in the user's document.
-     */
-    function isFranchiseMember(franchiseId) {
-        return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.franchiseId == franchiseId;
-    }
-
 
     // =============================
     // Collection: users
     // =============================
     match /users/{userId} {
       // A user can read/write their own profile. The master admin can read/write any user profile.
-      allow read, write: if isMaster() || (isSignedIn() && request.auth.uid == userId);
+      allow read, write: if isMaster() || (request.auth != null && request.auth.uid == userId);
     }
 
     // =============================
@@ -53,16 +33,13 @@ service cloud.firestore {
       allow get, write: if isMaster() || isFranchiseOwner(franchiseId);
       
       // Any signed-in user can list franchises (e.g., for a "find a franchise" map).
-      allow list: if isSignedIn();
+      allow list: if request.auth != null;
 
-      /**
-       * @description Rules for all subcollections within a franchise.
-       * Access is granted if the user is the master admin or the owner of the parent franchise.
-       * This single rule applies to clients, technicians, appointments, etc.
-       */
-       match /{subcollection}/{docId} {
-         allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
-       }
+      // --- Subcollections: clients, technicians, appointments, etc. ---
+      match /{subcollection}/{docId} {
+        // The master admin or the franchise owner can manage all resources within their franchise.
+        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      }
     }
   }
 }
