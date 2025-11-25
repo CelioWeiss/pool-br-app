@@ -8,13 +8,13 @@ service cloud.firestore {
     // Helper Functions
     // =============================
     function isMaster() {
-      // For this app, the master user is anyone with the role 'master' in their user document.
-      // NOTE: This assumes that only a trusted admin can set this role.
+      // Retorna true se o usuário for um administrador mestre.
+      // A verificação é simples, mas para um app em produção, considere usar custom claims.
       return request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'master';
     }
 
     function isFranchiseOwner(franchiseId) {
-      // User is the owner if their UID matches the ownerId on the franchise document.
+      // Retorna true se o UID do usuário corresponder ao ownerId no documento da franquia.
       return request.auth != null && get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
     }
 
@@ -22,8 +22,8 @@ service cloud.firestore {
     // Collection: users
     // =============================
     match /users/{userId} {
-      // A user can read/write their own profile.
-      // The master user can read/write any user profile.
+      // Um usuário pode ler e escrever seu próprio perfil.
+      // O administrador mestre pode ler e escrever qualquer perfil.
       allow read, write: if isMaster() || (request.auth != null && request.auth.uid == userId);
     }
 
@@ -31,21 +31,29 @@ service cloud.firestore {
     // Collection: franchises and Subcollections
     // =============================
     match /franchises/{franchiseId} {
-      // Allow read/write access on the franchise document itself to the master user or the owner.
+      // Permite leitura e escrita no próprio documento da franquia para o mestre ou o proprietário.
       allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
       
-      // Any signed-in user can list franchises, e.g. for a global map view.
-      // This is safe because it doesn't grant access to subcollections.
+      // Qualquer usuário autenticado pode listar as franquias (para um mapa, por exemplo).
       allow list: if request.auth != null;
 
-      // --- Subcollections ---
-      // This single rule applies to clients, technicians, appointments, etc.
-      // Access is granted if the user is the master admin or the owner of the parent franchise.
+      // --- Subcollections: technicians ---
+      match /technicians/{technicianId} {
+        // O mestre ou o proprietário da franquia podem gerenciar técnicos.
+        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+
+      // --- Subcollections: clients ---
+      match /clients/{clientId} {
+        // O mestre ou o proprietário da franquia podem gerenciar clientes.
+        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+      
+      // --- Outras Subcoleções ---
+      // Esta regra se aplica a outras subcoleções como appointments, serviceReports, etc.
       match /{subcollection}/{docId} {
         allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
   }
 }
-
-    
