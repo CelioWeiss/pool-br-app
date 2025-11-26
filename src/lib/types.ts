@@ -1,5 +1,6 @@
 
 
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -91,11 +92,20 @@ export interface ServiceReport {
   franchiseId: string;
   appointmentId: string;
   technicianId: string;
-  reportDateTime: string; // ISO string
-  chlorineLevel: number;
-  phLevel: number;
-  servicesPerformed: string;
+  clientId: string;
+  chlorine?: number;
+  alkalinity?: number;
+  ph?: number;
+  cya?: number;
+  calciumHardness?: number;
+  orp?: number;
+  tds?: number;
+  temperature?: number;
+  servicesPerformed: string[];
+  missingProducts?: string[];
+  observations?: string;
   photoUrls: string[];
-  notes: string;
   createdAt: string; // ISO string
 }
+
+    

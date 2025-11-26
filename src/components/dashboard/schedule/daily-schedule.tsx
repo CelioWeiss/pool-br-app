@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import type { Appointment, Client, Technician } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Check, X, Calendar } from 'lucide-react';
+import { Clock, Check, X, Calendar, PlayCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/use-auth';
 import { Spinner } from '@/components/ui/spinner';
@@ -43,7 +43,12 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
             </Badge>
         </div>
       </div>
-       <Button variant="outline" size="sm" disabled>Detalhes</Button>
+       <Button asChild>
+          <Link href={`/dashboard/service-report/${appointment.id}`}>
+            <PlayCircle className="mr-2 h-4 w-4" />
+            Iniciar Atendimento
+          </Link>
+       </Button>
     </div>
   );
 };
@@ -77,3 +82,5 @@ export function DailySchedule({ appointments, clients, technicians }: { appointm
     </div>
   );
 }
+
+    

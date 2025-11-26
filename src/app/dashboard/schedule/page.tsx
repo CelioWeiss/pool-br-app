@@ -22,7 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -43,10 +43,16 @@ export default function SchedulePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
-  // For owners, this is the dropdown selection. For technicians, it's their own ID.
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>(
-    hasRole('owner') ? 'all' : userInfo?.id || 'all'
-  );
+  const technicianUserIdToIdMap = useMemo(() => {
+    if (!technicians) return new Map<string, string>();
+    return new Map(technicians.map(t => [t.userId || '', t.id]));
+  }, [technicians]);
+
+  // For owners, this is the dropdown selection. For technicians, it's their own userId.
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>(() => {
+    if (hasRole('owner')) return 'all';
+    return userInfo?.id || 'all';
+  });
   
   const franchiseId = userInfo?.franchiseId;
 
@@ -68,90 +74,80 @@ export default function SchedulePage() {
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   const { data: manualAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
   
-  // --- Technician Mapping ---
-  // Create a map of userId -> technicianId for efficient lookup
-  const technicianUserIdToIdMap = useMemo(() => {
-    if (!technicians) return new Map<string, string>();
-    return new Map(technicians.map(t => [t.userId || '', t.id]));
-  }, [technicians]);
   
   // --- Unified Appointment Logic ---
-  const allAppointments = useMemo(() => {
-    // Return empty if essential data is not loaded
-    if (!clients || !manualAppointments || !technicians) return [];
-
-    const generatedAppointments: Appointment[] = [];
+ const allAppointmentsForFranchise = useMemo(() => {
+    if (!clients || !manualAppointments) {
+      return [];
+    }
+  
+    const appointmentsMap = new Map<string, Appointment>();
+  
+    // Add manual appointments first, they have priority
+    manualAppointments.forEach(appt => {
+      const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
+      appointmentsMap.set(key, appt);
+    });
+  
+    // Generate and add recurring appointments from client service days
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start, end });
-
-    // 1. Generate appointments from client service days
-    for (const client of clients) {
+  
+    clients.forEach(client => {
       if (client.serviceDays && client.serviceDays.length > 0 && client.technicianId) {
         const serviceDaysAsNumbers = client.serviceDays.map(d => dayOfWeekMap[d]);
-        for (const day of daysInMonth) {
+  
+        daysInMonth.forEach(day => {
           if (serviceDaysAsNumbers.includes(getDay(day))) {
             const scheduledDateTime = set(day, { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
-            generatedAppointments.push({
-              id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
-              clientId: client.id,
-              technicianId: client.technicianId,
-              franchiseId: client.franchiseId,
-              scheduledDateTime: scheduledDateTime.toISOString(),
-              status: 'scheduled', 
-            });
+            const key = `${client.id}-${format(scheduledDateTime, 'yyyy-MM-dd')}`;
+  
+            // Only add if no manual appointment exists for this client and day
+            if (!appointmentsMap.has(key)) {
+              appointmentsMap.set(key, {
+                id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
+                clientId: client.id,
+                technicianId: client.technicianId,
+                franchiseId: client.franchiseId,
+                scheduledDateTime: scheduledDateTime.toISOString(),
+                status: 'scheduled',
+              });
+            }
           }
-        }
+        });
       }
-    }
-    
-    // 2. Combine with manual appointments, letting manual ones override auto-generated ones
-    const combinedAppointmentsMap = new Map<string, Appointment>();
+    });
+  
+    return Array.from(appointmentsMap.values());
+  }, [clients, manualAppointments, currentDate]);
 
-    // Add generated first
-    for (const appt of generatedAppointments) {
-      const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
-      if (!combinedAppointmentsMap.has(key)) {
-        combinedAppointmentsMap.set(key, appt);
-      }
-    }
-    
-    // Then, add manual appointments, which will override any auto-generated ones for the same client/day
-    for (const appt of manualAppointments) {
-        const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
-        combinedAppointmentsMap.set(key, appt);
-    }
-    
-    const combinedList = Array.from(combinedAppointmentsMap.values());
-    
-    // 3. Filter the final list based on selected technician or user role
-    // This is the final filtering step after all appointments are gathered.
-    if (hasRole('technician')) {
-        // A technician should only see their own appointments.
-        // We use the technicianUserIdToIdMap to find the technician's document ID from their auth user ID.
-        const techDocId = technicianUserIdToIdMap.get(userInfo?.id || '');
-        if (!techDocId) return [];
-        return combinedList.filter(appt => appt.technicianId === techDocId);
-    }
-
+  const filteredAppointments = useMemo(() => {
     if (hasRole('owner')) {
       if (selectedTechnicianId === 'all') {
-        return combinedList; // Show all for the franchise owner
+        return allAppointmentsForFranchise;
       }
-      return combinedList.filter(appt => appt.technicianId === selectedTechnicianId);
+      return allAppointmentsForFranchise.filter(a => a.technicianId === selectedTechnicianId);
     }
 
-    return []; // Return empty for any other case
-  }, [clients, manualAppointments, technicians, currentDate, hasRole, userInfo, selectedTechnicianId, technicianUserIdToIdMap]);
+    if (hasRole('technician')) {
+      const technicianDocId = technicianUserIdToIdMap.get(userInfo?.id || '');
+      if (!technicianDocId) return [];
+      return allAppointmentsForFranchise.filter(a => a.technicianId === technicianDocId);
+    }
+
+    return [];
+  }, [allAppointmentsForFranchise, selectedTechnicianId, hasRole, userInfo, technicianUserIdToIdMap]);
+  
   
   const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
 
-  const appointmentDates = useMemo(() => allAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [allAppointments]);
+  const appointmentDates = useMemo(() => filteredAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [filteredAppointments]);
 
   const selectedAppointments = useMemo(() => {
-    if (!selectedDate || !allAppointments) return [];
-    return allAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), selectedDate));
-  }, [selectedDate, allAppointments]);
+    if (!selectedDate || !filteredAppointments) return [];
+    return filteredAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), selectedDate));
+  }, [selectedDate, filteredAppointments]);
 
 
   if (!hasRole(['owner', 'technician'])) {
@@ -256,3 +252,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
