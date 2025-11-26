@@ -6,18 +6,18 @@ import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { notFound } from "next/navigation";
 import { useAuth } from '@/hooks/use-auth';
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 import type { Appointment, Client } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, MapPin } from "lucide-react";
 
 
 export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
-  const { appointmentId } = params;
+  const appointmentId = params.appointmentId;
 
   const franchiseId = userInfo?.franchiseId;
 
