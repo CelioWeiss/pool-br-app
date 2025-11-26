@@ -4,7 +4,7 @@
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Droplets, Phone, Mail, MapPin, History } from 'lucide-react';
+import { User, Droplets, Phone, Mail, MapPin, History, Wrench } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
 import type { Client, Technician, Appointment } from '@/lib/types';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
@@ -37,13 +37,6 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
     [firestore, franchiseId, clientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
-
-  // Fetch Appointments for this Client
-  const appointmentsQuery = useMemoFirebase(() =>
-    firestore && franchiseId && clientId ? query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('clientId', '==', clientId)) : null,
-    [firestore, franchiseId, clientId]
-  );
-  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
   
   // Fetch All Technicians of the franchise to map names
   const techniciansCollection = useMemoFirebase(() =>
@@ -51,6 +44,19 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
     [firestore, franchiseId]
   );
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
+
+  // Appointments are derived on the schedule page, but for history, we fetch them here.
+  const appointmentsQuery = useMemoFirebase(() =>
+    firestore && franchiseId && clientId ? query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('clientId', '==', clientId)) : null,
+    [firestore, franchiseId, clientId]
+  );
+  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  const assignedTechnician = useMemoFirebase(() => {
+    if (!client || !client.technicianId || !technicians) return null;
+    return technicians.find(t => t.id === client.technicianId);
+  }, [client, technicians]);
+
 
   const isLoading = isLoadingClient || isLoadingAppointments || isLoadingTechnicians;
 
@@ -73,11 +79,13 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
     );
   }
 
+  const clientInitials = (client.name || '').split(' ').map(n => n[0]).join('').substring(0, 2);
+
   return (
     <div className="space-y-8">
       <div className="flex items-center gap-6">
         <Avatar className="h-24 w-24 border-4 border-primary">
-          <AvatarFallback className="text-3xl">{client.name?.charAt(0)}</AvatarFallback>
+          <AvatarFallback className="text-3xl">{clientInitials}</AvatarFallback>
         </Avatar>
         <div>
           <h1 className="text-4xl font-bold tracking-tight">{client.name}</h1>
@@ -99,10 +107,21 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Detalhes da Piscina</CardTitle>
+              <CardTitle>Detalhes Técnicos</CardTitle>
             </CardHeader>
-            <CardContent>
-              <InfoCard title="Especificações" value={client.poolDetails} icon={Droplets} />
+            <CardContent className="space-y-4">
+               <InfoCard title="Piscina" value={client.poolDetails} icon={Droplets} />
+               {assignedTechnician ? (
+                 <div>
+                    <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Wrench className="h-4 w-4" />
+                        Técnico Responsável
+                    </h3>
+                    <p className="text-base">{assignedTechnician.firstName} {assignedTechnician.lastName}</p>
+                 </div>
+               ) : (
+                 <InfoCard title="Técnico Responsável" value="Nenhum técnico atribuído" icon={Wrench} />
+               )}
             </CardContent>
           </Card>
         </div>
