@@ -68,7 +68,7 @@ export default function SchedulePage() {
 
   // --- Logic for Combining Manual and Auto-Generated Appointments ---
   const allAppointments = useMemo(() => {
-    if (!clients || !technicians) return [];
+    if (!clients) return [];
 
     // 1. Generate appointments from client service days for the current month
     const generatedAppointments: Appointment[] = [];
@@ -96,7 +96,7 @@ export default function SchedulePage() {
       }
     }
     
-    // 2. Combine with manual appointments, avoiding duplicates on the same day for the same client
+    // 2. Combine with manual appointments, letting manual ones override auto-generated ones
     const combinedAppointmentsMap = new Map<string, Appointment>();
 
     // Add generated first
@@ -116,7 +116,7 @@ export default function SchedulePage() {
     const combinedList = Array.from(combinedAppointmentsMap.values());
 
 
-    // 3. Filter based on user role and selected technician AFTER combining
+    // 3. Filter the final combined list based on user role and selected technician
     if (hasRole('technician') && userInfo?.id) {
       return combinedList.filter(a => a.technicianId === userInfo.id);
     }
@@ -127,7 +127,7 @@ export default function SchedulePage() {
 
     return combinedList;
 
-  }, [clients, technicians, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
+  }, [clients, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
   
   const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
 
