@@ -46,7 +46,7 @@ const missingProductsItems = [
     { id: "barrilha_leve", label: "Barrilha leve (elevador de pH)" },
     { id: "bicarbonato_sodio", label: "Bicarbonato de sódio (elevador de alcalinidade)" },
     { id: "clarificante", label: "Clarificante" },
-    { id("algicida_manutencao", label: "Algicida manutenção" },
+    { id: "algicida_manutencao", label: "Algicida manutenção" },
     { id: "algicida_choque", label: "Algicida choque" },
     { id: "oxidante", label: "Oxidante" },
     { id: "gel_clarificante", label: "Gel clarificante" },
@@ -226,5 +226,3 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
     </form>
   );
 }
-
-    
