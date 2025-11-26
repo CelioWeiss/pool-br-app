@@ -1,8 +1,9 @@
+
 "use server";
 
 import { analyzeServiceReport, ServiceReportInput, ServiceReportOutput } from "@/ai/flows/service-report-analyzer";
 import { revalidatePath } from "next/cache";
-import { doc, writeBatch } from "firebase/firestore";
+import { doc, writeBatch, collection as firestoreCollection } from "firebase/firestore";
 import { getSdks } from "@/firebase"; // Assuming this function gives firestore instance without needing auth
 import { ServiceReport, Appointment } from "@/lib/types";
 
@@ -71,9 +72,13 @@ export async function submitReportAction(
     try {
         const batch = writeBatch(firestore);
 
-        // 1. Create Service Report document
-        const reportRef = doc(firestore, 'franchises', franchiseId, 'serviceReports');
-        const newReport: Omit<ServiceReport, 'id'> = {
+        // 1. Create a reference for the new service report document to get an ID.
+        const reportCollectionRef = firestoreCollection(firestore, 'franchises', franchiseId, 'serviceReports');
+        const reportRef = doc(reportCollectionRef); // This creates a reference with a new unique ID
+
+        // 2. Create the Service Report document data
+        const newReport: ServiceReport = {
+            id: reportRef.id, // Use the generated ID
             franchiseId,
             appointmentId,
             technicianId,
@@ -91,12 +96,13 @@ export async function submitReportAction(
             observations: rawData.observations as string,
             // In a real app, upload files to Cloud Storage and save URLs here.
             // For now, we'll just simulate with placeholder names.
-            photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => (rawData[`photo-${i}`] as File).size > 0),
+            photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => (rawData[`photo-${i}`] as File)?.size > 0),
             createdAt: new Date().toISOString(),
         };
+        // Use the explicit reference with the new ID in the batch.
         batch.set(reportRef, newReport);
 
-        // 2. Update Appointment with the new report ID and set status to 'completed'
+        // 3. Update Appointment with the new report ID and set status to 'completed'
         const appointmentRef = doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId);
         const appointmentUpdate: Partial<Appointment> = {
             serviceReportId: reportRef.id,
@@ -104,7 +110,7 @@ export async function submitReportAction(
         };
         batch.update(appointmentRef, appointmentUpdate);
 
-        // 3. Commit the batch
+        // 4. Commit the batch
         await batch.commit();
 
         // Revalidate paths to show updated data
