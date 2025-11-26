@@ -14,7 +14,6 @@ import {
   Users, 
   Wrench, 
   Calendar, 
-  ClipboardList, 
   Map, 
   LogOut,
 } from 'lucide-react';
@@ -27,7 +26,6 @@ const menuItems = [
   { href: '/dashboard/clients', label: 'Clientes', icon: Users, roles: ['owner'] },
   { href: '/dashboard/technicians', label: 'Técnicos', icon: Wrench, roles: ['owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
-  { href: '/dashboard/service-report', label: 'Novo Relatório', icon: ClipboardList, roles: ['technician'] },
   { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner', 'technician'] },
 ];
 
