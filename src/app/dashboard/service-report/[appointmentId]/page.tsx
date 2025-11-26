@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from "react";
 import { ServiceReportForm } from "@/components/dashboard/service-report/report-form";
 import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -13,11 +14,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, MapPin } from "lucide-react";
 
-
 export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
-  const appointmentId = params.appointmentId;
+  const { appointmentId } = params;
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -54,6 +54,17 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
   if (!appointment || !client) {
     // Or a more user-friendly "not found" component
     return notFound();
+  }
+  
+  if (appointment.status !== 'scheduled') {
+    return (
+       <div className="flex h-[80vh] items-center justify-center text-center">
+         <div>
+            <h1 className="text-2xl font-bold">Atendimento não disponível</h1>
+            <p className="text-muted-foreground mt-2">Este atendimento já foi concluído ou cancelado e não pode mais ser editado.</p>
+         </div>
+       </div>
+    )
   }
 
   return (

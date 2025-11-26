@@ -3,21 +3,21 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
+import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle, AlertTriangle, Info, UploadCloud, X, Check } from "lucide-react";
+import { UploadCloud, X, CheckCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Client, Appointment, ServiceReport, Technician } from "@/lib/types";
-
-// Mock data, replace with actual fetching
-const mockAppointment: Appointment = { id: '1', clientId: '1', technicianId: '1', franchiseId: '1', scheduledDateTime: new Date().toISOString(), status: 'scheduled' };
-const mockClient: Client = { id: '1', userId: '1', name: 'Cliente Teste', address: 'Rua Teste, 123', contactName: 'Contato Teste', contactPhone: '123', contactEmail: 'test@test.com', franchiseId: '1', poolDetails: 'Piscina Teste', technicianId: '1', createdAt: new Date().toISOString() };
+import type { Client, Appointment } from "@/lib/types";
+import { submitReportAction, type SubmitReportState } from "@/app/actions";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5 },
@@ -57,22 +57,18 @@ const missingProductsItems = [
 
 
 function SubmitButton() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const handleClick = () => {
-      setIsSubmitting(true);
-      // Simulate submission
-      setTimeout(() => setIsSubmitting(false), 3000);
-  }
+  const { pending } = useFormStatus();
 
   return (
-    <Button type="submit" disabled={isSubmitting} className="w-full" onClick={handleClick}>
-      {isSubmitting ? <><Spinner size="small" className="mr-2"/> Finalizando...</> : "Finalizar Relatório"}
+    <Button type="submit" disabled={pending} className="w-full">
+      {pending ? <><Spinner size="small" className="mr-2"/> Finalizando...</> : "Finalizar Relatório"}
     </Button>
   );
 }
 
 export function ServiceReportForm({ appointment, client }: { appointment: Appointment; client: Client }) {
+  const { toast } = useToast();
+  const router = useRouter();
   const [previews, setPreviews] = useState<(string | null)[]>([null, null, null, null]);
   const fileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
   
@@ -80,8 +76,28 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
     waterParameters.reduce((acc, p) => ({ ...acc, [p.key]: p.defaultValue }), {})
   );
 
-  const [services, setServices] = useState<string[]>([]);
-  const [products, setProducts] = useState<string[]>([]);
+  const initialState: SubmitReportState = { success: false, error: undefined };
+  const [state, formAction] = useFormState(submitReportAction, initialState);
+
+  useEffect(() => {
+    if (state.success) {
+      toast({
+        title: "Relatório Finalizado!",
+        description: "O relatório de serviço foi salvo e o cliente será notificado.",
+        variant: 'default',
+      });
+      // Redirect to the schedule page after successful submission
+      router.push('/dashboard/schedule');
+    }
+    if (state.error) {
+      toast({
+        title: "Erro ao Finalizar",
+        description: state.error,
+        variant: "destructive",
+      });
+    }
+  }, [state, toast, router]);
+
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
@@ -109,12 +125,26 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
       setParameters(prev => ({ ...prev, [key]: value[0] }));
   }
 
-  const handleCheckboxChange = (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, item: string, checked: boolean) => {
-    setList(prev => checked ? [...prev, item] : prev.filter(i => i !== item));
-  };
+  if (state.success) {
+    return (
+        <Alert>
+            <CheckCircle className="h-4 w-4" />
+            <AlertTitle>Relatório Enviado com Sucesso!</AlertTitle>
+            <AlertDescription>
+                O cliente foi notificado. Você será redirecionado para a agenda.
+            </AlertDescription>
+        </Alert>
+    )
+  }
 
   return (
-    <form>
+    <form action={formAction}>
+       {/* Hidden fields to pass essential IDs */}
+      <input type="hidden" name="appointmentId" value={appointment.id} />
+      <input type="hidden" name="franchiseId" value={appointment.franchiseId} />
+      <input type="hidden" name="clientId" value={client.id} />
+      <input type="hidden" name="technicianId" value={appointment.technicianId} />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-6">
             <Card>
@@ -130,7 +160,6 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                                 <span className="text-sm font-medium text-muted-foreground">{parameters[param.key]}</span>
                             </div>
                             <Slider
-                                id={param.key}
                                 name={param.key}
                                 min={param.min}
                                 max={param.max}
@@ -185,7 +214,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                 <CardContent className="grid grid-cols-2 gap-4">
                     {servicesPerformedItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                            <Checkbox id={`service-${item.id}`} onCheckedChange={(checked) => handleCheckboxChange(services, setServices, item.id, !!checked)} />
+                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} />
                             <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -199,7 +228,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                 <CardContent className="grid grid-cols-2 gap-4">
                     {missingProductsItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                             <Checkbox id={`product-${item.id}`} onCheckedChange={(checked) => handleCheckboxChange(products, setProducts, item.id, !!checked)} />
+                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} />
                             <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}

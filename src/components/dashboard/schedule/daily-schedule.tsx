@@ -7,8 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Check, X, Calendar, PlayCircle } from 'lucide-react';
 import { format } from 'date-fns';
-import { useAuth } from '@/hooks/use-auth';
-import { Spinner } from '@/components/ui/spinner';
 import Link from 'next/link';
 
 
@@ -16,7 +14,7 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
 
   const statusInfo = {
     scheduled: { icon: Clock, color: "bg-blue-500", label: "Agendado" },
-    in_progress: { icon: Clock, color: "bg-yellow-500", label: "Em Progresso" },
+    in_progress: { icon: PlayCircle, color: "bg-yellow-500", label: "Em Progresso" },
     completed: { icon: Check, color: "bg-green-500", label: "Concluído" },
     cancelled: { icon: X, color: "bg-red-500", label: "Cancelado" },
   };
@@ -43,12 +41,14 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
             </Badge>
         </div>
       </div>
-       <Button asChild>
-          <Link href={`/dashboard/service-report/${appointment.id}`}>
-            <PlayCircle className="mr-2 h-4 w-4" />
-            Iniciar Atendimento
-          </Link>
-       </Button>
+       {appointment.status === 'scheduled' && (
+        <Button asChild size="sm">
+            <Link href={`/dashboard/service-report/${appointment.id}`}>
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Iniciar Atendimento
+            </Link>
+        </Button>
+       )}
     </div>
   );
 };
@@ -82,5 +82,3 @@ export function DailySchedule({ appointments, clients, technicians }: { appointm
     </div>
   );
 }
-
-    
