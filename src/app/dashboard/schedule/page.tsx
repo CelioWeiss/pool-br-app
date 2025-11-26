@@ -43,6 +43,15 @@ export default function SchedulePage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
+  const franchiseId = userInfo?.franchiseId;
+
+  // --- Data Fetching ---
+  const techniciansCollection = useMemoFirebase(() =>
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
+  , [firestore, franchiseId]);
+  
+  const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
+
   const technicianUserIdToIdMap = useMemo(() => {
     if (!technicians) return new Map<string, string>();
     return new Map(technicians.map(t => [t.userId || '', t.id]));
@@ -51,15 +60,10 @@ export default function SchedulePage() {
   // For owners, this is the dropdown selection. For technicians, it's their own userId.
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>(() => {
     if (hasRole('owner')) return 'all';
-    return userInfo?.id || 'all';
+    // When a technician logs in, their userInfo.id is their auth UID. We need to map it to their technician document ID.
+    const technicianDocId = technicianUserIdToIdMap.get(userInfo?.id || '');
+    return technicianDocId || 'all';
   });
-  
-  const franchiseId = userInfo?.franchiseId;
-
-  // --- Data Fetching ---
-  const techniciansCollection = useMemoFirebase(() =>
-    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
-  , [firestore, franchiseId]);
 
   const clientsCollection = useMemoFirebase(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
@@ -70,10 +74,8 @@ export default function SchedulePage() {
     return collection(firestore, 'franchises', franchiseId, 'appointments');
   }, [firestore, franchiseId]);
 
-  const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   const { data: manualAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
-  
   
   // --- Unified Appointment Logic ---
  const allAppointmentsForFranchise = useMemo(() => {
@@ -252,5 +254,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    
