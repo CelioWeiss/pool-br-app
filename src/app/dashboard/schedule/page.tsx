@@ -22,7 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -66,22 +66,22 @@ export default function SchedulePage() {
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   const { data: manualAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
-  // --- Logic for Combining Manual and Auto-Generated Appointments ---
+  // --- Unified Appointment Logic ---
   const allAppointments = useMemo(() => {
-    if (!clients) return [];
+    // Return empty if essential data is not loaded
+    if (!clients || !manualAppointments) return [];
 
-    // 1. Generate appointments from client service days for the current month
     const generatedAppointments: Appointment[] = [];
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start, end });
 
+    // 1. Generate appointments from client service days
     for (const client of clients) {
       if (client.serviceDays && client.serviceDays.length > 0 && client.technicianId) {
         const serviceDaysAsNumbers = client.serviceDays.map(d => dayOfWeekMap[d]);
         for (const day of daysInMonth) {
-          const dayOfWeekJs = getDay(day);
-          if (serviceDaysAsNumbers.includes(dayOfWeekJs)) {
+          if (serviceDaysAsNumbers.includes(getDay(day))) {
             const scheduledDateTime = set(day, { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
             generatedAppointments.push({
               id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
@@ -107,33 +107,39 @@ export default function SchedulePage() {
       }
     }
     
-    // Manual appointments override auto-generated ones
-    for (const appt of (manualAppointments || [])) {
+    // Then, add manual appointments, which will override any auto-generated ones for the same client/day
+    for (const appt of manualAppointments) {
         const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
         combinedAppointmentsMap.set(key, appt);
     }
     
+    // Convert map back to an array
     const combinedList = Array.from(combinedAppointmentsMap.values());
 
+    // 3. Filter the final list based on selected technician or user role
+    const finalFilteredList = combinedList.filter(appt => {
+      // Technicians only see their own appointments
+      if (hasRole('technician')) {
+        return appt.technicianId === userInfo?.id;
+      }
+      
+      // Owners can filter by technician
+      if (hasRole('owner')) {
+        if (selectedTechnicianId === 'all') {
+          return true; // Show all if 'all' is selected
+        }
+        return appt.technicianId === selectedTechnicianId; // Show only for the selected technician
+      }
 
-    // 3. Filter the final combined list based on user role and selected technician
-    if (hasRole('technician') && userInfo?.id) {
-      return combinedList.filter(a => a.technicianId === userInfo.id);
-    }
-    
-    if (hasRole('owner') && selectedTechnicianId !== 'all') {
-      return combinedList.filter(a => a.technicianId === selectedTechnicianId);
-    }
+      // Default case (should not be hit with current roles, but good for safety)
+      return false;
+    });
 
-    return combinedList;
+    return finalFilteredList;
 
   }, [clients, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
   
   const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
-
-  if (!hasRole(['owner', 'technician'])) {
-    return <p>Acesso negado.</p>;
-  }
 
   const appointmentDates = useMemo(() => allAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [allAppointments]);
 
@@ -142,6 +148,10 @@ export default function SchedulePage() {
     return allAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), selectedDate));
   }, [selectedDate, allAppointments]);
 
+
+  if (!hasRole(['owner', 'technician'])) {
+    return <p>Acesso negado.</p>;
+  }
 
   return (
     <div className="space-y-8">
@@ -241,5 +251,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    
