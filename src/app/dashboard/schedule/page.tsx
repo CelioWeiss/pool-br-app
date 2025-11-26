@@ -42,8 +42,10 @@ export default function SchedulePage() {
   const firestore = useFirestore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  
+  // For owners, this is the dropdown selection. For technicians, it's their own ID.
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>(
-    hasRole('technician') ? userInfo?.id || 'all' : 'all'
+    hasRole('owner') ? 'all' : userInfo?.id || 'all'
   );
   
   const franchiseId = userInfo?.franchiseId;
@@ -65,11 +67,18 @@ export default function SchedulePage() {
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   const { data: manualAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
-
+  
+  // --- Technician Mapping ---
+  // Create a map of userId -> technicianId for efficient lookup
+  const technicianUserIdToIdMap = useMemo(() => {
+    if (!technicians) return new Map<string, string>();
+    return new Map(technicians.map(t => [t.userId || '', t.id]));
+  }, [technicians]);
+  
   // --- Unified Appointment Logic ---
   const allAppointments = useMemo(() => {
     // Return empty if essential data is not loaded
-    if (!clients || !manualAppointments) return [];
+    if (!clients || !manualAppointments || !technicians) return [];
 
     const generatedAppointments: Appointment[] = [];
     const start = startOfMonth(currentDate);
@@ -113,25 +122,27 @@ export default function SchedulePage() {
         combinedAppointmentsMap.set(key, appt);
     }
     
-    // Convert map back to an array
     const combinedList = Array.from(combinedAppointmentsMap.values());
-
+    
     // 3. Filter the final list based on selected technician or user role
+    // This is the final filtering step after all appointments are gathered.
     if (hasRole('technician')) {
-      return combinedList.filter(appt => appt.technicianId === userInfo?.id);
+        // A technician should only see their own appointments.
+        // We use the technicianUserIdToIdMap to find the technician's document ID from their auth user ID.
+        const techDocId = technicianUserIdToIdMap.get(userInfo?.id || '');
+        if (!techDocId) return [];
+        return combinedList.filter(appt => appt.technicianId === techDocId);
     }
 
     if (hasRole('owner')) {
       if (selectedTechnicianId === 'all') {
-        return combinedList; // Show all if 'all' is selected
+        return combinedList; // Show all for the franchise owner
       }
       return combinedList.filter(appt => appt.technicianId === selectedTechnicianId);
     }
 
-    // Default case (should not be hit with current roles, but good for safety)
-    return [];
-
-  }, [clients, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
+    return []; // Return empty for any other case
+  }, [clients, manualAppointments, technicians, currentDate, hasRole, userInfo, selectedTechnicianId, technicianUserIdToIdMap]);
   
   const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
 
