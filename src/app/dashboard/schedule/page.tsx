@@ -117,25 +117,19 @@ export default function SchedulePage() {
     const combinedList = Array.from(combinedAppointmentsMap.values());
 
     // 3. Filter the final list based on selected technician or user role
-    const finalFilteredList = combinedList.filter(appt => {
-      // Technicians only see their own appointments
-      if (hasRole('technician')) {
-        return appt.technicianId === userInfo?.id;
-      }
-      
-      // Owners can filter by technician
-      if (hasRole('owner')) {
-        if (selectedTechnicianId === 'all') {
-          return true; // Show all if 'all' is selected
-        }
-        return appt.technicianId === selectedTechnicianId; // Show only for the selected technician
-      }
+    if (hasRole('technician')) {
+      return combinedList.filter(appt => appt.technicianId === userInfo?.id);
+    }
 
-      // Default case (should not be hit with current roles, but good for safety)
-      return false;
-    });
+    if (hasRole('owner')) {
+      if (selectedTechnicianId === 'all') {
+        return combinedList; // Show all if 'all' is selected
+      }
+      return combinedList.filter(appt => appt.technicianId === selectedTechnicianId);
+    }
 
-    return finalFilteredList;
+    // Default case (should not be hit with current roles, but good for safety)
+    return [];
 
   }, [clients, manualAppointments, currentDate, hasRole, userInfo, selectedTechnicianId]);
   
