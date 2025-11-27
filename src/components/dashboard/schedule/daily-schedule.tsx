@@ -32,9 +32,7 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
 
   return (
     <div className="flex items-start gap-4 p-4 border-b last:border-b-0">
-      <div className="flex flex-col items-center justify-center h-full">
-         <span className="text-lg font-bold">{format(new Date(appointment.scheduledDateTime), "HH:mm")}</span>
-      </div>
+      
       <div className="flex-1">
         <div className="flex justify-between items-start">
             <div>
