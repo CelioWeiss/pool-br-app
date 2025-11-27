@@ -89,3 +89,4 @@ export function DailySchedule({ appointments, clients, technicians }: { appointm
     </div>
   );
 }
+
