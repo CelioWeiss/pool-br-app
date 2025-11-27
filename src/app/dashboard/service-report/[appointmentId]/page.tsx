@@ -1,8 +1,7 @@
-
 "use client";
 
 import React, { useMemo } from "react";
-import { notFound, useParams } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ServiceReportForm } from "@/components/dashboard/service-report/report-form";
 import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -123,5 +122,3 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     </div>
   );
 }
-
-    
