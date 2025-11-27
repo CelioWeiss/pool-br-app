@@ -75,6 +75,11 @@ service cloud.firestore {
         // Allow technicians/clients within that franchise to read reports.
         allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && (userRole() == 'technician' || (userRole() == 'client' && get(resource.data.clientId).data.userId == request.auth.uid)));
       }
+      
+      match /quotes/{quoteId} {
+        // Allow master or the franchise owner to manage quotes.
+        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
+      }
     }
   }
 }

@@ -16,6 +16,7 @@ import {
   Calendar, 
   Map, 
   LogOut,
+  FileText,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -25,6 +26,7 @@ const menuItems = [
   { href: '/dashboard/franchises', label: 'Franquias', icon: Building2, roles: ['master'] },
   { href: '/dashboard/clients', label: 'Clientes', icon: Users, roles: ['owner'] },
   { href: '/dashboard/technicians', label: 'Técnicos', icon: Wrench, roles: ['owner'] },
+  { href: '/dashboard/quotes', label: 'Orçamentos', icon: FileText, roles: ['master', 'owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
   { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner', 'technician'] },
 ];

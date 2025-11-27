@@ -1,5 +1,6 @@
 
 
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -104,5 +105,22 @@ export interface ServiceReport {
   missingProducts: string[];
   observations: string;
   photoUrls: string[];
+  createdAt: string; // ISO string
+}
+
+export interface Quote {
+  id: string;
+  franchiseId: string;
+  clientId?: string | null; // Null if it's a new client
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  items: {
+    service: string;
+    price: number;
+  }[];
+  totalValue: number;
+  notes?: string;
+  status: 'pending' | 'accepted' | 'rejected';
   createdAt: string; // ISO string
 }
