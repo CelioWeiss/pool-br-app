@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, FirestorePermissionError, errorEmitter } from '@/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import type { Quote, Client } from '@/lib/types';
@@ -43,12 +43,12 @@ export default function QuotesPage() {
     return <p>Acesso negado.</p>;
   }
 
-  const handleSaveQuote = async (data: NewQuoteFormData) => {
+  const handleSaveQuote = (data: NewQuoteFormData) => {
     if (!firestore || !franchiseId) return;
 
     setIsSaving(true);
     
-    const newQuote: Omit<Quote, 'id'> = {
+    const newQuoteData: Omit<Quote, 'id'> = {
         franchiseId,
         clientId: data.clientId,
         clientName: data.clientName,
@@ -61,23 +61,29 @@ export default function QuotesPage() {
         createdAt: new Date().toISOString(),
     };
 
-    try {
-      await addDoc(collection(firestore, 'franchises', franchiseId, 'quotes'), newQuote);
-      toast({
-        title: "Orçamento Criado!",
-        description: `O orçamento para ${data.clientName} foi salvo com sucesso.`,
-      });
-      setIsNewQuoteDialogOpen(false);
-    } catch (error: any) {
-      console.error("Error creating quote: ", error);
-      toast({
-        variant: 'destructive',
-        title: "Erro ao criar orçamento",
-        description: error.message || "Ocorreu um erro ao salvar o orçamento.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
+    const quotesRef = collection(firestore, 'franchises', franchiseId, 'quotes');
+    
+    addDoc(quotesRef, newQuoteData)
+    .then(() => {
+        toast({
+            title: "Orçamento Criado!",
+            description: `O orçamento para ${data.clientName} foi salvo com sucesso.`,
+        });
+        setIsNewQuoteDialogOpen(false);
+    })
+    .catch((error) => {
+        console.error("Error creating quote: ", error);
+        
+        const permissionError = new FirestorePermissionError({
+            path: quotesRef.path,
+            operation: 'create',
+            requestResourceData: newQuoteData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+    })
+    .finally(() => {
+        setIsSaving(false);
+    });
   };
 
   const isLoading = isLoadingClients || isLoadingQuotes;
