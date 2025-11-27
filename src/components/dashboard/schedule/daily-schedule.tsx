@@ -50,14 +50,6 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
             </Badge>
         </div>
       </div>
-       {appointment.status === 'scheduled' && (
-        <Button asChild size="sm">
-            <Link href={reportLink}>
-                <PlayCircle className="mr-2 h-4 w-4" />
-                Iniciar Atendimento
-            </Link>
-        </Button>
-       )}
     </div>
   );
 };
