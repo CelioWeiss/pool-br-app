@@ -22,16 +22,16 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
 
   // Para agendamentos recorrentes (que ainda não têm um ID real no BD)
-  const isRecurring = appointment.id === 'new' || appointment.id.startsWith('auto-');
+  const isRecurring = appointment.id.startsWith('auto-');
   
-  // CORREÇÃO: Usar a rota correta
+  // CORREÇÃO: Usar rota diferente para novos agendamentos
   const reportLink = isRecurring
     ? `/dashboard/service-report/new?clientId=${appointment.clientId}&technicianId=${appointment.technicianId}&franchiseId=${appointment.franchiseId}&scheduledDateTime=${encodeURIComponent(appointment.scheduledDateTime)}`
     : `/dashboard/service-report/${appointment.id}`;
 
 
   return (
-    <div className="flex items-start gap-4 p-4 border-b last:border-b-0">
+    <div className="flex items-center gap-4 p-4 border-b last:border-b-0">
       
       <div className="flex-1">
         <div className="flex justify-between items-start">
@@ -48,6 +48,14 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
             </Badge>
         </div>
       </div>
+       {appointment.status === 'scheduled' && (
+        <Button asChild size="sm">
+            <Link href={reportLink}>
+                <PlayCircle className="mr-2 h-4 w-4" />
+                Iniciar Atendimento
+            </Link>
+        </Button>
+       )}
     </div>
   );
 };
@@ -81,5 +89,3 @@ export function DailySchedule({ appointments, clients, technicians }: { appointm
     </div>
   );
 }
-
-    
