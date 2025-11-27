@@ -75,7 +75,7 @@ export async function submitReportAction(
     const rawData = Object.fromEntries(formData.entries());
     
     // O ID do formulário pode ser um ID de agendamento real ou 'new' para agendamentos recorrentes.
-    const appointmentId = rawData.appointmentId as string;
+    let appointmentId = rawData.appointmentId as string;
     const franchiseId = rawData.franchiseId as string;
     const clientId = rawData.clientId as string;
     const technicianId = rawData.technicianId as string;
@@ -88,13 +88,12 @@ export async function submitReportAction(
     try {
         const batch = firestore.batch();
         let appointmentRef;
-        let finalAppointmentId = appointmentId;
 
         // Para agendamentos recorrentes, o ID será "new". Precisamos criar um registro real no banco de dados para ele.
         if (appointmentId === 'new') {
             // Cria um novo documento de agendamento porque este não existia no BD
             appointmentRef = firestore.collection(`franchises/${franchiseId}/appointments`).doc();
-            finalAppointmentId = appointmentRef.id;
+            appointmentId = appointmentRef.id; // Atualiza para o ID real do novo documento
             
             const newAppointment: Omit<Appointment, 'id'> = {
                 franchiseId,
@@ -108,15 +107,15 @@ export async function submitReportAction(
             batch.set(appointmentRef, newAppointment);
         } else {
             // É um agendamento existente, basta obter sua referência
-            appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${finalAppointmentId}`);
+            appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${appointmentId}`);
         }
 
         // Cria um novo documento de relatório de serviço
         const reportRef = firestore.collection(`franchises/${franchiseId}/serviceReports`).doc();
 
-        const newReport: Omit<ServiceReport, 'id'> = {
+        const newReport: Omit<ServiceReport, 'id' | 'createdAt'> = {
             franchiseId,
-            appointmentId: finalAppointmentId,
+            appointmentId: appointmentId, // Usa o ID (seja o original ou o novo)
             technicianId,
             clientId,
             chlorine: Number(rawData.chlorine),
@@ -135,9 +134,8 @@ export async function submitReportAction(
               const file = rawData[`photo-${i}`] as File;
               return file && file.size > 0;
             }),
-            createdAt: new Date().toISOString(),
         };
-        batch.set(reportRef, newReport);
+        batch.set(reportRef, { ...newReport, createdAt: new Date().toISOString() });
 
         // Atualiza o agendamento (novo ou existente) com o ID do relatório de serviço e define o status como concluído
         batch.update(appointmentRef, {

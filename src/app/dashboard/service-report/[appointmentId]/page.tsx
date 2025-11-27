@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { useSearchParams, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ServiceReportForm } from "@/components/dashboard/service-report/report-form";
 import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -17,55 +17,26 @@ import { User, MapPin } from "lucide-react";
 export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
-  const searchParams = useSearchParams();
   const { appointmentId } = params;
-
-  // Para agendamentos recorrentes, o ID será 'new' e os dados vêm dos searchParams
-  const isNewRecurringAppointment = appointmentId === 'new';
-
-  const clientIdFromParams = searchParams.get('clientId');
-  const technicianIdFromParams = searchParams.get('technicianId');
-  const scheduledDateTimeFromParams = searchParams.get('scheduledDateTime');
 
   const franchiseId = userInfo?.franchiseId;
 
-  // --- Busca de Dados ---
-
-  // Busca dados do agendamento se for um pré-existente do BD
+  // Busca dados do agendamento
   const appointmentDocRef = useMemoFirebase(() =>
-    !isNewRecurringAppointment && firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
-    [firestore, franchiseId, appointmentId, isNewRecurringAppointment]
+    firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
+    [firestore, franchiseId, appointmentId]
   );
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
 
-  // Determina o ID do cliente a ser buscado: da URL para novo recorrente, do documento do BD para existente
-  const finalClientId = isNewRecurringAppointment ? clientIdFromParams : appointment?.clientId;
-  
-  // Busca dados do cliente com base no ID do cliente determinado
+  // Busca dados do cliente com base no agendamento
   const clientDocRef = useMemoFirebase(() =>
-    firestore && franchiseId && finalClientId ? doc(firestore, 'franchises', franchiseId, 'clients', finalClientId) : null,
-    [firestore, franchiseId, finalClientId]
+    firestore && franchiseId && appointment?.clientId ? doc(firestore, 'franchises', franchiseId, 'clients', appointment.clientId) : null,
+    [firestore, franchiseId, appointment?.clientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
   
-  // Constrói o objeto de agendamento final para o formulário
-  // É o do BD ou um temporário para novos agendamentos recorrentes
-  const finalAppointment: Appointment | null = useMemo(() => {
-    if (isNewRecurringAppointment && clientIdFromParams && technicianIdFromParams && scheduledDateTimeFromParams && franchiseId) {
-      return {
-        id: 'new', // Um ID genérico para indicar que é um novo relatório
-        clientId: clientIdFromParams,
-        technicianId: technicianIdFromParams,
-        franchiseId,
-        scheduledDateTime: scheduledDateTimeFromParams,
-        status: 'scheduled' as const
-      };
-    }
-    return appointment || null;
-  }, [isNewRecurringAppointment, clientIdFromParams, technicianIdFromParams, scheduledDateTimeFromParams, franchiseId, appointment]);
-
   const logo = PlaceHolderImages.find(p => p.id === 'logo-color');
-  const isLoading = (isLoadingAppointment && !isNewRecurringAppointment) || isLoadingClient;
+  const isLoading = isLoadingAppointment || isLoadingClient;
 
   if (isLoading) {
     return (
@@ -76,13 +47,13 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     );
   }
 
-  // Se não tivermos um objeto de agendamento final ou um cliente, algo está errado.
-  if (!finalAppointment || !client) {
+  // Se não houver agendamento ou cliente, a página não foi encontrada
+  if (!appointment || !client) {
     return notFound();
   }
   
-  // Se o agendamento do BD já estiver concluído, bloqueia a edição.
-  if (finalAppointment.status !== 'scheduled') {
+  // Se o agendamento já foi concluído, não permite edição
+  if (appointment.status !== 'scheduled') {
     return (
        <div className="flex h-[80vh] items-center justify-center text-center">
          <div>
@@ -128,7 +99,7 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
           </CardContent>
         </Card>
 
-      <ServiceReportForm appointment={finalAppointment} client={client}/>
+      <ServiceReportForm appointment={appointment} client={client}/>
     </div>
   );
 }
