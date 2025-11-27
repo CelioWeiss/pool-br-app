@@ -49,49 +49,36 @@ export default function SchedulePage() {
   const techniciansCollection = useMemoFirebase(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
   , [firestore, franchiseId]);
-  
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
-
-  const technicianUserIdToIdMap = useMemo(() => {
-    if (!technicians) return new Map<string, string>();
-    return new Map(technicians.map(t => [t.userId || '', t.id]));
-  }, [technicians]);
-
-  // For owners, this is the dropdown selection. For technicians, it's their own userId.
-  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>(() => {
-    if (hasRole('owner')) return 'all';
-    // When a technician logs in, their userInfo.id is their auth UID. We need to map it to their technician document ID.
-    const technicianDocId = technicianUserIdToIdMap.get(userInfo?.id || '');
-    return technicianDocId || 'all';
-  });
 
   const clientsCollection = useMemoFirebase(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
   , [firestore, franchiseId]);
+  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   
   const appointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !franchiseId) return null;
     return collection(firestore, 'franchises', franchiseId, 'appointments');
   }, [firestore, franchiseId]);
-
-  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   const { data: manualAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('all');
   
   // --- Unified Appointment Logic ---
- const allAppointmentsForFranchise = useMemo(() => {
+  const allAppointmentsForFranchise = useMemo(() => {
     if (!clients || !manualAppointments) {
       return [];
     }
   
     const appointmentsMap = new Map<string, Appointment>();
   
-    // Add manual appointments first, they have priority
+    // 1. Add manual appointments first, they have priority
     manualAppointments.forEach(appt => {
       const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
       appointmentsMap.set(key, appt);
     });
   
-    // Generate and add recurring appointments from client service days
+    // 2. Generate and add recurring appointments from client service days
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start, end });
@@ -102,12 +89,13 @@ export default function SchedulePage() {
   
         daysInMonth.forEach(day => {
           if (serviceDaysAsNumbers.includes(getDay(day))) {
-            const scheduledDateTime = set(day, { hours: 12, minutes: 0, seconds: 0, milliseconds: 0 });
+            const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); // Default time
             const key = `${client.id}-${format(scheduledDateTime, 'yyyy-MM-dd')}`;
   
             // Only add if no manual appointment exists for this client and day
             if (!appointmentsMap.has(key)) {
               appointmentsMap.set(key, {
+                // Use a predictable ID for recurring appointments that don't exist in DB yet
                 id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
                 clientId: client.id,
                 technicianId: client.technicianId,
@@ -125,21 +113,26 @@ export default function SchedulePage() {
   }, [clients, manualAppointments, currentDate]);
 
   const filteredAppointments = useMemo(() => {
-    if (hasRole('owner')) {
-      if (selectedTechnicianId === 'all') {
-        return allAppointmentsForFranchise;
+    let appointmentsToFilter = allAppointmentsForFranchise;
+    
+    if (hasRole('technician')) {
+      // Find technician doc ID from their user ID
+      const techDocId = technicians?.find(t => t.userId === userInfo?.id)?.id;
+      if (techDocId) {
+        return appointmentsToFilter.filter(a => a.technicianId === techDocId);
       }
-      return allAppointmentsForFranchise.filter(a => a.technicianId === selectedTechnicianId);
+      return []; // Technician not found or not mapped
     }
 
-    if (hasRole('technician')) {
-      const technicianDocId = technicianUserIdToIdMap.get(userInfo?.id || '');
-      if (!technicianDocId) return [];
-      return allAppointmentsForFranchise.filter(a => a.technicianId === technicianDocId);
+    if (hasRole('owner')) {
+      if (selectedTechnicianId === 'all') {
+        return appointmentsToFilter;
+      }
+      return appointmentsToFilter.filter(a => a.technicianId === selectedTechnicianId);
     }
 
     return [];
-  }, [allAppointmentsForFranchise, selectedTechnicianId, hasRole, userInfo, technicianUserIdToIdMap]);
+  }, [allAppointmentsForFranchise, selectedTechnicianId, hasRole, userInfo?.id, technicians]);
   
   
   const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;

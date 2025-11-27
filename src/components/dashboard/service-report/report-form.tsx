@@ -86,7 +86,6 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
         description: "O relatório de serviço foi salvo e o cliente será notificado.",
         variant: 'default',
       });
-      // Redirect to the schedule page after successful submission
       router.push('/dashboard/schedule');
     }
     if (state.error) {
@@ -139,11 +138,12 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
 
   return (
     <form action={formAction} encType="multipart/form-data">
-       {/* Hidden fields to pass essential IDs */}
       <input type="hidden" name="appointmentId" value={appointment.id} />
       <input type="hidden" name="franchiseId" value={appointment.franchiseId} />
       <input type="hidden" name="clientId" value={client.id} />
       <input type="hidden" name="technicianId" value={appointment.technicianId} />
+      <input type="hidden" name="scheduledDateTime" value={appointment.scheduledDateTime} />
+
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-6">

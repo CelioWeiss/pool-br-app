@@ -4,25 +4,18 @@
 import { analyzeServiceReport, ServiceReportInput, ServiceReportOutput } from "@/ai/flows/service-report-analyzer";
 import { revalidatePath } from "next/cache";
 import { ServiceReport, Appointment } from "@/lib/types";
-
-// Import Firebase Admin SDK
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { v4 as uuidv4 } from 'uuid';
 
-// Helper para inicializar o Firebase Admin (de forma segura)
+
 function getAdminFirestore() {
   if (getApps().length === 0) {
-    // Para um ambiente de produção real, use variáveis de ambiente para as credenciais
-    // Ex: JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string)
-    // Por enquanto, vamos assumir que as credenciais estão disponíveis.
-    // Esta é uma configuração de exemplo e precisa ser sécurisée
     try {
        initializeApp({
          credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!))
        });
     } catch(e) {
-      // Em um ambiente de desenvolvimento local sem a variável, isso pode falhar.
-      // Para o Studio, as credenciais devem ser injetadas.
       console.error("Firebase Admin initialization failed. Make sure FIREBASE_SERVICE_ACCOUNT_KEY is set.", e);
       throw new Error("Firebase Admin initialization failed.");
     }
@@ -82,26 +75,45 @@ export async function submitReportAction(
 
     const rawData = Object.fromEntries(formData.entries());
     
-    const appointmentId = rawData.appointmentId as string;
+    const appointmentId = rawData.appointmentId as string; // Can be a real ID or 'new'
     const franchiseId = rawData.franchiseId as string;
     const clientId = rawData.clientId as string;
     const technicianId = rawData.technicianId as string;
+    const scheduledDateTime = rawData.scheduledDateTime as string;
 
-    if (!appointmentId || !franchiseId || !clientId || !technicianId) {
+    if (!franchiseId || !clientId || !technicianId || !scheduledDateTime) {
         return { success: false, error: "Dados essenciais do agendamento estão faltando." };
     }
 
     try {
         const batch = firestore.batch();
+        let appointmentRef;
+        let finalAppointmentId = appointmentId;
 
-        // 1. Create a reference for the new service report document to get an ID.
+        // For recurring appointments, the ID will start with "auto-". We need to create a real DB entry.
+        if (appointmentId.startsWith('auto-')) {
+            appointmentRef = firestore.collection(`franchises/${franchiseId}/appointments`).doc();
+            finalAppointmentId = appointmentRef.id;
+            
+            const newAppointment: Appointment = {
+                id: finalAppointmentId,
+                franchiseId,
+                clientId,
+                technicianId,
+                scheduledDateTime,
+                status: 'completed', // Will be updated with report ID later
+                serviceReportId: '', // Placeholder
+            };
+            batch.set(appointmentRef, newAppointment);
+        } else {
+            appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${appointmentId}`);
+        }
+
         const reportRef = firestore.collection(`franchises/${franchiseId}/serviceReports`).doc();
 
-        // 2. Create the Service Report document data
-        const newReport: ServiceReport = {
-            id: reportRef.id,
+        const newReport: Omit<ServiceReport, 'id'> = {
             franchiseId,
-            appointmentId,
+            appointmentId: finalAppointmentId,
             technicianId,
             clientId,
             chlorine: Number(rawData.chlorine),
@@ -115,8 +127,6 @@ export async function submitReportAction(
             servicesPerformed: formData.getAll('servicesPerformed') as string[],
             missingProducts: formData.getAll('missingProducts') as string[],
             observations: rawData.observations as string,
-            // Em um app real, faríamos upload para o Storage e salvaríamos as URLs.
-            // Por agora, simulamos com nomes.
             photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => {
               const file = rawData[`photo-${i}`] as File;
               return file && file.size > 0;
@@ -125,15 +135,11 @@ export async function submitReportAction(
         };
         batch.set(reportRef, newReport);
 
-        // 3. Update Appointment with the new report ID and set status to 'completed'
-        const appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${appointmentId}`);
-        const appointmentUpdate: Partial<Appointment> = {
+        batch.update(appointmentRef, {
             serviceReportId: reportRef.id,
             status: 'completed',
-        };
-        batch.update(appointmentRef, appointmentUpdate);
+        });
 
-        // 4. Commit the batch
         await batch.commit();
 
         revalidatePath(`/dashboard/schedule`);

@@ -2,10 +2,10 @@
 "use client";
 
 import React from "react";
+import { useSearchParams, notFound } from "next/navigation";
 import { ServiceReportForm } from "@/components/dashboard/service-report/report-form";
 import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { notFound } from "next/navigation";
 import { useAuth } from '@/hooks/use-auth';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -17,30 +17,55 @@ import { User, MapPin } from "lucide-react";
 export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
+  const searchParams = useSearchParams();
   const { appointmentId } = params;
+
+  // Read params from URL for recurring appointments
+  const clientId = searchParams.get('clientId');
+  const technicianId = searchParams.get('technicianId');
+  const scheduledDateTime = searchParams.get('scheduledDateTime');
 
   const franchiseId = userInfo?.franchiseId;
 
-  // Fetch Appointment Data
+  // If it's a real appointment from DB, it won't have clientId in searchParams
+  const isRecurringAppointment = !!clientId;
+
+  // --- Data Fetching ---
+
+  // Fetch Appointment Data if it's a pre-existing one
   const appointmentDocRef = useMemoFirebase(() =>
-    firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
-    [firestore, franchiseId, appointmentId]
+    !isRecurringAppointment && firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
+    [firestore, franchiseId, appointmentId, isRecurringAppointment]
   );
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
 
-  const clientId = appointment?.clientId;
-
-  // Fetch Client Data based on appointment
+  // Determine the client ID to fetch
+  const finalClientId = isRecurringAppointment ? clientId : appointment?.clientId;
+  
+  // Fetch Client Data based on appointment or URL param
   const clientDocRef = useMemoFirebase(() =>
-    firestore && franchiseId && clientId ? doc(firestore, 'franchises', franchiseId, 'clients', clientId) : null,
-    [firestore, franchiseId, clientId]
+    firestore && franchiseId && finalClientId ? doc(firestore, 'franchises', franchiseId, 'clients', finalClientId) : null,
+    [firestore, franchiseId, finalClientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
-
+  
+  // Construct a pseudo-appointment object for recurring ones
+  const finalAppointment = useMemoFirebase(() => {
+    if (isRecurringAppointment && clientId && technicianId && scheduledDateTime && franchiseId) {
+      return {
+        id: appointmentId, // e.g., auto-clientId-date
+        clientId,
+        technicianId,
+        franchiseId,
+        scheduledDateTime,
+        status: 'scheduled' as const
+      };
+    }
+    return appointment;
+  }, [isRecurringAppointment, appointmentId, clientId, technicianId, scheduledDateTime, franchiseId, appointment]);
 
   const logo = PlaceHolderImages.find(p => p.id === 'logo-color');
-
-  const isLoading = isLoadingAppointment || isLoadingClient;
+  const isLoading = (isLoadingAppointment && !isRecurringAppointment) || isLoadingClient;
 
   if (isLoading) {
     return (
@@ -51,12 +76,11 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     );
   }
 
-  if (!appointment || !client) {
-    // Or a more user-friendly "not found" component
+  if (!finalAppointment || !client) {
     return notFound();
   }
   
-  if (appointment.status !== 'scheduled') {
+  if (finalAppointment.status !== 'scheduled') {
     return (
        <div className="flex h-[80vh] items-center justify-center text-center">
          <div>
@@ -102,7 +126,7 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
           </CardContent>
         </Card>
 
-      <ServiceReportForm appointment={appointment} client={client}/>
+      <ServiceReportForm appointment={finalAppointment} client={client}/>
     </div>
   );
 }

@@ -21,6 +21,12 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
 
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
 
+  // For recurring appointments, we need to pass params in the URL
+  const reportLink = appointment.id.startsWith('auto-')
+    ? `/dashboard/service-report/${appointment.id}?clientId=${appointment.clientId}&technicianId=${appointment.technicianId}&franchiseId=${appointment.franchiseId}&scheduledDateTime=${encodeURIComponent(appointment.scheduledDateTime)}`
+    : `/dashboard/service-report/${appointment.id}`;
+
+
   return (
     <div className="flex items-start gap-4 p-4 border-b last:border-b-0">
       <div className="flex flex-col items-center justify-center h-full">
@@ -43,7 +49,7 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
       </div>
        {appointment.status === 'scheduled' && (
         <Button asChild size="sm">
-            <Link href={`/dashboard/service-report/${appointment.id}`}>
+            <Link href={reportLink}>
                 <PlayCircle className="mr-2 h-4 w-4" />
                 Iniciar Atendimento
             </Link>
