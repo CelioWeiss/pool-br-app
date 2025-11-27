@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -100,14 +101,14 @@ export default function RelatorioPage() {
   ];
   
   const aguaItems = [
-      { key: "cloro", label: "Cloro", min: 0, max: 5, step: 0.1 },
-      { key: "ph", label: "pH", min: 6, max: 9, step: 0.1 },
-      { key: "alcalinidade", label: "Alcalinidade", min: 0, max: 200, step: 10 },
-      { key: "cya", label: "CYA", min: 0, max: 100, step: 5 },
-      { key: "dureza", label: "Dureza Cálcica", min: 0, max: 500, step: 10 },
-      { key: "orp", label: "ORP", min: 0, max: 1000, step: 10 },
-      { key: "tds", label: "TDS", min: 0, max: 3000, step: 100 },
-      { key: "temperatura", label: "Temperatura", min: 0, max: 40, step: 1 },
+      { key: "cloro", label: "Cloro", min: 0, max: 5, step: 0.1, unit: "ppm" },
+      { key: "ph", label: "pH", min: 6, max: 9, step: 0.1, unit: "" },
+      { key: "alcalinidade", label: "Alcalinidade", min: 0, max: 200, step: 10, unit: "ppm" },
+      { key: "cya", label: "CYA", min: 0, max: 100, step: 5, unit: "ppm" },
+      { key: "dureza", label: "Dureza Cálcica", min: 0, max: 500, step: 10, unit: "ppm" },
+      { key: "orp", label: "ORP", min: 0, max: 1000, step: 10, unit: "mV" },
+      { key: "tds", label: "TDS", min: 0, max: 3000, step: 100, unit: "ppm" },
+      { key: "temperatura", label: "Temperatura", min: 0, max: 40, step: 1, unit: "°C" },
   ] as const;
 
 
@@ -123,7 +124,7 @@ export default function RelatorioPage() {
                     <div key={item.key}>
                       <div className="flex justify-between items-center mb-1">
                           <Label htmlFor={item.key} className="capitalize">{item.label}</Label>
-                           <span className="text-sm font-medium text-muted-foreground">{agua[item.key]}</span>
+                           <span className="text-sm font-medium text-muted-foreground">{agua[item.key]} {item.unit}</span>
                       </div>
                       <Input
                         id={item.key}
