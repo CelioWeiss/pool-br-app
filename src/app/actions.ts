@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { ServiceReport, Appointment } from "@/lib/types";
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { v4 as uuidv4 } from 'uuid';
 
 
 function getAdminFirestore() {
@@ -75,7 +74,7 @@ export async function submitReportAction(
 
     const rawData = Object.fromEntries(formData.entries());
     
-    // The ID from the form can be a real appointment ID, or a temporary one like 'auto-...' for recurring ones
+    // O ID do formulário pode ser um ID de agendamento real ou 'new' para agendamentos recorrentes.
     const appointmentId = rawData.appointmentId as string;
     const franchiseId = rawData.franchiseId as string;
     const clientId = rawData.clientId as string;
@@ -91,9 +90,9 @@ export async function submitReportAction(
         let appointmentRef;
         let finalAppointmentId = appointmentId;
 
-        // For recurring appointments, the ID will start with "auto-". We need to create a real DB entry for it.
-        if (appointmentId.startsWith('auto-')) {
-            // Create a new appointment document because this one didn't exist in the DB
+        // Para agendamentos recorrentes, o ID será "new". Precisamos criar um registro real no banco de dados para ele.
+        if (appointmentId === 'new') {
+            // Cria um novo documento de agendamento porque este não existia no BD
             appointmentRef = firestore.collection(`franchises/${franchiseId}/appointments`).doc();
             finalAppointmentId = appointmentRef.id;
             
@@ -102,17 +101,17 @@ export async function submitReportAction(
                 clientId,
                 technicianId,
                 scheduledDateTime,
-                status: 'completed', // We will set it to completed right away
-                serviceReportId: '', // Placeholder, will be updated below
+                status: 'completed', // Iremos definir como concluído imediatamente
+                serviceReportId: '', // Placeholder, será atualizado abaixo
             };
-            // Set the new appointment data
+            // Define os dados do novo agendamento
             batch.set(appointmentRef, newAppointment);
         } else {
-            // It's an existing appointment, just get its reference
-            appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${appointmentId}`);
+            // É um agendamento existente, basta obter sua referência
+            appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${finalAppointmentId}`);
         }
 
-        // Create a new service report document
+        // Cria um novo documento de relatório de serviço
         const reportRef = firestore.collection(`franchises/${franchiseId}/serviceReports`).doc();
 
         const newReport: Omit<ServiceReport, 'id'> = {
@@ -131,7 +130,7 @@ export async function submitReportAction(
             servicesPerformed: formData.getAll('servicesPerformed') as string[],
             missingProducts: formData.getAll('missingProducts') as string[],
             observations: rawData.observations as string,
-            // TODO: Handle actual photo uploads to Firebase Storage
+            // TODO: Lidar com uploads de fotos reais para o Firebase Storage
             photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => {
               const file = rawData[`photo-${i}`] as File;
               return file && file.size > 0;
@@ -140,16 +139,16 @@ export async function submitReportAction(
         };
         batch.set(reportRef, newReport);
 
-        // Update the appointment (either the new or existing one) with the service report ID and set status to completed
+        // Atualiza o agendamento (novo ou existente) com o ID do relatório de serviço e define o status como concluído
         batch.update(appointmentRef, {
             serviceReportId: reportRef.id,
             status: 'completed',
         });
 
-        // Commit all batched writes atomically
+        // Confirma todas as escritas em lote atomicamente
         await batch.commit();
 
-        // Revalidate paths to update the UI
+        // Revalida caminhos para atualizar a UI
         revalidatePath(`/dashboard/schedule`);
         revalidatePath(`/dashboard/clients/${clientId}`);
 

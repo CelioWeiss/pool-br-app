@@ -20,7 +20,7 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
   const searchParams = useSearchParams();
   const { appointmentId } = params;
 
-  // For recurring appointments, the ID will be 'new' and data comes from searchParams
+  // Para agendamentos recorrentes, o ID será 'new' e os dados vêm dos searchParams
   const isNewRecurringAppointment = appointmentId === 'new';
 
   const clientIdFromParams = searchParams.get('clientId');
@@ -29,31 +29,31 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
 
   const franchiseId = userInfo?.franchiseId;
 
-  // --- Data Fetching ---
+  // --- Busca de Dados ---
 
-  // Fetch Appointment Data if it's a pre-existing one from the DB
+  // Busca dados do agendamento se for um pré-existente do BD
   const appointmentDocRef = useMemoFirebase(() =>
     !isNewRecurringAppointment && firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
     [firestore, franchiseId, appointmentId, isNewRecurringAppointment]
   );
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
 
-  // Determine the client ID to fetch: from URL for new recurring, from DB doc for existing
+  // Determina o ID do cliente a ser buscado: da URL para novo recorrente, do documento do BD para existente
   const finalClientId = isNewRecurringAppointment ? clientIdFromParams : appointment?.clientId;
   
-  // Fetch Client Data based on the determined client ID
+  // Busca dados do cliente com base no ID do cliente determinado
   const clientDocRef = useMemoFirebase(() =>
     firestore && franchiseId && finalClientId ? doc(firestore, 'franchises', franchiseId, 'clients', finalClientId) : null,
     [firestore, franchiseId, finalClientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
   
-  // Construct the final appointment object for the form
-  // It's either the one from DB or a temporary one for new recurring appointments
+  // Constrói o objeto de agendamento final para o formulário
+  // É o do BD ou um temporário para novos agendamentos recorrentes
   const finalAppointment: Appointment | null = useMemo(() => {
     if (isNewRecurringAppointment && clientIdFromParams && technicianIdFromParams && scheduledDateTimeFromParams && franchiseId) {
       return {
-        id: `auto-${clientIdFromParams}-${new Date(scheduledDateTimeFromParams).getTime()}`, // A temporary, unique ID
+        id: 'new', // Um ID genérico para indicar que é um novo relatório
         clientId: clientIdFromParams,
         technicianId: technicianIdFromParams,
         franchiseId,
@@ -76,12 +76,12 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     );
   }
 
-  // If we don't have a final appointment object or a client, something is wrong.
+  // Se não tivermos um objeto de agendamento final ou um cliente, algo está errado.
   if (!finalAppointment || !client) {
     return notFound();
   }
   
-  // If the appointment from the DB is already completed, block editing.
+  // Se o agendamento do BD já estiver concluído, bloqueia a edição.
   if (finalAppointment.status !== 'scheduled') {
     return (
        <div className="flex h-[80vh] items-center justify-center text-center">

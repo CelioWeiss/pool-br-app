@@ -101,7 +101,7 @@ export default function SchedulePage() {
                 clientId: client.id,
                 technicianId: client.technicianId,
                 franchiseId: client.franchiseId,
-                scheduledDateTime: scheduledDateTime.toISOString(),
+                scheduledDateTime: scheduledDateTime.toISOString(), // Ensure it's an ISO string
                 status: 'scheduled',
               });
             }
