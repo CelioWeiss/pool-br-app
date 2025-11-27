@@ -96,7 +96,7 @@ export default function SchedulePage() {
             if (!appointmentsMap.has(key)) {
               appointmentsMap.set(key, {
                 // Use a generic ID for recurring appointments that don't exist in DB yet
-                id: `new`,
+                id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
                 clientId: client.id,
                 technicianId: client.technicianId,
                 franchiseId: client.franchiseId,

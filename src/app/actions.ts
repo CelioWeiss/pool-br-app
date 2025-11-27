@@ -95,13 +95,12 @@ export async function submitReportAction(
             appointmentRef = firestore.collection(`franchises/${franchiseId}/appointments`).doc();
             appointmentId = appointmentRef.id; // Atualiza para o ID real do novo documento
             
-            const newAppointment: Omit<Appointment, 'id'> = {
+            const newAppointment: Omit<Appointment, 'id' | 'serviceReportId'> = {
                 franchiseId,
                 clientId,
                 technicianId,
                 scheduledDateTime,
                 status: 'completed', // Iremos definir como concluído imediatamente
-                serviceReportId: '', // Placeholder, será atualizado abaixo
             };
             // Define os dados do novo agendamento
             batch.set(appointmentRef, newAppointment);

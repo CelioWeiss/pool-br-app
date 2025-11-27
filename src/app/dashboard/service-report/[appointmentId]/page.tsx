@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { notFound } from "next/navigation";
+import { notFound, useParams } from "next/navigation";
 import { ServiceReportForm } from "@/components/dashboard/service-report/report-form";
 import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -73,7 +73,7 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
   }
 
   // 2. Se o agendamento já foi concluído, não permite edição
-  if (appointment.status !== 'scheduled') {
+  if (appointment.status !== 'scheduled' && appointment.status !== 'in_progress') {
     return (
        <div className="flex h-[80vh] items-center justify-center text-center">
          <div>
