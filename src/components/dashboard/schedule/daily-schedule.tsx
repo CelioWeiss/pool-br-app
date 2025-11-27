@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useMemo } from 'react';
@@ -6,11 +5,11 @@ import type { Appointment, Client, Technician } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Check, X, Calendar, PlayCircle } from 'lucide-react';
-import { format } from 'date-fns';
 import Link from 'next/link';
-
+import { useRouter } from 'next/navigation';
 
 const AppointmentItem = ({ appointment, client, technician }: { appointment: Appointment, client?: Client, technician?: Technician }) => {
+  const router = useRouter();
 
   const statusInfo = {
     scheduled: { icon: Clock, color: "bg-blue-500", label: "Agendado" },
@@ -20,15 +19,6 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
   };
 
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
-
-  // Para agendamentos recorrentes (que ainda não têm um ID real no BD)
-  const isRecurring = appointment.id.startsWith('auto-');
-  
-  // CORREÇÃO: Usar rota diferente para novos agendamentos
-  const reportLink = isRecurring
-    ? `/dashboard/service-report/new?clientId=${appointment.clientId}&technicianId=${appointment.technicianId}&franchiseId=${appointment.franchiseId}&scheduledDateTime=${encodeURIComponent(appointment.scheduledDateTime)}`
-    : `/dashboard/service-report/${appointment.id}`;
-
 
   return (
     <div className="flex items-center gap-4 p-4 border-b last:border-b-0">
@@ -49,11 +39,9 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
         </div>
       </div>
        {appointment.status === 'scheduled' && (
-        <Button asChild size="sm">
-            <Link href={reportLink}>
-                <PlayCircle className="mr-2 h-4 w-4" />
-                Iniciar Atendimento
-            </Link>
+        <Button onClick={() => router.push(`/relatorio/${appointment.id}`)} size="sm">
+            <PlayCircle className="mr-2 h-4 w-4" />
+            Iniciar Atendimento
         </Button>
        )}
     </div>
@@ -89,4 +77,3 @@ export function DailySchedule({ appointments, clients, technicians }: { appointm
     </div>
   );
 }
-

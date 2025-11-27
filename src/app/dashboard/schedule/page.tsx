@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -95,7 +94,7 @@ export default function SchedulePage() {
             // Only add if no manual appointment exists for this client and day
             if (!appointmentsMap.has(key)) {
               appointmentsMap.set(key, {
-                // Use a generic ID for recurring appointments that don't exist in DB yet
+                // Use a unique ID for recurring appointments that don't exist in DB yet
                 id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
                 clientId: client.id,
                 technicianId: client.technicianId,
@@ -247,5 +246,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-    
