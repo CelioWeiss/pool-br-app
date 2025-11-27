@@ -3,9 +3,33 @@
 
 import { analyzeServiceReport, ServiceReportInput, ServiceReportOutput } from "@/ai/flows/service-report-analyzer";
 import { revalidatePath } from "next/cache";
-import { doc, writeBatch, collection as firestoreCollection } from "firebase/firestore";
-import { getSdks } from "@/firebase"; // Assuming this function gives firestore instance without needing auth
 import { ServiceReport, Appointment } from "@/lib/types";
+
+// Import Firebase Admin SDK
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+
+// Helper para inicializar o Firebase Admin (de forma segura)
+function getAdminFirestore() {
+  if (getApps().length === 0) {
+    // Para um ambiente de produção real, use variáveis de ambiente para as credenciais
+    // Ex: JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY as string)
+    // Por enquanto, vamos assumir que as credenciais estão disponíveis.
+    // Esta é uma configuração de exemplo e precisa ser sécurisée
+    try {
+       initializeApp({
+         credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY!))
+       });
+    } catch(e) {
+      // Em um ambiente de desenvolvimento local sem a variável, isso pode falhar.
+      // Para o Studio, as credenciais devem ser injetadas.
+      console.error("Firebase Admin initialization failed. Make sure FIREBASE_SERVICE_ACCOUNT_KEY is set.", e);
+      throw new Error("Firebase Admin initialization failed.");
+    }
+  }
+  return getFirestore();
+}
+
 
 export interface AnalyzeReportState {
   analysisResult?: ServiceReportOutput;
@@ -50,13 +74,11 @@ export interface SubmitReportState {
   error?: string;
 }
 
-
-// This is a simplified server action. In a real app, you'd handle file uploads to a storage service.
 export async function submitReportAction(
     prevState: SubmitReportState,
     formData: FormData
 ): Promise<SubmitReportState> {
-    const { firestore } = getSdks(); // This might need adjustment based on your server-side firebase init
+    const firestore = getAdminFirestore();
 
     const rawData = Object.fromEntries(formData.entries());
     
@@ -70,15 +92,14 @@ export async function submitReportAction(
     }
 
     try {
-        const batch = writeBatch(firestore);
+        const batch = firestore.batch();
 
         // 1. Create a reference for the new service report document to get an ID.
-        const reportCollectionRef = firestoreCollection(firestore, 'franchises', franchiseId, 'serviceReports');
-        const reportRef = doc(reportCollectionRef); // This creates a reference with a new unique ID
+        const reportRef = firestore.collection(`franchises/${franchiseId}/serviceReports`).doc();
 
         // 2. Create the Service Report document data
         const newReport: ServiceReport = {
-            id: reportRef.id, // Use the generated ID
+            id: reportRef.id,
             franchiseId,
             appointmentId,
             technicianId,
@@ -94,16 +115,18 @@ export async function submitReportAction(
             servicesPerformed: formData.getAll('servicesPerformed') as string[],
             missingProducts: formData.getAll('missingProducts') as string[],
             observations: rawData.observations as string,
-            // In a real app, upload files to Cloud Storage and save URLs here.
-            // For now, we'll just simulate with placeholder names.
-            photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => (rawData[`photo-${i}`] as File)?.size > 0),
+            // Em um app real, faríamos upload para o Storage e salvaríamos as URLs.
+            // Por agora, simulamos com nomes.
+            photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => {
+              const file = rawData[`photo-${i}`] as File;
+              return file && file.size > 0;
+            }),
             createdAt: new Date().toISOString(),
         };
-        // Use the explicit reference with the new ID in the batch.
         batch.set(reportRef, newReport);
 
         // 3. Update Appointment with the new report ID and set status to 'completed'
-        const appointmentRef = doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId);
+        const appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${appointmentId}`);
         const appointmentUpdate: Partial<Appointment> = {
             serviceReportId: reportRef.id,
             status: 'completed',
@@ -113,7 +136,6 @@ export async function submitReportAction(
         // 4. Commit the batch
         await batch.commit();
 
-        // Revalidate paths to show updated data
         revalidatePath(`/dashboard/schedule`);
         revalidatePath(`/dashboard/clients/${clientId}`);
 

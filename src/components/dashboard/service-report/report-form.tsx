@@ -138,7 +138,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
   }
 
   return (
-    <form action={formAction}>
+    <form action={formAction} encType="multipart/form-data">
        {/* Hidden fields to pass essential IDs */}
       <input type="hidden" name="appointmentId" value={appointment.id} />
       <input type="hidden" name="franchiseId" value={appointment.franchiseId} />
