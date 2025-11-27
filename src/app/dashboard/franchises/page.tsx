@@ -66,7 +66,7 @@ export default function FranchisesPage() {
       };
       batch.set(franchiseRef, newFranchise);
 
-      // 4. Define User Profile document reference and data
+      // 4. Define User Profile document reference and data IN THE ROOT /users collection
       const userProfileRef = doc(firestore, 'users', ownerUid);
       const [ownerFirstName, ...ownerLastNameParts] = data.ownerName.split(' ');
       const newUserProfile: UserInfo = {
