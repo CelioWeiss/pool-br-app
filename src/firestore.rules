@@ -8,20 +8,36 @@ service cloud.firestore {
     // Helper Functions
     // =============================
     function isMaster() {
-      // This is a simple check, for a production app, consider using custom claims.
-      return request.auth != null && request.auth.uid == "master-admin-01";
+      // For production, prefer custom claims. This check is for demo purposes.
+      // It assumes a 'users' collection where roles are stored.
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return request.auth != null && userDoc.data.role == 'master';
     }
 
     function isFranchiseOwner(franchiseId) {
-      // Returns true if the user's UID matches the ownerId on the franchise document.
-      return request.auth != null && get(/databases/$(database)/documents/franchises/$(franchiseId)).data.ownerId == request.auth.uid;
+      // Robust check: ensures document exists before trying to access its data.
+      let franchiseDoc = get(/databases/$(database)/documents/franchises/$(franchiseId));
+      return request.auth != null &&
+             franchiseDoc.exists == true &&
+             franchiseDoc.data.ownerId == request.auth.uid;
+    }
+    
+    function isUserInFranchise(franchiseId) {
+        let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+        return request.auth != null &&
+               userDoc.exists == true &&
+               userDoc.data.franchiseId == franchiseId;
+    }
+    
+    function userRole() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
     // =============================
     // Collection: users
     // =============================
     match /users/{userId} {
-      // A user can read/write their own profile. The master admin can read/write any user profile.
+      // A user can read/write their own profile. Master admin can read/write any user profile.
       allow read, write: if isMaster() || (request.auth != null && request.auth.uid == userId);
     }
 
@@ -29,16 +45,40 @@ service cloud.firestore {
     // Collection: franchises and Subcollections
     // =============================
     match /franchises/{franchiseId} {
-      // The master admin or the direct franchise owner can get or write the franchise document.
-      allow get, write: if isMaster() || isFranchiseOwner(franchiseId);
       
-      // Any signed-in user can list franchises (e.g., for a "find a franchise" map).
+      // Allow master and the specific franchise owner to read/write the franchise document.
+      allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      
+      // Any authenticated user can list franchises (e.g., for a "find a franchise" map).
       allow list: if request.auth != null;
 
-      // --- Subcollections: clients, technicians, appointments, etc. ---
-      match /{subcollection}/{docId} {
-        // The master admin or the franchise owner can manage all resources within their franchise.
-        allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
+      // --- Secure Subcollections ---
+      match /technicians/{technicianId} {
+        // Allow master or the franchise owner to perform all actions on technicians.
+        // The 'list' permission is crucial for querying collections.
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+
+      match /clients/{clientId} {
+         // Allow master or the franchise owner to perform all actions on clients.
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+      
+      match /appointments/{appointmentId} {
+        // Allow master or franchise owner to manage all appointments.
+        // Allow technicians/clients within that franchise to read appointments.
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && (userRole() == 'technician' || (userRole() == 'client' && get(resource.data.clientId).data.userId == request.auth.uid)));
+      }
+
+      match /serviceReports/{serviceReportId} {
+        // Allow master or franchise owner to manage all reports.
+        // Allow technicians/clients within that franchise to read reports.
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && (userRole() == 'technician' || (userRole() == 'client' && get(resource.data.clientId).data.userId == request.auth.uid)));
+      }
+      
+      match /quotes/{quoteId} {
+        // Allow master or the franchise owner to manage quotes.
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
   }
