@@ -21,9 +21,10 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
 
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
 
-  // For recurring appointments, we need to pass params in the URL
-  const reportLink = appointment.id.startsWith('auto-')
-    ? `/dashboard/service-report/${appointment.id}?clientId=${appointment.clientId}&technicianId=${appointment.technicianId}&franchiseId=${appointment.franchiseId}&scheduledDateTime=${encodeURIComponent(appointment.scheduledDateTime)}`
+  // For recurring appointments (which don't have a real DB id yet), we use 'new' and pass data via query params.
+  const isRecurring = appointment.id.startsWith('auto-');
+  const reportLink = isRecurring
+    ? `/dashboard/service-report/new?clientId=${appointment.clientId}&technicianId=${appointment.technicianId}&franchiseId=${appointment.franchiseId}&scheduledDateTime=${encodeURIComponent(appointment.scheduledDateTime)}`
     : `/dashboard/service-report/${appointment.id}`;
 
 

@@ -5,7 +5,7 @@ import { analyzeServiceReport, ServiceReportInput, ServiceReportOutput } from "@
 import { revalidatePath } from "next/cache";
 import { ServiceReport, Appointment } from "@/lib/types";
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -75,7 +75,8 @@ export async function submitReportAction(
 
     const rawData = Object.fromEntries(formData.entries());
     
-    const appointmentId = rawData.appointmentId as string; // Can be a real ID or 'new'
+    // The ID from the form can be a real appointment ID, or a temporary one like 'auto-...' for recurring ones
+    const appointmentId = rawData.appointmentId as string;
     const franchiseId = rawData.franchiseId as string;
     const clientId = rawData.clientId as string;
     const technicianId = rawData.technicianId as string;
@@ -90,25 +91,28 @@ export async function submitReportAction(
         let appointmentRef;
         let finalAppointmentId = appointmentId;
 
-        // For recurring appointments, the ID will start with "auto-". We need to create a real DB entry.
+        // For recurring appointments, the ID will start with "auto-". We need to create a real DB entry for it.
         if (appointmentId.startsWith('auto-')) {
+            // Create a new appointment document because this one didn't exist in the DB
             appointmentRef = firestore.collection(`franchises/${franchiseId}/appointments`).doc();
             finalAppointmentId = appointmentRef.id;
             
-            const newAppointment: Appointment = {
-                id: finalAppointmentId,
+            const newAppointment: Omit<Appointment, 'id'> = {
                 franchiseId,
                 clientId,
                 technicianId,
                 scheduledDateTime,
-                status: 'completed', // Will be updated with report ID later
-                serviceReportId: '', // Placeholder
+                status: 'completed', // We will set it to completed right away
+                serviceReportId: '', // Placeholder, will be updated below
             };
+            // Set the new appointment data
             batch.set(appointmentRef, newAppointment);
         } else {
+            // It's an existing appointment, just get its reference
             appointmentRef = firestore.doc(`franchises/${franchiseId}/appointments/${appointmentId}`);
         }
 
+        // Create a new service report document
         const reportRef = firestore.collection(`franchises/${franchiseId}/serviceReports`).doc();
 
         const newReport: Omit<ServiceReport, 'id'> = {
@@ -127,6 +131,7 @@ export async function submitReportAction(
             servicesPerformed: formData.getAll('servicesPerformed') as string[],
             missingProducts: formData.getAll('missingProducts') as string[],
             observations: rawData.observations as string,
+            // TODO: Handle actual photo uploads to Firebase Storage
             photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => {
               const file = rawData[`photo-${i}`] as File;
               return file && file.size > 0;
@@ -135,13 +140,16 @@ export async function submitReportAction(
         };
         batch.set(reportRef, newReport);
 
+        // Update the appointment (either the new or existing one) with the service report ID and set status to completed
         batch.update(appointmentRef, {
             serviceReportId: reportRef.id,
             status: 'completed',
         });
 
+        // Commit all batched writes atomically
         await batch.commit();
 
+        // Revalidate paths to update the UI
         revalidatePath(`/dashboard/schedule`);
         revalidatePath(`/dashboard/clients/${clientId}`);
 

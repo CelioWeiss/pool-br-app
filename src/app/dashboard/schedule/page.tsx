@@ -95,7 +95,8 @@ export default function SchedulePage() {
             // Only add if no manual appointment exists for this client and day
             if (!appointmentsMap.has(key)) {
               appointmentsMap.set(key, {
-                // Use a predictable ID for recurring appointments that don't exist in DB yet
+                // Use a generic ID for recurring appointments that don't exist in DB yet
+                // The actions.ts will handle creating the appointment doc if it doesn't exist
                 id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
                 clientId: client.id,
                 technicianId: client.technicianId,
@@ -115,13 +116,13 @@ export default function SchedulePage() {
   const filteredAppointments = useMemo(() => {
     let appointmentsToFilter = allAppointmentsForFranchise;
     
-    if (hasRole('technician')) {
-      // Find technician doc ID from their user ID
-      const techDocId = technicians?.find(t => t.userId === userInfo?.id)?.id;
-      if (techDocId) {
-        return appointmentsToFilter.filter(a => a.technicianId === techDocId);
-      }
-      return []; // Technician not found or not mapped
+    if (hasRole('technician') && userInfo?.id) {
+        // For technicians, filter by their userId, which is stored in the technician document
+        const techDoc = technicians?.find(t => t.userId === userInfo.id);
+        if (techDoc) {
+            return appointmentsToFilter.filter(a => a.technicianId === techDoc.id);
+        }
+        return []; // Technician document not found, return no appointments
     }
 
     if (hasRole('owner')) {

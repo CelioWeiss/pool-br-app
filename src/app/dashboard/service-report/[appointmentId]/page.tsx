@@ -14,57 +14,58 @@ import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, MapPin } from "lucide-react";
 
-export default function ServiceReportPage({ params: { appointmentId } }: { params: { appointmentId: string } }) {
+export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
   const searchParams = useSearchParams();
+  const { appointmentId } = params;
 
-  // Read params from URL for recurring appointments
-  const clientId = searchParams.get('clientId');
-  const technicianId = searchParams.get('technicianId');
-  const scheduledDateTime = searchParams.get('scheduledDateTime');
+  // For recurring appointments, the ID will be 'new' and data comes from searchParams
+  const isNewRecurringAppointment = appointmentId === 'new';
+
+  const clientIdFromParams = searchParams.get('clientId');
+  const technicianIdFromParams = searchParams.get('technicianId');
+  const scheduledDateTimeFromParams = searchParams.get('scheduledDateTime');
 
   const franchiseId = userInfo?.franchiseId;
 
-  // If it's a real appointment from DB, it won't have clientId in searchParams
-  const isRecurringAppointment = !!clientId;
-
   // --- Data Fetching ---
 
-  // Fetch Appointment Data if it's a pre-existing one
+  // Fetch Appointment Data if it's a pre-existing one from the DB
   const appointmentDocRef = useMemoFirebase(() =>
-    !isRecurringAppointment && firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
-    [firestore, franchiseId, appointmentId, isRecurringAppointment]
+    !isNewRecurringAppointment && firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null,
+    [firestore, franchiseId, appointmentId, isNewRecurringAppointment]
   );
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
 
-  // Determine the client ID to fetch
-  const finalClientId = isRecurringAppointment ? clientId : appointment?.clientId;
+  // Determine the client ID to fetch: from URL for new recurring, from DB doc for existing
+  const finalClientId = isNewRecurringAppointment ? clientIdFromParams : appointment?.clientId;
   
-  // Fetch Client Data based on appointment or URL param
+  // Fetch Client Data based on the determined client ID
   const clientDocRef = useMemoFirebase(() =>
     firestore && franchiseId && finalClientId ? doc(firestore, 'franchises', franchiseId, 'clients', finalClientId) : null,
     [firestore, franchiseId, finalClientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
   
-  // Construct a pseudo-appointment object for recurring ones
-  const finalAppointment = useMemoFirebase(() => {
-    if (isRecurringAppointment && clientId && technicianId && scheduledDateTime && franchiseId) {
+  // Construct the final appointment object for the form
+  // It's either the one from DB or a temporary one for new recurring appointments
+  const finalAppointment: Appointment | null = useMemo(() => {
+    if (isNewRecurringAppointment && clientIdFromParams && technicianIdFromParams && scheduledDateTimeFromParams && franchiseId) {
       return {
-        id: appointmentId, // e.g., auto-clientId-date
-        clientId,
-        technicianId,
+        id: `auto-${clientIdFromParams}-${new Date(scheduledDateTimeFromParams).getTime()}`, // A temporary, unique ID
+        clientId: clientIdFromParams,
+        technicianId: technicianIdFromParams,
         franchiseId,
-        scheduledDateTime,
+        scheduledDateTime: scheduledDateTimeFromParams,
         status: 'scheduled' as const
       };
     }
-    return appointment;
-  }, [isRecurringAppointment, appointmentId, clientId, technicianId, scheduledDateTime, franchiseId, appointment]);
+    return appointment || null;
+  }, [isNewRecurringAppointment, clientIdFromParams, technicianIdFromParams, scheduledDateTimeFromParams, franchiseId, appointment]);
 
   const logo = PlaceHolderImages.find(p => p.id === 'logo-color');
-  const isLoading = (isLoadingAppointment && !isRecurringAppointment) || isLoadingClient;
+  const isLoading = (isLoadingAppointment && !isNewRecurringAppointment) || isLoadingClient;
 
   if (isLoading) {
     return (
@@ -75,10 +76,12 @@ export default function ServiceReportPage({ params: { appointmentId } }: { param
     );
   }
 
+  // If we don't have a final appointment object or a client, something is wrong.
   if (!finalAppointment || !client) {
     return notFound();
   }
   
+  // If the appointment from the DB is already completed, block editing.
   if (finalAppointment.status !== 'scheduled') {
     return (
        <div className="flex h-[80vh] items-center justify-center text-center">
