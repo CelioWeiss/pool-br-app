@@ -28,7 +28,7 @@ const menuItems = [
   { href: '/dashboard/technicians', label: 'Técnicos', icon: Wrench, roles: ['owner'] },
   { href: '/dashboard/quotes', label: 'Orçamentos', icon: FileText, roles: ['master', 'owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
-  { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner', 'technician'] },
+  { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner'] },
 ];
 
 export function AppSidebar() {
