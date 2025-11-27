@@ -7,15 +7,15 @@ import { ServiceReportForm } from "@/components/dashboard/service-report/report-
 import Image from "next/image";
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useAuth } from '@/hooks/use-auth';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { Appointment, Client } from '@/lib/types';
+import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import type { Appointment, Client, Technician } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, MapPin } from "lucide-react";
 
 export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
-  const { userInfo } = useAuth();
+  const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
   const { appointmentId } = params;
 
@@ -34,9 +34,16 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     [firestore, franchiseId, appointment?.clientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
+
+  const techniciansCollection = useMemoFirebase(() =>
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
+  , [firestore, franchiseId]);
+  const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
+
+  const techDoc = useMemo(() => technicians?.find(t => t.userId === userInfo?.id), [technicians, userInfo?.id]);
   
   const logo = PlaceHolderImages.find(p => p.id === 'logo-color');
-  const isLoading = isLoadingAppointment || isLoadingClient;
+  const isLoading = isLoadingAppointment || isLoadingClient || isLoadingTechnicians;
 
   if (isLoading) {
     return (
@@ -52,7 +59,20 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     return notFound();
   }
   
-  // Se o agendamento já foi concluído, não permite edição
+  // Regras de acesso
+  // 1. O técnico só pode ver o relatório de um atendimento atribuído a ele
+  if (hasRole('technician') && techDoc?.id !== appointment.technicianId) {
+    return (
+       <div className="flex h-[80vh] items-center justify-center text-center">
+         <div>
+            <h1 className="text-2xl font-bold">Acesso Negado</h1>
+            <p className="text-muted-foreground mt-2">Você não tem permissão para acessar este atendimento.</p>
+         </div>
+       </div>
+    )
+  }
+
+  // 2. Se o agendamento já foi concluído, não permite edição
   if (appointment.status !== 'scheduled') {
     return (
        <div className="flex h-[80vh] items-center justify-center text-center">
@@ -103,3 +123,5 @@ export default function ServiceReportPage({ params }: { params: { appointmentId:
     </div>
   );
 }
+
+    

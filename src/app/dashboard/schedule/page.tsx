@@ -89,15 +89,14 @@ export default function SchedulePage() {
   
         daysInMonth.forEach(day => {
           if (serviceDaysAsNumbers.includes(getDay(day))) {
-            const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); // Default time
+            const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
             const key = `${client.id}-${format(scheduledDateTime, 'yyyy-MM-dd')}`;
   
             // Only add if no manual appointment exists for this client and day
             if (!appointmentsMap.has(key)) {
               appointmentsMap.set(key, {
                 // Use a generic ID for recurring appointments that don't exist in DB yet
-                // The actions.ts will handle creating the appointment doc if it doesn't exist
-                id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
+                id: `new`,
                 clientId: client.id,
                 technicianId: client.technicianId,
                 franchiseId: client.franchiseId,
@@ -248,3 +247,5 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+    
