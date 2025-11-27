@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useSearchParams, notFound } from "next/navigation";
 import { ServiceReportForm } from "@/components/dashboard/service-report/report-form";
 import Image from "next/image";
@@ -14,11 +14,10 @@ import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, MapPin } from "lucide-react";
 
-export default function ServiceReportPage({ params }: { params: { appointmentId: string } }) {
+export default function ServiceReportPage({ params: { appointmentId } }: { params: { appointmentId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
   const searchParams = useSearchParams();
-  const { appointmentId } = params;
 
   // Read params from URL for recurring appointments
   const clientId = searchParams.get('clientId');
