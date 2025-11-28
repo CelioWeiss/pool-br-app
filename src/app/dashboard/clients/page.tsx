@@ -11,7 +11,7 @@ import { PlusCircle, MoreHorizontal, Edit, UserX } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
-import type { Client, Technician, UserInfo } from '@/lib/types';
+import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
@@ -77,7 +77,7 @@ export default function ClientsPage() {
            
            const userRef = doc(firestore, 'users', newUserId);
            const [firstName, ...lastNameParts] = clientData.name.split(' ');
-           const newUserProfile: Omit<UserInfo, 'avatarUrl' | 'phone'> = {
+           const newUserProfile: Omit<UserInfo, 'avatarUrl' | 'phone' | 'createdAt'> = {
                id: newUserId,
                franchiseId: franchiseId,
                role: 'client',
@@ -100,19 +100,22 @@ export default function ClientsPage() {
         const newUserId = userCredential.user.uid;
 
         const clientRef = doc(collection(firestore, 'franchises', franchiseId, 'clients'));
-        const newClient: Client = {
+        const newClient: Omit<Client, 'createdAt'> = {
           id: clientRef.id,
           userId: newUserId,
           franchiseId: franchiseId,
-          createdAt: new Date().toISOString(),
           isActive: true,
           ...dataToSave,
-        } as Client;
-        batch.set(clientRef, newClient);
+          name: clientData.name,
+          contactName: clientData.contactName,
+          contactPhone: clientData.contactPhone,
+          contactEmail: clientData.contactEmail,
+        };
+        batch.set(clientRef, {...newClient, createdAt: new Date().toISOString()});
         
         const userRef = doc(firestore, 'users', newUserId);
         const [firstName, ...lastNameParts] = clientData.name.split(' ');
-        const newUserProfile: Omit<UserInfo, 'avatarUrl' | 'phone'> = {
+        const newUserProfile: Omit<UserInfo, 'avatarUrl' | 'phone'| 'createdAt'> = {
             id: newUserId,
             franchiseId: franchiseId,
             role: 'client',
@@ -121,7 +124,7 @@ export default function ClientsPage() {
             email: clientData.contactEmail,
             isActive: true,
         };
-        batch.set(userRef, newUserProfile);
+        batch.set(userRef, {...newUserProfile, createdAt: new Date().toISOString()});
       }
 
       await batch.commit();
@@ -187,7 +190,7 @@ export default function ClientsPage() {
     }
   };
   
-  const activeClients = useMemo(() => clientList?.filter(c => c.isActive !== false) || [], [clientList]);
+  const activeClients = useMemo(() => clientList?.filter(c => c.isActive) || [], [clientList]);
 
   return (
     <>
@@ -307,3 +310,5 @@ export default function ClientsPage() {
     </>
   );
 }
+
+    
