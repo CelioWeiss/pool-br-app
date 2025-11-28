@@ -2,15 +2,17 @@
 "use client";
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Eye, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, useMemoFirebase, FirestorePermissionError, errorEmitter } from '@/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import type { Quote, Client } from '@/lib/types';
 import { NewQuoteForm, type NewQuoteFormData } from '@/components/dashboard/quotes/new-quote-form';
@@ -38,6 +40,8 @@ export default function QuotesPage() {
 
   const [isNewQuoteDialogOpen, setIsNewQuoteDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+
 
   if (!hasRole(['master', 'owner']) || !franchiseId) {
     return <p>Acesso negado.</p>;
@@ -64,7 +68,9 @@ export default function QuotesPage() {
     const quotesRef = collection(firestore, 'franchises', franchiseId, 'quotes');
     
     addDoc(quotesRef, newQuoteData)
-    .then(() => {
+    .then((docRef) => {
+        const quoteWithId = { ...newQuoteData, id: docRef.id };
+        updateDoc(docRef, { id: docRef.id }); // Add id to the document
         toast({
             title: "Orçamento Criado!",
             description: `O orçamento para ${data.clientName} foi salvo com sucesso.`,
@@ -84,6 +90,34 @@ export default function QuotesPage() {
     .finally(() => {
         setIsSaving(false);
     });
+  };
+
+  const handleStatusChange = async (quoteId: string, status: Quote['status']) => {
+    if (!firestore || !franchiseId) return;
+    setUpdatingStatusId(quoteId);
+    const quoteRef = doc(firestore, 'franchises', franchiseId, 'quotes', quoteId);
+    try {
+      await updateDoc(quoteRef, { status });
+      toast({
+        title: 'Status atualizado!',
+        description: `O orçamento foi marcado como ${status}.`,
+      });
+    } catch (error) {
+      console.error("Error updating quote status: ", error);
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao atualizar',
+        description: 'Não foi possível alterar o status do orçamento.',
+      });
+    } finally {
+        setUpdatingStatusId(null);
+    }
+  };
+
+  const statusConfig = {
+    pending: { label: 'Pendente', variant: 'secondary' as const, icon: Clock },
+    accepted: { label: 'Aprovado', variant: 'default' as const, className: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
+    rejected: { label: 'Negado', variant: 'destructive' as const, icon: XCircle },
   };
 
   const isLoading = isLoadingClients || isLoadingQuotes;
@@ -141,23 +175,51 @@ export default function QuotesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {quoteList && quoteList.length > 0 ? quoteList.map((quote) => (
+                {quoteList && quoteList.length > 0 ? quoteList.map((quote) => {
+                  const currentStatus = statusConfig[quote.status] || statusConfig.pending;
+                  const isUpdating = updatingStatusId === quote.id;
+                  return (
                   <TableRow key={quote.id}>
                     <TableCell className="font-medium">{quote.clientName}</TableCell>
                     <TableCell>{format(new Date(quote.createdAt), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
                     <TableCell>
-                      <Badge variant={quote.status === 'pending' ? 'secondary' : quote.status === 'accepted' ? 'default' : 'destructive'}>
-                        {quote.status}
+                      <Badge variant={currentStatus.variant} className={currentStatus.className}>
+                        <currentStatus.icon className="mr-1 h-3 w-3" />
+                        {currentStatus.label}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
                         {quote.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" disabled>Ver</Button>
+                      {isUpdating ? <Spinner size="small" /> : (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/dashboard/quotes/${quote.id}`}><Eye className="mr-2 h-4 w-4" />Ver Detalhes</Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleStatusChange(quote.id, 'accepted')} disabled={quote.status === 'accepted'}>
+                                    <CheckCircle className="mr-2 h-4 w-4" />Marcar como Aprovado
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(quote.id, 'rejected')} disabled={quote.status === 'rejected'}>
+                                    <XCircle className="mr-2 h-4 w-4" />Marcar como Negado
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleStatusChange(quote.id, 'pending')} disabled={quote.status === 'pending'}>
+                                    <Clock className="mr-2 h-4 w-4" />Marcar como Pendente
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </TableCell>
                   </TableRow>
-                )) : (
+                  );
+                }) : (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">Nenhum orçamento encontrado.</TableCell>
                   </TableRow>
