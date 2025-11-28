@@ -1,3 +1,4 @@
+
 'use client';
 
 import { LoginForm } from '@/components/auth/login-form';
@@ -20,7 +21,7 @@ export default function Home() {
               data-ai-logo
             />
           )}
-        <p className="text-muted-foreground -mt-2">
+        <p className="text-muted-foreground -mt-2 font-bold">
           Pool BR - Gestão de Piscinas
         </p>
       </div>
