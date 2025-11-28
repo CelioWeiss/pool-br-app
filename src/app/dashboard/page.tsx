@@ -5,11 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Users, Wrench, Calendar } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
 import { useFirestore } from '@/firebase';
-import { collection, query, where, getCountFromServer } from 'firebase/firestore';
+import { collection, query, where, getCountFromServer, getDocs, Timestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
-
+import { MonthlyRevenueChart, type MonthlyRevenueData } from '@/components/dashboard/charts/monthly-revenue-chart';
+import { ClientStatsChart, type ClientStatsData } from '@/components/dashboard/charts/client-stats-chart';
+import type { Client, Payment } from '@/lib/types';
+import { subMonths, startOfMonth, endOfMonth, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 const StatCard = ({
   title,
@@ -48,6 +52,10 @@ export default function DashboardPage() {
     appointments: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [revenueData, setRevenueData] = useState<MonthlyRevenueData[]>([]);
+  const [clientStatsData, setClientStatsData] = useState<ClientStatsData[]>([]);
+  const [totalActiveClients, setTotalActiveClients] = useState(0);
+  const [totalInactiveClients, setTotalInactiveClients] = useState(0);
 
 
   useEffect(() => {
@@ -101,6 +109,62 @@ export default function DashboardPage() {
           );
           const apptSnap = await getCountFromServer(apptQuery);
           counts.appointments = apptSnap.data().count;
+          
+           // Fetch data for charts
+          const now = new Date();
+          const revenuePromises: Promise<number>[] = [];
+          const clientStatsPromises: Promise<{ new: number, inactive: number }>[] = [];
+          const monthLabels: string[] = [];
+          
+          for (let i = 5; i >= 0; i--) {
+            const date = subMonths(now, i);
+            monthLabels.push(format(date, 'MMM', { locale: ptBR }));
+
+            const start = startOfMonth(date);
+            const end = endOfMonth(date);
+
+            // Revenue
+            const paymentsQuery = query(
+              collection(firestore, 'franchises', userInfo.franchiseId, 'payments'),
+              where('status', '==', 'paid'),
+              where('paidAt', '>=', start.toISOString()),
+              where('paidAt', '<=', end.toISOString())
+            );
+            revenuePromises.push(
+                getDocs(paymentsQuery).then(snap => snap.docs.reduce((sum, doc) => sum + (doc.data() as Payment).amount, 0))
+            );
+
+            // Client stats
+            const clientsRef = collection(firestore, 'franchises', userInfo.franchiseId, 'clients');
+            const newClientsQuery = query(clientsRef, where('createdAt', '>=', start.toISOString()), where('createdAt', '<=', end.toISOString()));
+            const inactiveClientsQuery = query(clientsRef, where('isActive', '==', false)); // Simplified: checks all inactive, not just in that month
+            
+            clientStatsPromises.push(Promise.all([
+              getDocs(newClientsQuery).then(snap => snap.size),
+              getDocs(inactiveClientsQuery).then(snap => snap.size)
+            ]).then(([newCount, inactiveCount]) => ({ new: newCount, inactive: inactiveCount })));
+          }
+
+          const revenueResults = await Promise.all(revenuePromises);
+          setRevenueData(monthLabels.map((month, index) => ({ month, revenue: revenueResults[index] })));
+
+          const clientStatsResults = await Promise.all(clientStatsPromises);
+           setClientStatsData(monthLabels.map((month, index) => ({
+            month,
+            newClients: clientStatsResults[index].new,
+            inactiveClients: clientStatsResults[index].inactive, // This is an approximation
+          })));
+
+          const allClientsQuery = collection(firestore, 'franchises', userInfo.franchiseId, 'clients');
+          const allClientsSnap = await getDocs(allClientsQuery);
+          let active = 0;
+          let inactive = 0;
+          allClientsSnap.forEach(doc => {
+            if (doc.data().isActive) active++;
+            else inactive++;
+          });
+          setTotalActiveClients(active);
+          setTotalInactiveClients(inactive);
         }
 
         setStats(counts);
@@ -146,8 +210,8 @@ export default function DashboardPage() {
         )}
         {hasRole(['master', 'owner']) && (
           <StatCard
-            title="Total de Clientes"
-            value={stats.clients}
+            title="Clientes Ativos"
+            value={totalActiveClients}
             icon={Users}
             isLoading={isLoading}
           />
@@ -169,6 +233,22 @@ export default function DashboardPage() {
           />
         )}
       </div>
+
+       {hasRole('owner') && (
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div className="lg:col-span-3">
+                <MonthlyRevenueChart data={revenueData} isLoading={isLoading} />
+            </div>
+             <div className="lg:col-span-2">
+                <ClientStatsChart 
+                    data={clientStatsData} 
+                    isLoading={isLoading}
+                    totalActive={totalActiveClients}
+                    totalInactive={totalInactiveClients}
+                />
+            </div>
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         {hasRole('owner') && userInfo.franchiseId && <PendingClients franchiseId={userInfo.franchiseId} />}
