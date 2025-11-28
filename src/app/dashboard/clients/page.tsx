@@ -12,9 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
 import type { Client, Technician, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, useAuth as useFirebaseAuth, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 
 
@@ -22,7 +22,7 @@ export default function ClientsPage() {
   const { userInfo } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
-  const auth = useFirebaseAuth();
+  const auth = getAuth(); // Use getAuth() to get the auth instance
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -61,7 +61,7 @@ export default function ClientsPage() {
     try {
       const batch = writeBatch(firestore);
   
-      const dataToSave: Partial<Client> = {
+      const dataToSave: Partial<Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'>> = {
           name: clientData.name,
           address: clientData.address,
           contactName: clientData.contactName,

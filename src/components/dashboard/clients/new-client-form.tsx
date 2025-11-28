@@ -12,7 +12,7 @@ import { PlusCircle, X } from 'lucide-react';
 import { DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 
-export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId'> {
+export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> {
     password?: string;
 }
 
@@ -47,7 +47,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
     const [phone, setPhone] = useState('');
     const [poolDetails, setPoolDetails] = useState('');
     const [technicianId, setTechnicianId] = useState<string | undefined>(undefined);
-    const [addresses, setAddresses] = useState<string[]>(['']);
+    const [address, setAddress] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [monthlyFee, setMonthlyFee] = useState<number | string>('');
@@ -63,7 +63,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             setName(client.name);
             setEmail(client.contactEmail || '');
             setPhone(client.contactPhone || '');
-            setAddresses(client.address ? client.address.split('; ') : ['']);
+            setAddress(client.address || '');
             setPoolDetails(client.poolDetails || '');
             setTechnicianId(client.technicianId || undefined);
             setMonthlyFee(client.monthlyFee || '');
@@ -74,7 +74,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             setName('');
             setEmail('');
             setPhone('');
-            setAddresses(['']);
+            setAddress('');
             setPoolDetails('');
             setTechnicianId(undefined);
             setPassword('');
@@ -85,23 +85,6 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             setServiceDays([]);
         }
     }, [client]);
-
-    const handleAddressChange = (index: number, value: string) => {
-        const newAddresses = [...addresses];
-        newAddresses[index] = value;
-        setAddresses(newAddresses);
-    };
-
-    const addAddress = () => {
-        setAddresses([...addresses, '']);
-    };
-
-    const removeAddress = (index: number) => {
-        if (addresses.length > 1) {
-            const newAddresses = addresses.filter((_, i) => i !== index);
-            setAddresses(newAddresses);
-        }
-    };
     
     const handleServiceDayChange = (day: DayOfWeek, checked: boolean) => {
         setServiceDays(prev => 
@@ -126,10 +109,9 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             contactEmail: email,
             contactName: name,
             contactPhone: phone,
-            address: addresses.join('; '),
+            address: address,
             poolDetails: poolDetails,
             technicianId: technicianId || null,
-            createdAt: client?.createdAt || new Date().toISOString(),
             monthlyFee: Number(monthlyFee),
             dueDay: dueDay,
             contractType: contractType,
@@ -153,7 +135,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="email">Email de Contato</Label>
-                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving} />
+                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || isEditing} />
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="phone">Telefone de Contato</Label>
@@ -162,27 +144,14 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             </div>
 
             <div className="grid gap-2">
-                <Label>Endereços</Label>
-                {addresses.map((address, index) => (
-                <div key={index} className="flex items-center gap-2">
-                    <Input
+                <Label>Endereço</Label>
+                <Input
                     value={address}
-                    onChange={(e) => handleAddressChange(index, e.target.value)}
-                    placeholder={`Endereço ${index + 1}`}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Endereço completo"
                     required
                     disabled={isSaving}
-                    />
-                    {addresses.length > 1 && (
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removeAddress(index)} disabled={isSaving}>
-                        <X className="h-4 w-4" />
-                    </Button>
-                    )}
-                </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={addAddress} className="mt-2 w-fit" disabled={isSaving}>
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Adicionar Endereço
-                </Button>
+                />
             </div>
             
             <div className="grid gap-2">
