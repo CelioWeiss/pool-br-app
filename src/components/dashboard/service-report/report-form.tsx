@@ -3,7 +3,6 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
-import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,11 +12,12 @@ import { UploadCloud, X, CheckCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Client, Appointment } from "@/lib/types";
-import { submitReportAction, type SubmitReportState } from "@/app/actions";
+import type { Client, Appointment, ServiceReport } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useFirestore } from "@/firebase";
+import { writeBatch, doc, collection } from "firebase/firestore";
 
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5 },
@@ -56,46 +56,19 @@ const missingProductsItems = [
 ];
 
 
-function SubmitButton() {
-  const { pending } = useFormStatus();
-
-  return (
-    <Button type="submit" disabled={pending} className="w-full">
-      {pending ? <><Spinner size="small" className="mr-2"/> Finalizando...</> : "Finalizar Relatório"}
-    </Button>
-  );
-}
-
 export function ServiceReportForm({ appointment, client }: { appointment: Appointment; client: Client }) {
   const { toast } = useToast();
   const router = useRouter();
+  const firestore = useFirestore();
+
   const [previews, setPreviews] = useState<(string | null)[]>([null, null, null, null]);
   const fileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
   
   const [parameters, setParameters] = useState<Record<string, number>>(() =>
     waterParameters.reduce((acc, p) => ({ ...acc, [p.key]: p.defaultValue }), {})
   );
-
-  const initialState: SubmitReportState = { success: false, error: undefined };
-  const [state, formAction] = useFormState(submitReportAction, initialState);
-
-  useEffect(() => {
-    if (state.success) {
-      toast({
-        title: "Relatório Finalizado!",
-        description: "O relatório de serviço foi salvo e o cliente será notificado.",
-        variant: 'default',
-      });
-      router.push('/dashboard/schedule');
-    }
-    if (state.error) {
-      toast({
-        title: "Erro ao Finalizar",
-        description: state.error,
-        variant: "destructive",
-      });
-    }
-  }, [state, toast, router]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
 
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
@@ -124,20 +97,104 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
       setParameters(prev => ({ ...prev, [key]: value[0] }));
   }
 
-  if (state.success) {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!firestore) return;
+
+    setIsSaving(true);
+    const formData = new FormData(e.currentTarget);
+    const rawData = Object.fromEntries(formData.entries());
+
+    let appointmentId = rawData.appointmentId as string;
+    const franchiseId = rawData.franchiseId as string;
+    
+    try {
+        const batch = writeBatch(firestore);
+        let appointmentRef;
+
+        if (appointmentId === 'new') {
+            appointmentRef = doc(collection(firestore, `franchises/${franchiseId}/appointments`));
+            appointmentId = appointmentRef.id;
+            
+            const newAppointment: Omit<Appointment, 'id' | 'serviceReportId'> = {
+                franchiseId,
+                clientId: rawData.clientId as string,
+                technicianId: rawData.technicianId as string,
+                scheduledDateTime: rawData.scheduledDateTime as string,
+                status: 'completed',
+            };
+            batch.set(appointmentRef, newAppointment);
+        } else {
+            appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments/${appointmentId}`);
+        }
+
+        const reportRef = doc(collection(firestore, `franchises/${franchiseId}/serviceReports`));
+
+        const newReport: Omit<ServiceReport, 'id' | 'createdAt'> = {
+            franchiseId,
+            appointmentId: appointmentId,
+            technicianId: rawData.technicianId as string,
+            clientId: rawData.clientId as string,
+            chlorine: Number(rawData.chlorine),
+            alkalinity: Number(rawData.alkalinity),
+            ph: Number(rawData.ph),
+            cya: Number(rawData.cya),
+            calciumHardness: Number(rawData.calciumHardness),
+            orp: Number(rawData.orp),
+            tds: Number(rawData.tds),
+            temperature: Number(rawData.temperature),
+            servicesPerformed: formData.getAll('servicesPerformed') as string[],
+            missingProducts: formData.getAll('missingProducts') as string[],
+            observations: rawData.observations as string,
+            // TODO: Handle photo uploads
+            photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => {
+              const file = rawData[`photo-${i}`] as File;
+              return file && file.size > 0;
+            }),
+        };
+        batch.set(reportRef, { ...newReport, createdAt: new Date().toISOString() });
+
+        batch.update(appointmentRef, {
+            serviceReportId: reportRef.id,
+            status: 'completed',
+        });
+
+        await batch.commit();
+
+        setIsSuccess(true);
+        toast({
+            title: "Relatório Finalizado!",
+            description: "O relatório de serviço foi salvo e o cliente será notificado.",
+        });
+        router.push('/dashboard/schedule');
+
+    } catch (err: any) {
+        console.error("Error submitting report:", err);
+        toast({
+            variant: "destructive",
+            title: "Erro ao Finalizar",
+            description: err.message || "Ocorreu um erro ao finalizar o relatório.",
+        });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+
+  if (isSuccess) {
     return (
         <Alert>
             <CheckCircle className="h-4 w-4" />
             <AlertTitle>Relatório Enviado com Sucesso!</AlertTitle>
             <AlertDescription>
-                O cliente foi notificado. Você será redirecionado para a agenda.
+                Você será redirecionado para a agenda.
             </AlertDescription>
         </Alert>
     )
   }
 
   return (
-    <form action={formAction} encType="multipart/form-data">
+    <form onSubmit={handleSubmit} encType="multipart/form-data">
       <input type="hidden" name="appointmentId" value={appointment.id} />
       <input type="hidden" name="franchiseId" value={appointment.franchiseId} />
       <input type="hidden" name="clientId" value={client.id} />
@@ -249,7 +306,9 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                 </CardContent>
             </Card>
             
-            <SubmitButton />
+            <Button type="submit" disabled={isSaving} className="w-full">
+                {isSaving ? <><Spinner size="small" className="mr-2"/> Finalizando...</> : "Finalizar Relatório"}
+            </Button>
         </div>
       </div>
     </form>

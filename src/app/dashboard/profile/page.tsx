@@ -1,36 +1,26 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/hooks/use-toast';
-import { updateFranchiseProfileAction } from '@/app/actions';
 import type { Franchise } from '@/lib/types';
 import { Info, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-function SubmitButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? <><Spinner size="small" className="mr-2" /> Salvando...</> : "Salvar Alterações"}
-    </Button>
-  );
-}
+import { revalidatePath } from 'next/cache';
 
 export default function ProfilePage() {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -38,33 +28,60 @@ export default function ProfilePage() {
     firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null
   , [firestore, franchiseId]);
 
-  const { data: franchise, isLoading } = useDoc<Franchise>(franchiseDocRef);
-
-  const initialState = { success: false, error: undefined };
-  const [state, formAction] = useActionState(updateFranchiseProfileAction, initialState);
+  const { data: franchise, isLoading, error } = useDoc<Franchise>(franchiseDocRef);
   
+  const [pixKey, setPixKey] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
+
   useEffect(() => {
-    if (state.success) {
-      toast({
-        title: "Perfil Atualizado!",
-        description: "As informações da sua franquia foram salvas.",
-      });
+    if (franchise) {
+        setPixKey(franchise.pixKey || '');
+        setLogoUrl(franchise.logoUrl || '');
     }
-    if (state.error) {
-      toast({
-        variant: 'destructive',
-        title: "Erro ao Salvar",
-        description: state.error,
-      });
+  }, [franchise]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!franchiseDocRef) {
+        toast({
+            variant: 'destructive',
+            title: "Erro",
+            description: "Referência da franquia não encontrada.",
+        });
+        return;
     }
-  }, [state, toast]);
+    setIsSaving(true);
+    try {
+        await updateDoc(franchiseDocRef, {
+            pixKey: pixKey,
+            logoUrl: logoUrl,
+        });
+        toast({
+            title: "Perfil Atualizado!",
+            description: "As informações da sua franquia foram salvas.",
+        });
+    } catch (err: any) {
+        toast({
+            variant: 'destructive',
+            title: "Erro ao Salvar",
+            description: err.message || "Não foi possível atualizar o perfil da franquia.",
+        });
+    } finally {
+        setIsSaving(false);
+    }
+  }
+
 
   if (isLoading) {
     return <div className="flex h-full items-center justify-center"><Spinner size="large" /></div>;
   }
 
-  if (!franchise) {
+  if (!franchise && !isLoading) {
     return <p>Franquia não encontrada.</p>;
+  }
+  
+  if (error) {
+      return <p>Ocorreu um erro ao carregar os dados do perfil.</p>
   }
 
   return (
@@ -74,8 +91,7 @@ export default function ProfilePage() {
         <p className="text-muted-foreground">Gerencie as informações da sua franquia.</p>
       </div>
       
-      <form action={formAction}>
-        <input type="hidden" name="franchiseId" value={franchise.id} />
+      <form onSubmit={handleSubmit}>
         <Card>
           <CardHeader>
             <CardTitle>Informações de Pagamento e Marca</CardTitle>
@@ -89,8 +105,10 @@ export default function ProfilePage() {
               <Input
                 id="pixKey"
                 name="pixKey"
-                defaultValue={franchise.pixKey}
+                value={pixKey}
+                onChange={(e) => setPixKey(e.target.value)}
                 placeholder="E-mail, CPF/CNPJ, ou chave aleatória"
+                disabled={isSaving}
               />
               <p className="text-sm text-muted-foreground flex items-center gap-2 pt-1">
                 <Info size={14} /> Esta chave PIX será exibida no portal do cliente para pagamentos.
@@ -101,8 +119,10 @@ export default function ProfilePage() {
               <Input
                 id="logoUrl"
                 name="logoUrl"
-                defaultValue={franchise.logoUrl}
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
                 placeholder="https://exemplo.com/sua-logo.png"
+                disabled={isSaving}
               />
                <Alert variant="default" className="mt-2 bg-blue-50 border-blue-200 text-blue-800">
                 <AlertCircle className="h-4 w-4 !text-blue-800" />
@@ -114,7 +134,9 @@ export default function ProfilePage() {
             </div>
           </CardContent>
           <div className="p-6 pt-0">
-             <SubmitButton />
+             <Button type="submit" disabled={isSaving}>
+                {isSaving ? <><Spinner size="small" className="mr-2" /> Salvando...</> : "Salvar Alterações"}
+            </Button>
           </div>
         </Card>
       </form>
