@@ -4,13 +4,13 @@
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { DollarSign, Calendar, User, Wrench, History, Droplets, Copy } from 'lucide-react';
+import { DollarSign, Calendar, User, Wrench, History, Droplets, Copy, MapPin } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
 import { format } from 'date-fns';
-import type { Client, Technician, Appointment, Franchise, UserInfo } from '@/lib/types';
+import type { Client, Technician, Appointment, Franchise, UserInfo, ServiceLocation } from '@/lib/types';
 import { useMemo } from 'react';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { collection, doc, query, where, getDocs, limit } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -68,12 +68,19 @@ export function ClientDashboard() {
 
   // Find the client document using the user's ID
   const clientQuery = useMemoFirebase(() => 
-    firestore && franchiseId && user ? query(collection(firestore, `franchises/${franchiseId}/clients`), where('userId', '==', user.uid)) : null, 
+    firestore && franchiseId && user ? query(collection(firestore, `franchises/${franchiseId}/clients`), where('userId', '==', user.uid), limit(1)) : null, 
   [firestore, franchiseId, user]);
   
   const { data: clientQueryResult, isLoading: isLoadingClient } = useCollection<Client>(clientQuery);
   const clientData = useMemo(() => clientQueryResult?.[0], [clientQueryResult]);
   const clientId = clientData?.id;
+
+  // Find the service location for this client
+  const locationsQuery = useMemoFirebase(() =>
+    firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/clients/${clientId}/locations`), limit(1)) : null,
+  [firestore, franchiseId, clientId]);
+  const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsQuery);
+  const primaryLocation = useMemo(() => locations?.[0], [locations]);
 
   const franchiseDocRef = useMemoFirebase(() => 
     firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null,
@@ -99,9 +106,9 @@ export function ClientDashboard() {
   }, [clientAppointments]);
   
   const assignedTechnician: Technician | undefined = useMemo(() => {
-    if (!upcomingAppointment || !technicians) return undefined;
-    return technicians.find(t => t.id === upcomingAppointment.technicianId);
-  }, [upcomingAppointment, technicians]);
+    if (!primaryLocation?.technicianId || !technicians) return undefined;
+    return technicians.find(t => t.id === primaryLocation.technicianId);
+  }, [primaryLocation, technicians]);
 
   // Get User profile for the assigned technician to get the avatar
   const techUserDocRef = useMemoFirebase(() =>
@@ -110,7 +117,7 @@ export function ClientDashboard() {
   const { data: techUserInfo, isLoading: isLoadingTechUser } = useDoc<UserInfo>(techUserDocRef);
 
 
-  const isLoading = isLoadingClient || isLoadingFranchise || isLoadingTechnicians || isLoadingAppointments || isLoadingTechUser;
+  const isLoading = isLoadingClient || isLoadingFranchise || isLoadingTechnicians || isLoadingAppointments || isLoadingTechUser || isLoadingLocations;
 
   if (isLoading) {
       return <div className="flex h-[80vh] items-center justify-center"><Spinner size="large" /></div>
@@ -174,7 +181,13 @@ export function ClientDashboard() {
                                 </div>
                             </div>
                         ) : (
-                            <p className="text-muted-foreground">Nenhum técnico atribuído.</p>
+                            <p className="text-muted-foreground text-sm">Nenhum técnico atribuído a este local.</p>
+                        )}
+                        {primaryLocation && (
+                            <div className="text-sm text-muted-foreground mt-4 pt-4 border-t">
+                                <p className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4" /> Local de Atendimento:</p>
+                                <p>{primaryLocation.address}</p>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
