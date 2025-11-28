@@ -74,11 +74,11 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 1 * 1024 * 1024) { // 1MB limit
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
         toast({
           variant: "destructive",
           title: "Arquivo muito grande",
-          description: "Por favor, selecione uma imagem com menos de 1MB."
+          description: "Por favor, selecione uma imagem com menos de 5MB."
         });
         return;
       }
@@ -224,7 +224,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             <Card>
                 <CardHeader>
                     <CardTitle>Upload de Fotos</CardTitle>
-                    <CardDescription>Anexe até 4 fotos do serviço (máx 1MB cada).</CardDescription>
+                    <CardDescription>Anexe até 4 fotos do serviço (máx 5MB cada).</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
                     {[0, 1, 2, 3].map(index => (
@@ -306,3 +306,5 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
     </form>
   );
 }
+
+    
