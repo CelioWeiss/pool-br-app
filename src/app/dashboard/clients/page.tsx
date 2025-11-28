@@ -16,6 +16,7 @@ import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePe
 import { collection, doc, writeBatch } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
+import { Badge } from '@/components/ui/badge';
 
 
 export default function ClientsPage() {
@@ -57,7 +58,8 @@ export default function ClientsPage() {
     try {
       const batch = writeBatch(firestore);
   
-      const dataToSave: Partial<Omit<Client, 'id' | 'createdAt' | 'franchiseId'>> = {
+      // Explicitly define the type for dataToSave to ensure it matches Client properties
+      const dataToSave: Partial<Pick<Client, 'name' | 'contactName' | 'contactPhone' | 'contactEmail' | 'avatarUrl'>> = {
           name: clientData.name,
           contactName: clientData.contactName,
           contactPhone: clientData.contactPhone,
@@ -77,7 +79,7 @@ export default function ClientsPage() {
            
            const userRef = doc(firestore, 'users', newUserId);
            const [firstName, ...lastNameParts] = clientData.name.split(' ');
-           const newUserProfile: UserInfo = {
+           const newUserProfile: Omit<UserInfo, 'avatarUrl' | 'phone'> = {
                id: newUserId,
                franchiseId: franchiseId,
                role: 'client',
@@ -112,7 +114,7 @@ export default function ClientsPage() {
         
         const userRef = doc(firestore, 'users', newUserId);
         const [firstName, ...lastNameParts] = clientData.name.split(' ');
-        const newUserProfile: UserInfo = {
+        const newUserProfile: Omit<UserInfo, 'avatarUrl' | 'phone'> = {
             id: newUserId,
             franchiseId: franchiseId,
             role: 'client',
@@ -198,8 +200,15 @@ export default function ClientsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Clientes</CardTitle>
-          <CardDescription>Lista de clientes da sua franquia.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Clientes</CardTitle>
+              <CardDescription>Lista de clientes da sua franquia.</CardDescription>
+            </div>
+            {!isLoading && clientList && (
+               <Badge variant="secondary">{clientList.length} cliente(s)</Badge>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (

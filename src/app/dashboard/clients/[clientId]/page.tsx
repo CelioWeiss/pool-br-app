@@ -5,7 +5,7 @@ import React from "react";
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Phone, Mail, History, PlusCircle } from 'lucide-react';
+import { User, Phone, Mail, History, PlusCircle, AlertTriangle, Clock } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
 import type { Client, Technician, Appointment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
@@ -17,6 +17,8 @@ import { useState } from 'react';
 import { ClientLocations } from '@/components/dashboard/clients/client-locations';
 import { NewLocationForm } from '@/components/dashboard/clients/new-location-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Accordion } from "@/components/ui/accordion";
+
 
 const InfoCard = ({ title, value, icon: Icon }: { title: string, value: string | number, icon: React.ElementType }) => (
   <div>
@@ -63,6 +65,19 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     [firestore, franchiseId, clientId]
   );
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+
+  const { pendingAppointments, completedAppointments } = React.useMemo(() => {
+    const pending: Appointment[] = [];
+    const completed: Appointment[] = [];
+    (clientAppointments || []).forEach(appt => {
+      if (appt.status === 'scheduled' || appt.status === 'in_progress') {
+        pending.push(appt);
+      } else {
+        completed.push(appt);
+      }
+    });
+    return { pendingAppointments: pending, completedAppointments: completed };
+  }, [clientAppointments]);
 
   const isLoading = isLoadingClient || isLoadingAppointments || isLoadingTechnicians || isLoadingLocations;
 
@@ -141,21 +156,36 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
             </CardContent>
           </Card>
         </div>
-        <div className="lg:col-span-2">
-           <Card>
+        <div className="lg:col-span-2 space-y-8">
+            <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5"/>
+                      Atendimentos Pendentes
+                  </CardTitle>
+                   <CardDescription>
+                    {pendingAppointments.length > 0 ? `Encontrado(s) ${pendingAppointments.length} atendimento(s) pendente(s).` : 'Nenhum atendimento pendente.'}
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <AppointmentHistory appointments={pendingAppointments} technicians={technicians || []} />
+              </CardContent>
+            </Card>
+
+            <Card>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                       <History className="h-5 w-5"/>
                       Histórico de Atendimentos
                   </CardTitle>
                   <CardDescription>
-                    {clientAppointments ? `Encontrado(s) ${clientAppointments.length} atendimento(s).` : 'Nenhum atendimento encontrado.'}
+                    {completedAppointments.length > 0 ? `Encontrado(s) ${completedAppointments.length} atendimento(s) no histórico.` : 'Nenhum atendimento no histórico.'}
                   </CardDescription>
               </CardHeader>
               <CardContent>
-                  <AppointmentHistory appointments={clientAppointments || []} technicians={technicians || []} />
+                  <AppointmentHistory appointments={completedAppointments} technicians={technicians || []} />
               </CardContent>
-          </Card>
+            </Card>
         </div>
       </div>
     </div>
