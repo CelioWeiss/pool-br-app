@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -12,14 +12,15 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/hooks/use-toast';
 import type { Franchise } from '@/lib/types';
-import { Info, AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Info, UploadCloud, X } from 'lucide-react';
+import Image from 'next/image';
 
 export default function ProfilePage() {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -38,6 +39,25 @@ export default function ProfilePage() {
         setLogoUrl(franchise.logoUrl || '');
     }
   }, [franchise]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1024 * 1024) { // 1MB limit
+        toast({
+          variant: "destructive",
+          title: "Arquivo muito grande",
+          description: "Por favor, selecione uma imagem com menos de 1MB."
+        });
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setLogoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,23 +133,30 @@ export default function ProfilePage() {
                 <Info size={14} /> Esta chave PIX será exibida no portal do cliente para pagamentos.
               </p>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="logoUrl">URL da Logo da Franquia</Label>
+             <div className="space-y-2">
+              <Label htmlFor="logoUrl">Logo da Franquia</Label>
               <Input
-                id="logoUrl"
-                name="logoUrl"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-                placeholder="https://exemplo.com/sua-logo.png"
-                disabled={isSaving}
+                  id="logoUrlInput"
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={handleFileChange}
               />
-               <Alert variant="default" className="mt-2 bg-blue-50 border-blue-200 text-blue-800">
-                <AlertCircle className="h-4 w-4 !text-blue-800" />
-                <AlertTitle>Upload de Imagem</AlertTitle>
-                <AlertDescription>
-                  A funcionalidade de upload direto de imagens ainda não está disponível. Por favor, cole a URL de uma imagem já hospedada na internet.
-                </AlertDescription>
-              </Alert>
+              {logoUrl ? (
+                  <div className="relative w-48 h-24">
+                      <Image src={logoUrl} alt="Logo preview" layout="fill" className="rounded-md object-contain border p-2" />
+                      <Button type="button" size="icon" variant="destructive" className="absolute -top-2 -right-2 h-6 w-6" onClick={() => setLogoUrl('')}>
+                          <X size={14}/>
+                      </Button>
+                  </div>
+              ) : (
+                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} className="w-fit">
+                    <UploadCloud className="mr-2" />
+                    Selecionar Imagem
+                  </Button>
+              )}
+               <p className="text-xs text-muted-foreground">Envie uma imagem de até 1MB.</p>
             </div>
           </CardContent>
           <div className="p-6 pt-0">
