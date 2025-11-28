@@ -17,7 +17,7 @@ import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function ProfilePage() {
-  const { userInfo, user } = useAuth();
+  const { userInfo, user, hasRole } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -81,11 +81,11 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firestore || !franchiseDocRef || !userDocRef) {
+    if (!firestore || !userDocRef) {
         toast({
             variant: 'destructive',
             title: "Erro de Referência",
-            description: "Não foi possível encontrar as referências do usuário ou da franquia.",
+            description: "Não foi possível encontrar a referência do usuário.",
         });
         return;
     }
@@ -94,11 +94,13 @@ export default function ProfilePage() {
     try {
         const batch = writeBatch(firestore);
 
-        // Update Franchise Doc
-        batch.update(franchiseDocRef, {
-            pixKey: pixKey,
-            logoUrl: logoUrl,
-        });
+        // Update Franchise Doc if it exists
+        if (franchiseDocRef) {
+          batch.update(franchiseDocRef, {
+              pixKey: pixKey,
+              logoUrl: logoUrl,
+          });
+        }
 
         // Update User Doc
         const [firstName, ...lastNameParts] = userName.split(' ');
@@ -132,8 +134,8 @@ export default function ProfilePage() {
     return <div className="flex h-full items-center justify-center"><Spinner size="large" /></div>;
   }
 
-  if ((!franchise || !userData) && !isLoading) {
-    return <p>Dados do perfil ou da franquia não encontrados.</p>;
+  if (!userData && !isLoading) {
+    return <p>Dados do perfil não encontrados.</p>;
   }
 
   return (
@@ -144,115 +146,115 @@ export default function ProfilePage() {
       </div>
       
       <form onSubmit={handleSubmit} className="space-y-8">
-        {hasRole('owner') && (
-           <Card>
+         <Card>
+            <CardHeader>
+              <CardTitle>Meu Perfil</CardTitle>
+              <CardDescription>
+                Atualize seu nome de exibição e sua foto de perfil.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label htmlFor="userName">Nome Completo</Label>
+                <Input
+                  id="userName"
+                  name="userName"
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="Seu nome completo"
+                  disabled={isSaving}
+                />
+              </div>
+               <div className="space-y-2">
+                <Label htmlFor="avatarUrl">Sua Foto de Perfil</Label>
+                <div className="flex items-center gap-4">
+                   <Avatar className="h-16 w-16">
+                    <AvatarImage src={avatarUrl} alt={userName} />
+                    <AvatarFallback><User /></AvatarFallback>
+                  </Avatar>
+                  <Input
+                      id="avatarUrlInput"
+                      ref={avatarFileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={(e) => handleFileChange(e, setAvatarUrl)}
+                  />
+                  <Button type="button" variant="outline" onClick={() => avatarFileInputRef.current?.click()} className="w-fit">
+                      <UploadCloud className="mr-2" />
+                      Alterar Foto
+                  </Button>
+                  {avatarUrl && (
+                     <Button type="button" size="sm" variant="ghost" onClick={() => setAvatarUrl('')}>
+                        <X size={14} className="mr-1"/>
+                        Remover
+                    </Button>
+                  )}
+                </div>
+                 <p className="text-xs text-muted-foreground">Envie uma imagem de até 1MB.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+        {hasRole('owner') && franchise && (
+            <Card>
               <CardHeader>
-                <CardTitle>Meu Perfil</CardTitle>
+                <CardTitle>Perfil da Franquia</CardTitle>
                 <CardDescription>
-                  Atualize seu nome de exibição e sua foto de perfil.
+                  Adicione a chave PIX para receber pagamentos e a logo da sua franquia.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid md:grid-cols-2 gap-6">
+              <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="userName">Nome Completo</Label>
+                  <Label htmlFor="pixKey">Chave PIX</Label>
                   <Input
-                    id="userName"
-                    name="userName"
-                    value={userName}
-                    onChange={(e) => setUserName(e.target.value)}
-                    placeholder="Seu nome completo"
+                    id="pixKey"
+                    name="pixKey"
+                    value={pixKey}
+                    onChange={(e) => setPixKey(e.target.value)}
+                    placeholder="E-mail, CPF/CNPJ, ou chave aleatória"
                     disabled={isSaving}
                   />
+                  <p className="text-sm text-muted-foreground flex items-center gap-2 pt-1">
+                    <Info size={14} /> Esta chave PIX será exibida no portal do cliente para pagamentos.
+                  </p>
                 </div>
                  <div className="space-y-2">
-                  <Label htmlFor="avatarUrl">Sua Foto de Perfil</Label>
+                  <Label htmlFor="logoUrl">Logo da Franquia</Label>
+                  <Input
+                      id="logoUrlInput"
+                      ref={logoFileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={(e) => handleFileChange(e, setLogoUrl)}
+                  />
                   <div className="flex items-center gap-4">
-                     <Avatar className="h-16 w-16">
-                      <AvatarImage src={avatarUrl} alt={userName} />
-                      <AvatarFallback><User /></AvatarFallback>
-                    </Avatar>
-                    <Input
-                        id="avatarUrlInput"
-                        ref={avatarFileInputRef}
-                        type="file"
-                        className="hidden"
-                        accept="image/png, image/jpeg, image/webp"
-                        onChange={(e) => handleFileChange(e, setAvatarUrl)}
-                    />
-                    <Button type="button" variant="outline" onClick={() => avatarFileInputRef.current?.click()} className="w-fit">
-                        <UploadCloud className="mr-2" />
-                        Alterar Foto
-                    </Button>
-                    {avatarUrl && (
-                       <Button type="button" size="sm" variant="ghost" onClick={() => setAvatarUrl('')}>
-                          <X size={14} className="mr-1"/>
-                          Remover
-                      </Button>
+                    {logoUrl ? (
+                        <div className="relative w-48 h-24 bg-muted/50 p-2 rounded-md flex items-center justify-center">
+                            <Image src={logoUrl} alt="Logo preview" layout="fill" className="rounded-md object-contain border p-2" />
+                        </div>
+                    ) : (
+                        <div className="w-48 h-24 bg-muted/50 rounded-md flex items-center justify-center text-sm text-muted-foreground">
+                            Sem logo
+                        </div>
                     )}
+                     <Button type="button" variant="outline" onClick={() => logoFileInputRef.current?.click()} className="w-fit">
+                        <UploadCloud className="mr-2" />
+                        {logoUrl ? "Alterar Imagem" : "Selecionar Imagem"}
+                      </Button>
+                      {logoUrl && (
+                         <Button type="button" size="sm" variant="ghost" onClick={() => setLogoUrl('')}>
+                            <X size={14} className="mr-1"/>
+                            Remover
+                        </Button>
+                      )}
                   </div>
                    <p className="text-xs text-muted-foreground">Envie uma imagem de até 1MB.</p>
                 </div>
               </CardContent>
             </Card>
         )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Perfil da Franquia</CardTitle>
-            <CardDescription>
-              Adicione a chave PIX para receber pagamentos e a logo da sua franquia.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="pixKey">Chave PIX</Label>
-              <Input
-                id="pixKey"
-                name="pixKey"
-                value={pixKey}
-                onChange={(e) => setPixKey(e.target.value)}
-                placeholder="E-mail, CPF/CNPJ, ou chave aleatória"
-                disabled={isSaving}
-              />
-              <p className="text-sm text-muted-foreground flex items-center gap-2 pt-1">
-                <Info size={14} /> Esta chave PIX será exibida no portal do cliente para pagamentos.
-              </p>
-            </div>
-             <div className="space-y-2">
-              <Label htmlFor="logoUrl">Logo da Franquia</Label>
-              <Input
-                  id="logoUrlInput"
-                  ref={logoFileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="image/png, image/jpeg, image/webp"
-                  onChange={(e) => handleFileChange(e, setLogoUrl)}
-              />
-              <div className="flex items-center gap-4">
-                {logoUrl ? (
-                    <div className="relative w-48 h-24 bg-muted/50 p-2 rounded-md flex items-center justify-center">
-                        <Image src={logoUrl} alt="Logo preview" layout="fill" className="rounded-md object-contain border p-2" />
-                    </div>
-                ) : (
-                    <div className="w-48 h-24 bg-muted/50 rounded-md flex items-center justify-center text-sm text-muted-foreground">
-                        Sem logo
-                    </div>
-                )}
-                 <Button type="button" variant="outline" onClick={() => logoFileInputRef.current?.click()} className="w-fit">
-                    <UploadCloud className="mr-2" />
-                    {logoUrl ? "Alterar Imagem" : "Selecionar Imagem"}
-                  </Button>
-                  {logoUrl && (
-                     <Button type="button" size="sm" variant="ghost" onClick={() => setLogoUrl('')}>
-                        <X size={14} className="mr-1"/>
-                        Remover
-                    </Button>
-                  )}
-              </div>
-               <p className="text-xs text-muted-foreground">Envie uma imagem de até 1MB.</p>
-            </div>
-          </CardContent>
-        </Card>
         
         <div className="flex justify-end">
            <Button type="submit" disabled={isSaving} size="lg">
@@ -263,5 +265,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
