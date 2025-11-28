@@ -34,10 +34,18 @@ service cloud.firestore {
     
     function getUserRole(userId) {
         let userDoc = get(/databases/$(database)/documents/users/$(userId));
-        if (userDoc.exists) {
+        if (userDoc.exists == true) {
             return userDoc.data.role;
         }
         return null;
+    }
+    
+    function isSameFranchiseAsUser(otherUserId) {
+        let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+        let otherUserDoc = get(/databases/$(database)/documents/users/$(otherUserId));
+        return userDoc.exists == true &&
+               otherUserDoc.exists == true &&
+               userDoc.data.franchiseId == otherUserDoc.data.franchiseId;
     }
 
     // =============================
@@ -45,8 +53,16 @@ service cloud.firestore {
     // =============================
     match /users/{userId} {
       // A user can read/write their own profile.
-      // A master user can read/write any user profile.
-      allow read, write: if request.auth != null && (request.auth.uid == userId || isMaster());
+      allow write: if request.auth != null && request.auth.uid == userId;
+
+      // A user can read their own profile.
+      // A master user can read any profile.
+      // A user can read the profile of another user in the same franchise.
+      allow read: if request.auth != null && (
+        request.auth.uid == userId || 
+        isMaster() ||
+        isSameFranchiseAsUser(userId)
+      );
     }
     
     // =============================
@@ -101,5 +117,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
