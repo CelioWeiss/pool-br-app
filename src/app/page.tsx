@@ -21,7 +21,7 @@ export default function Home() {
             />
           )}
         <p className="text-muted-foreground -mt-2">
-          Gestão de Piscinas
+          Pool BR - Gestão de Piscinas
         </p>
       </div>
       <div className="w-full max-w-sm mt-10">
