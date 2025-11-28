@@ -1,4 +1,5 @@
 
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -35,20 +36,38 @@ export interface Client {
   id: string;
   userId: string; // Firebase Auth UID
   name: string;
-  address: string;
+  // address is deprecated, moved to ServiceLocation
+  // address: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
   franchiseId: string;
-  poolDetails: string;
-  technicianId: string | null;
+  // poolDetails is deprecated, moved to ServiceLocation
+  // poolDetails: string;
+  // technicianId is deprecated, moved to ServiceLocation
+  // technicianId: string | null;
   createdAt: string; // ISO string
-  locationLatitude?: number;
-  locationLongitude?: number;
+  // locationLatitude?: number;
+  // locationLongitude?: number;
   monthlyFee?: number;
   dueDay?: number;
   contractType?: ContractType;
-  serviceDays?: DayOfWeek[];
+  // serviceDays is deprecated, moved to ServiceLocation
+  // serviceDays?: DayOfWeek[];
+}
+
+export interface ServiceLocation {
+  id: string;
+  clientId: string;
+  franchiseId: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode?: string;
+  poolDetails: string;
+  technicianId: string | null;
+  serviceDays: DayOfWeek[];
+  createdAt: string; // ISO string
 }
 
 export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> {
@@ -74,6 +93,7 @@ export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'can
 export interface Appointment {
   id: string;
   clientId: string;
+  locationId: string; // Added to specify which location
   technicianId: string;
   franchiseId: string;
   scheduledDateTime: string; // ISO string
@@ -87,6 +107,7 @@ export interface ServiceReport {
   appointmentId: string;
   technicianId: string;
   clientId: string;
+  locationId: string; // Added to specify which location
   chlorine: number;
   alkalinity: number;
   ph: number;

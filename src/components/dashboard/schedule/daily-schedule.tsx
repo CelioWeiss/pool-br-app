@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useMemo, useState } from 'react';
-import type { Appointment, Client, Technician } from '@/lib/types';
+import type { Appointment, Client, Technician, ServiceLocation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Clock, Check, X, Calendar, PlayCircle } from 'lucide-react';
@@ -12,7 +13,7 @@ import { addDoc, collection } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
 
-const AppointmentItem = ({ appointment, client, technician }: { appointment: Appointment, client?: Client, technician?: Technician }) => {
+const AppointmentItem = ({ appointment, client, technician, location }: { appointment: Appointment, client?: Client, technician?: Technician, location?: ServiceLocation }) => {
   const router = useRouter();
   const firestore = useFirestore();
   const { userInfo } = useAuth();
@@ -40,6 +41,7 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
       
       const newAppointmentData: Omit<Appointment, 'id'> = {
         clientId: appointment.clientId,
+        locationId: appointment.locationId,
         technicianId: appointment.technicianId,
         franchiseId: appointment.franchiseId,
         scheduledDateTime: appointment.scheduledDateTime,
@@ -75,7 +77,7 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
                  <Link href={`/dashboard/clients/${appointment.clientId}`} className="font-semibold hover:underline text-primary">
                   {client?.name || 'Cliente não encontrado'}
                 </Link>
-                <p className="text-sm text-muted-foreground">{client?.address}</p>
+                <p className="text-sm text-muted-foreground">{location?.address || 'Endereço não encontrado'}</p>
                 <p className="text-sm text-muted-foreground">Técnico: {technician ? `${technician.firstName} ${technician.lastName}` : 'N/A'}</p>
             </div>
             <Badge variant="secondary" className="flex items-center gap-1.5 whitespace-nowrap">
@@ -98,9 +100,10 @@ const AppointmentItem = ({ appointment, client, technician }: { appointment: App
 };
 
 
-export function DailySchedule({ appointments, clients, technicians }: { appointments: Appointment[], clients: Client[], technicians: Technician[] }) {
+export function DailySchedule({ appointments, clients, technicians, locations }: { appointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[] }) {
   const clientsMap = useMemo(() => new Map(clients?.map(c => [c.id, c])), [clients]);
   const techniciansMap = useMemo(() => new Map(technicians?.map(t => [t.id, t])), [technicians]);
+  const locationsMap = useMemo(() => new Map(locations?.map(l => [l.id, l])), [locations]);
   
   if (appointments.length === 0) {
     return (
@@ -121,6 +124,7 @@ export function DailySchedule({ appointments, clients, technicians }: { appointm
             appointment={appt} 
             client={clientsMap.get(appt.clientId)}
             technician={techniciansMap.get(appt.technicianId)}
+            location={locationsMap.get(appt.locationId)}
         />
       ))}
     </div>

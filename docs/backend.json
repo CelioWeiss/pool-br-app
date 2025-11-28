@@ -94,7 +94,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Client",
       "type": "object",
-      "description": "Represents a client of a franchise.",
+      "description": "Represents a client of a franchise. A client can have multiple service locations.",
       "properties": {
         "id": {
           "type": "string",
@@ -104,23 +104,19 @@
           "type": "string",
           "description": "Reference to Franchise to which the client belongs. (Relationship: Franchise 1:N Client)"
         },
-        "firstName": {
-          "type": "string",
-          "description": "The first name of the client."
+        "name": {
+            "type": "string",
+            "description": "The name of the client (individual or company)."
         },
-        "lastName": {
+        "contactName": {
           "type": "string",
-          "description": "The last name of the client."
+          "description": "The name of the primary contact person for the client."
         },
-        "address": {
-          "type": "string",
-          "description": "The address of the client."
-        },
-        "phone": {
+        "contactPhone": {
           "type": "string",
           "description": "The phone number of the client."
         },
-        "email": {
+        "contactEmail": {
           "type": "string",
           "description": "The email address of the client.",
           "format": "email"
@@ -133,10 +129,27 @@
       "required": [
         "id",
         "franchiseId",
-        "firstName",
-        "lastName",
-        "address"
+        "name"
       ]
+    },
+    "ServiceLocation": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ServiceLocation",
+        "type": "object",
+        "description": "Represents a specific address where service is provided for a client.",
+        "properties": {
+            "id": { "type": "string", "description": "Unique identifier for the service location." },
+            "clientId": { "type": "string", "description": "Reference to the Client this location belongs to." },
+            "franchiseId": { "type": "string", "description": "Reference to the Franchise this location belongs to." },
+            "address": { "type": "string", "description": "Full street address." },
+            "city": { "type": "string", "description": "City" },
+            "state": { "type": "string", "description": "State" },
+            "zipCode": { "type": "string", "description": "Postal or ZIP code." },
+            "poolDetails": { "type": "string", "description": "Specific details about the pool at this location." },
+            "technicianId": { "type": "string", "description": "ID of the technician assigned to this location." },
+            "serviceDays": { "type": "array", "items": { "type": "string" }, "description": "Days of the week for recurring service." }
+        },
+        "required": ["id", "clientId", "franchiseId", "address", "city", "state"]
     },
     "Technician": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -184,7 +197,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Appointment",
       "type": "object",
-      "description": "Represents an appointment scheduled for a client.",
+      "description": "Represents an appointment scheduled for a client at a specific service location.",
       "properties": {
         "id": {
           "type": "string",
@@ -192,15 +205,19 @@
         },
         "franchiseId": {
           "type": "string",
-          "description": "Reference to Franchise to which the appointment belongs. (Relationship: Franchise 1:N Appointment)"
+          "description": "Reference to Franchise to which the appointment belongs."
         },
         "clientId": {
           "type": "string",
-          "description": "Reference to Client for whom the appointment is scheduled. (Relationship: Client 1:N Appointment)"
+          "description": "Reference to Client for whom the appointment is scheduled."
+        },
+        "locationId": {
+            "type": "string",
+            "description": "Reference to the ServiceLocation for this appointment."
         },
         "technicianId": {
           "type": "string",
-          "description": "Reference to Technician assigned to the appointment. (Relationship: Technician 1:N Appointment)"
+          "description": "Reference to Technician assigned to the appointment."
         },
         "scheduledTime": {
           "type": "string",
@@ -220,6 +237,7 @@
         "id",
         "franchiseId",
         "clientId",
+        "locationId",
         "technicianId",
         "scheduledTime",
         "status"
@@ -250,6 +268,10 @@
         "clientId": {
           "type": "string",
           "description": "Reference to Client for this service report."
+        },
+        "locationId": {
+            "type": "string",
+            "description": "Reference to the ServiceLocation for this service report."
         },
         "chlorine": {
           "type": "number",
@@ -320,6 +342,7 @@
         "appointmentId",
         "technicianId",
         "clientId",
+        "locationId",
         "createdAt"
       ]
     },
@@ -426,7 +449,7 @@
           "schema": {
             "$ref": "#/backend/entities/Client"
           },
-          "description": "Stores client information within a franchise. Includes denormalized 'franchiseId' for authorization independence.",
+          "description": "Stores client information within a franchise. A client can have multiple service locations.",
           "params": [
             {
               "name": "franchiseId",
@@ -437,6 +460,19 @@
               "description": "The unique identifier of the client."
             }
           ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/clients/{clientId}/locations/{locationId}",
+        "definition": {
+            "entityName": "ServiceLocation",
+            "schema": { "$ref": "#/backend/entities/ServiceLocation" },
+            "description": "Stores the specific service locations for a client.",
+            "params": [
+                { "name": "franchiseId", "description": "The ID of the franchise." },
+                { "name": "clientId", "description": "The ID of the client." },
+                { "name": "locationId", "description": "The unique ID of the service location." }
+            ]
         }
       },
       {
@@ -523,6 +559,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\n\n**Key Design Choices & Justifications:**\n\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\n4.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\n5.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. The `franchiseId` in the path establishes the relationship.\n6.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\n7.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\n8.  **/universityVideos/{videoId}:** This is a new top-level collection to store educational videos. It's a global resource managed by master users and viewable by all authenticated users, so it doesn't belong under any specific franchise.\n\n**Authorization Independence:**\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\n\n**QAPs (Rules are not Filters):**\n*   **Structural Segregation:** The use of subcollections for franchise-specific data remains a core principle. This simplifies security rules and prevents the need to filter data within a large collection. For example, all documents within `/franchises/{franchiseId}/clients` belong to that franchise and can be secured with a single rule checking for ownership.\n\n**DBAC (Database-Based Access Control):**\n*   The `role` field in the `users` collection is the foundation of DBAC. Security rules check this field to determine user permissions for creating, reading, and writing data. There are no custom claims."
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\n\n**Key Design Choices & Justifications:**\n\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\n4.  **/franchises/{franchiseId}/clients/{clientId}/locations/{locationId}:** A new sub-collection to handle multiple service addresses for a single client, each with its own QR code target.\n5.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\n6.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. The `franchiseId` in the path establishes the relationship.\n7.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\n8.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\n9.  **/universityVideos/{videoId}:** This is a new top-level collection to store educational videos. It's a global resource managed by master users and viewable by all authenticated users, so it doesn't belong under any specific franchise.\n\n**Authorization Independence:**\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\n\n**QAPs (Rules are not Filters):**\n*   **Structural Segregation:** The use of subcollections for franchise-specific data remains a core principle. This simplifies security rules and prevents the need to filter data within a large collection. For example, all documents within `/franchises/{franchiseId}/clients` belong to that franchise and can be secured with a single rule checking for ownership.\n\n**DBAC (Database-Based Access Control):**\n*   The `role` field in the `users` collection is the foundation of DBAC. Security rules check this field to determine user permissions for creating, reading, and writing data. There are no custom claims."
   }
 }

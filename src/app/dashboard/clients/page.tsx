@@ -47,12 +47,6 @@ export default function ClientsPage() {
     return <p>Acesso negado.</p>;
   }
 
-  const getTechnicianName = (id: string | null) => {
-    if (!id || !franchiseTechnicians) return 'N/A';
-    const technician = franchiseTechnicians.find(t => t.id === id);
-    return technician ? `${technician.firstName} ${technician.lastName}` : 'N/A';
-  }
-
   const handleSaveClient = async (clientData: NewClientFormData, clientId?: string) => {
     if (!firestore || !auth || !franchiseId) return;
   
@@ -63,18 +57,14 @@ export default function ClientsPage() {
     try {
       const batch = writeBatch(firestore);
   
-      const dataToSave: Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> = {
+      const dataToSave: Partial<Client> = {
           name: clientData.name,
-          address: clientData.address,
           contactName: clientData.contactName,
           contactPhone: clientData.contactPhone,
           contactEmail: clientData.contactEmail,
-          poolDetails: clientData.poolDetails,
-          technicianId: clientData.technicianId,
           monthlyFee: clientData.monthlyFee,
           dueDay: clientData.dueDay,
           contractType: clientData.contractType,
-          serviceDays: clientData.serviceDays,
       };
 
       if (isEditing) {
@@ -200,7 +190,6 @@ export default function ClientsPage() {
             </DialogHeader>
             <NewClientForm 
               client={editingClient}
-              technicians={franchiseTechnicians || []} 
               onSave={handleSaveClient}
               onCancel={() => handleDialogChange(false)}
               isSaving={isSaving}
@@ -224,9 +213,8 @@ export default function ClientsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Endereço</TableHead>
-                  <TableHead>Técnico</TableHead>
-                  <TableHead>Detalhes da Piscina</TableHead>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>Email</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -238,16 +226,15 @@ export default function ClientsPage() {
                         {client.name}
                       </Link>
                     </TableCell>
-                    <TableCell>{client.address}</TableCell>
-                    <TableCell>{getTechnicianName(client.technicianId)}</TableCell>
-                    <TableCell>{client.poolDetails}</TableCell>
+                    <TableCell>{client.contactName}</TableCell>
+                    <TableCell>{client.contactEmail}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => handleEditClick(client)}>Editar</Button>
                     </TableCell>
                   </TableRow>
                 )) : (
                   <TableRow>
-                      <TableCell colSpan={5} className="text-center">Nenhum cliente encontrado.</TableCell>
+                      <TableCell colSpan={4} className="text-center">Nenhum cliente encontrado.</TableCell>
                   </TableRow>
                 )}
               </TableBody>

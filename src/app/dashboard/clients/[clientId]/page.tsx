@@ -4,15 +4,18 @@
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Droplets, Phone, Mail, MapPin, History, Wrench } from 'lucide-react';
+import { User, Droplets, Phone, Mail, MapPin, History, Wrench, PlusCircle } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
-import type { Client, Technician, Appointment } from '@/lib/types';
+import type { Client, Technician, Appointment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { ClientLocations } from '@/components/dashboard/clients/client-locations';
+import { NewLocationForm } from '@/components/dashboard/clients/new-location-form';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 
 const InfoCard = ({ title, value, icon: Icon }: { title: string, value: string | number, icon: React.ElementType }) => (
   <div>
@@ -32,34 +35,35 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
 
   const franchiseId = userInfo?.franchiseId;
 
-  // Fetch Client Data
+  // --- State for Dialog ---
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+
+  // --- Data Fetching ---
   const clientDocRef = useMemoFirebase(() =>
     firestore && franchiseId && clientId ? doc(firestore, 'franchises', franchiseId, 'clients', clientId) : null,
     [firestore, franchiseId, clientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
   
-  // Fetch All Technicians of the franchise to map names
+  const locationsCollectionRef = useMemoFirebase(() =>
+    firestore && franchiseId && clientId ? collection(firestore, 'franchises', franchiseId, 'clients', clientId, 'locations') : null,
+    [firestore, franchiseId, clientId]
+  );
+  const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsCollectionRef);
+
   const techniciansCollection = useMemoFirebase(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null,
     [firestore, franchiseId]
   );
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
 
-  // Appointments are derived on the schedule page, but for history, we fetch them here.
   const appointmentsQuery = useMemoFirebase(() =>
     firestore && franchiseId && clientId ? query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('clientId', '==', clientId)) : null,
     [firestore, franchiseId, clientId]
   );
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
-  const assignedTechnician = useMemo(() => {
-    if (!client || !client.technicianId || !technicians) return null;
-    return technicians.find(t => t.id === client.technicianId);
-  }, [client, technicians]);
-
-
-  const isLoading = isLoadingClient || isLoadingAppointments || isLoadingTechnicians;
+  const isLoading = isLoadingClient || isLoadingAppointments || isLoadingTechnicians || isLoadingLocations;
 
   if (isLoading) {
     return (
@@ -90,7 +94,7 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
         </Avatar>
         <div>
           <h1 className="text-4xl font-bold tracking-tight">{client.name}</h1>
-          <p className="text-lg text-muted-foreground">{client.address}</p>
+          <p className="text-lg text-muted-foreground">{client.contactEmail}</p>
         </div>
       </div>
 
@@ -106,23 +110,32 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
               <InfoCard title="Email" value={client.contactEmail} icon={Mail} />
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Detalhes Técnicos</CardTitle>
+           <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>Locais de Atendimento</CardTitle>
+                <CardDescription>Endereços e QR Codes</CardDescription>
+              </div>
+               <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="icon" variant="outline"><PlusCircle className="h-4 w-4"/></Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                      <DialogHeader>
+                          <DialogTitle>Novo Local de Atendimento</DialogTitle>
+                          <DialogDescription>Adicione um novo endereço para este cliente.</DialogDescription>
+                      </DialogHeader>
+                      <NewLocationForm 
+                        clientId={clientId} 
+                        franchiseId={franchiseId!}
+                        technicians={technicians || []}
+                        onSave={() => setIsLocationDialogOpen(false)}
+                      />
+                  </DialogContent>
+               </Dialog>
             </CardHeader>
-            <CardContent className="space-y-4">
-               <InfoCard title="Piscina" value={client.poolDetails} icon={Droplets} />
-               {assignedTechnician ? (
-                 <div>
-                    <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        <Wrench className="h-4 w-4" />
-                        Técnico Responsável
-                    </h3>
-                    <p className="text-base">{assignedTechnician.firstName} {assignedTechnician.lastName}</p>
-                 </div>
-               ) : (
-                 <InfoCard title="Técnico Responsável" value="Nenhum técnico atribuído" icon={Wrench} />
-               )}
+            <CardContent>
+                <ClientLocations locations={locations || []} technicians={technicians || []} />
             </CardContent>
           </Card>
         </div>
@@ -146,5 +159,3 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
     </div>
   );
 }
-
-    

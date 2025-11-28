@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useMemo } from 'react';
@@ -7,7 +8,7 @@ import { doc } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { ServiceReportForm } from '@/components/dashboard/service-report/report-form';
-import type { Client, Appointment } from '@/lib/types';
+import type { Client, Appointment, ServiceLocation } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 import { AlertTriangle } from 'lucide-react';
 
@@ -27,6 +28,7 @@ export default function RelatorioPage() {
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
   
   const clientId = appointment?.clientId;
+  const locationId = appointment?.locationId;
   
   const clientDocRef = useMemoFirebase(() => 
       (firestore && franchiseId && clientId) ? doc(firestore, `franchises/${franchiseId}/clients`, clientId) : null
@@ -34,7 +36,13 @@ export default function RelatorioPage() {
   
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
 
-  const isLoading = isLoadingAppointment || isLoadingClient;
+  const locationDocRef = useMemoFirebase(() =>
+    (firestore && franchiseId && clientId && locationId) ? doc(firestore, `franchises/${franchiseId}/clients/${clientId}/locations`, locationId) : null
+  , [firestore, franchiseId, clientId, locationId]);
+
+  const { data: location, isLoading: isLoadingLocation } = useDoc<ServiceLocation>(locationDocRef);
+
+  const isLoading = isLoadingAppointment || isLoadingClient || isLoadingLocation;
 
   if (isLoading) {
       return (
@@ -45,7 +53,7 @@ export default function RelatorioPage() {
       );
   }
 
-  if (!appointment || !client) {
+  if (!appointment || !client || !location) {
       return (
            <div className="flex h-[80vh] items-center justify-center">
             <Card className="max-w-md text-center">
@@ -53,7 +61,7 @@ export default function RelatorioPage() {
                     <CardTitle className="flex items-center justify-center gap-2"><AlertTriangle className="text-destructive"/> Atendimento Não Encontrado</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <p>Não foi possível carregar os dados do atendimento ou do cliente. Verifique o ID e tente novamente.</p>
+                    <p>Não foi possível carregar os dados completos do atendimento (agendamento, cliente ou local). Verifique o ID e tente novamente.</p>
                 </CardContent>
             </Card>
            </div>
@@ -66,9 +74,10 @@ export default function RelatorioPage() {
       <div className="space-y-1">
         <h1 className="text-3xl font-bold tracking-tight">Relatório de Atendimento</h1>
         <p className="text-muted-foreground text-lg">Cliente: <span className="font-semibold">{client.name}</span></p>
+         <p className="text-muted-foreground">Endereço: <span className="font-semibold">{location.address}</span></p>
       </div>
 
-      <ServiceReportForm appointment={appointment} client={client} />
+      <ServiceReportForm appointment={appointment} client={client} location={location} />
     </div>
   );
 }

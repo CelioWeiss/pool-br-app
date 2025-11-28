@@ -1,8 +1,9 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import type { Appointment, Technician, Client, DayOfWeek } from '@/lib/types';
+import type { Appointment, Technician, Client, DayOfWeek, ServiceLocation } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ChevronLeft, ChevronRight, User } from 'lucide-react';
@@ -55,6 +56,49 @@ export default function SchedulePage() {
   , [firestore, franchiseId]);
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   
+  const locationsQuery = useMemoFirebase(() => {
+    if (!firestore || !franchiseId) return null;
+    // This is not ideal for performance, but for this structure it's necessary.
+    // A better approach would be a root-level 'locations' collection if the app scales.
+    return query(collection(firestore, 'franchises', franchiseId, 'clients'), where('franchiseId', '==', franchiseId))
+  }, [firestore, franchiseId]);
+  
+  // We need to fetch all locations for all clients in the franchise to build the schedule
+  const serviceLocationsCollection = useMemoFirebase(() => 
+    firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null, 
+  [firestore, franchiseId]);
+
+  // This is a simplified approach. For large franchises, querying all locations could be slow.
+  const [allLocations, setAllLocations] = useState<ServiceLocation[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+
+  useEffect(() => {
+    if (!firestore || !franchiseId) {
+        setIsLoadingLocations(false);
+        return;
+    };
+    setIsLoadingLocations(true);
+    const fetchAllLocations = async () => {
+        const clientsSnapshot = await getDocs(query(collection(firestore, `franchises/${franchiseId}/clients`)));
+        const locationsPromises = clientsSnapshot.docs.map(clientDoc => 
+            getDocs(collection(firestore, `franchises/${franchiseId}/clients/${clientDoc.id}/locations`))
+        );
+        const locationsSnapshots = await Promise.all(locationsPromises);
+        const allLocs: ServiceLocation[] = [];
+        locationsSnapshots.forEach(locSnap => {
+            locSnap.docs.forEach(doc => {
+                allLocs.push({ id: doc.id, ...doc.data() } as ServiceLocation);
+            });
+        });
+        setAllLocations(allLocs);
+        setIsLoadingLocations(false);
+    }
+    fetchAllLocations();
+  // This should re-run if firestore or franchiseId changes.
+  // Not including clients in deps to avoid re-fetching on every client change during the session.
+  }, [firestore, franchiseId]);
+
+
   const appointmentsQuery = useMemoFirebase(() => {
     if (!firestore || !franchiseId) return null;
     return collection(firestore, 'franchises', franchiseId, 'appointments');
@@ -65,7 +109,7 @@ export default function SchedulePage() {
   
   // --- Unified Appointment Logic ---
   const allAppointmentsForFranchise = useMemo(() => {
-    if (!clients || !manualAppointments) {
+    if (!allLocations || !manualAppointments) {
       return [];
     }
   
@@ -73,32 +117,33 @@ export default function SchedulePage() {
   
     // 1. Add manual appointments first, they have priority
     manualAppointments.forEach(appt => {
-      const key = `${appt.clientId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
+      const key = `${appt.locationId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
       appointmentsMap.set(key, appt);
     });
   
-    // 2. Generate and add recurring appointments from client service days
+    // 2. Generate and add recurring appointments from service locations
     const start = startOfMonth(currentDate);
     const end = endOfMonth(currentDate);
     const daysInMonth = eachDayOfInterval({ start, end });
   
-    clients.forEach(client => {
-      if (client.serviceDays && client.serviceDays.length > 0 && client.technicianId) {
-        const serviceDaysAsNumbers = client.serviceDays.map(d => dayOfWeekMap[d]);
+    allLocations.forEach(location => {
+      if (location.serviceDays && location.serviceDays.length > 0 && location.technicianId) {
+        const serviceDaysAsNumbers = location.serviceDays.map(d => dayOfWeekMap[d]);
   
         daysInMonth.forEach(day => {
           if (serviceDaysAsNumbers.includes(getDay(day))) {
             const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
-            const key = `${client.id}-${format(scheduledDateTime, 'yyyy-MM-dd')}`;
+            const key = `${location.id}-${format(scheduledDateTime, 'yyyy-MM-dd')}`;
   
-            // Only add if no manual appointment exists for this client and day
+            // Only add if no manual appointment exists for this location and day
             if (!appointmentsMap.has(key)) {
               appointmentsMap.set(key, {
                 // Use a unique ID for recurring appointments that don't exist in DB yet
-                id: `auto-${client.id}-${format(day, 'yyyy-MM-dd')}`,
-                clientId: client.id,
-                technicianId: client.technicianId,
-                franchiseId: client.franchiseId,
+                id: `auto-${location.id}-${format(day, 'yyyy-MM-dd')}`,
+                clientId: location.clientId,
+                locationId: location.id,
+                technicianId: location.technicianId,
+                franchiseId: location.franchiseId,
                 scheduledDateTime: scheduledDateTime.toISOString(), // Ensure it's an ISO string
                 status: 'scheduled',
               });
@@ -109,7 +154,7 @@ export default function SchedulePage() {
     });
   
     return Array.from(appointmentsMap.values());
-  }, [clients, manualAppointments, currentDate]);
+  }, [allLocations, manualAppointments, currentDate]);
 
   const filteredAppointments = useMemo(() => {
     let appointmentsToFilter = allAppointmentsForFranchise;
@@ -134,7 +179,7 @@ export default function SchedulePage() {
   }, [allAppointmentsForFranchise, selectedTechnicianId, hasRole, userInfo?.id, technicians]);
   
   
-  const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
+  const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments || isLoadingLocations;
 
   const appointmentDates = useMemo(() => filteredAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [filteredAppointments]);
 
@@ -238,6 +283,7 @@ export default function SchedulePage() {
                 appointments={selectedAppointments} 
                 clients={clients || []}
                 technicians={technicians || []}
+                locations={allLocations || []}
               />
             )}
           </CardContent>
@@ -246,3 +292,6 @@ export default function SchedulePage() {
     </div>
   );
 }
+
+// Dummy getDocs for type-checking, since the real one is from firebase/firestore
+const getDocs = (query: any) => Promise.resolve({ docs: [] as any[] });

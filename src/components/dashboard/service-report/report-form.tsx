@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useRef } from "react";
@@ -11,7 +12,7 @@ import { UploadCloud, X, CheckCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Client, Appointment, ServiceReport } from "@/lib/types";
+import type { Client, Appointment, ServiceReport, ServiceLocation } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -55,7 +56,7 @@ const missingProductsItems = [
 ];
 
 
-export function ServiceReportForm({ appointment, client }: { appointment: Appointment; client: Client }) {
+export function ServiceReportForm({ appointment, client, location }: { appointment: Appointment; client: Client, location: ServiceLocation }) {
   const { toast } = useToast();
   const router = useRouter();
   const firestore = useFirestore();
@@ -112,7 +113,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
     const formData = new FormData(e.currentTarget);
     const rawData = Object.fromEntries(formData.entries());
 
-    const { id: appointmentId, franchiseId, clientId, technicianId } = appointment;
+    const { id: appointmentId, franchiseId, clientId, technicianId, locationId } = appointment;
     
     try {
         const batch = writeBatch(firestore);
@@ -126,6 +127,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
             appointmentId,
             technicianId,
             clientId,
+            locationId,
             chlorine: parameters['chlorine'],
             ph: parameters['ph'],
             alkalinity: parameters['alkalinity'],
