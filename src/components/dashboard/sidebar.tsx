@@ -34,7 +34,6 @@ const menuItems = [
   { href: '/dashboard/scanner', label: 'Escanear QR Code', icon: QrCode, roles: ['technician'] },
   { href: '/dashboard/university', label: 'Universidade', icon: BookOpen, roles: ['master', 'owner', 'technician'] },
   { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner'] },
-  { href: '/dashboard/profile', label: 'Perfil', icon: UserIcon, roles: ['master', 'owner', 'technician'] },
 ];
 
 export function AppSidebar() {

@@ -57,15 +57,12 @@ export default function ClientsPage() {
     try {
       const batch = writeBatch(firestore);
   
-      const dataToSave: Partial<Client> = {
+      const dataToSave: Partial<Omit<Client, 'id' | 'createdAt' | 'franchiseId'>> = {
           name: clientData.name,
           contactName: clientData.contactName,
           contactPhone: clientData.contactPhone,
           contactEmail: clientData.contactEmail,
           avatarUrl: clientData.avatarUrl,
-          monthlyFee: clientData.monthlyFee,
-          dueDay: clientData.dueDay,
-          contractType: clientData.contractType,
       };
 
       if (isEditing) {

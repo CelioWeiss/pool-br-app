@@ -28,7 +28,6 @@ export interface Franchise {
 
 export type NewFranchiseData = Omit<Franchise, 'id'>
 
-export type ContractType = 'mensal' | 'quinzenal' | 'avulso';
 export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 'sabado' | 'domingo';
 
 
@@ -42,9 +41,6 @@ export interface Client {
   franchiseId: string;
   avatarUrl?: string;
   createdAt: string; // ISO string
-  monthlyFee?: number;
-  dueDay?: number;
-  contractType?: ContractType;
 }
 
 export interface ServiceLocation {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Client, ContractType } from '@/lib/types';
+import type { Client } from '@/lib/types';
 import { DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
@@ -23,12 +23,6 @@ interface NewClientFormProps {
   isSaving: boolean;
 }
 
-const contractTypes: { value: ContractType, label: string }[] = [
-    { value: 'mensal', label: 'Mensal' },
-    { value: 'quinzenal', label: 'Quinzenal' },
-    { value: 'avulso', label: 'Avulso' },
-]
-
 export function NewClientForm({ onSave, onCancel, client = null, isSaving }: NewClientFormProps) {
     const { toast } = useToast();
     const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -38,10 +32,7 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [monthlyFee, setMonthlyFee] = useState<number | string>('');
-    const [dueDay, setDueDay] = useState<number | undefined>(undefined);
-    const [contractType, setContractType] = useState<ContractType | undefined>(undefined);
-    const [avatarUrl, setAvatarUrl] = useState<string | undefined>('');
+    const [avatarUrl, setAvatarUrl] = useState('');
 
 
     const isEditing = !!client;
@@ -53,9 +44,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             setContactName(client.contactName || '');
             setEmail(client.contactEmail || '');
             setPhone(client.contactPhone || '');
-            setMonthlyFee(client.monthlyFee || '');
-            setDueDay(client.dueDay || undefined);
-            setContractType(client.contractType || undefined);
             setAvatarUrl(client.avatarUrl || '');
         } else {
             setName('');
@@ -64,9 +52,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             setPhone('');
             setPassword('');
             setConfirmPassword('');
-            setMonthlyFee('');
-            setDueDay(undefined);
-            setContractType(undefined);
             setAvatarUrl('');
         }
     }, [client]);
@@ -109,9 +94,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             contactPhone: phone,
             contactEmail: email,
             avatarUrl: avatarUrl,
-            monthlyFee: Number(monthlyFee),
-            dueDay: dueDay,
-            contractType: contractType,
         };
 
         if (showPasswordFields) {
@@ -165,42 +147,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
                 </div>
             </div>
             
-            <fieldset className="border-t pt-4 space-y-4">
-                <legend className="text-sm font-medium text-muted-foreground">Detalhes do Contrato</legend>
-                <div className="grid grid-cols-2 gap-4">
-                     <div className="grid gap-2">
-                        <Label htmlFor="monthlyFee">Mensalidade (R$)</Label>
-                        <Input id="monthlyFee" type="number" placeholder="Ex: 300" value={monthlyFee} onChange={e => setMonthlyFee(e.target.value)} disabled={isSaving} />
-                    </div>
-                    <div className="grid gap-2">
-                        <Label htmlFor="dueDay">Dia do Vencimento</Label>
-                        <Select value={dueDay?.toString()} onValueChange={(val) => setDueDay(Number(val))} disabled={isSaving}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                                    <SelectItem key={day} value={day.toString()}>{day}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="contractType">Tipo de Contrato</Label>
-                     <Select value={contractType} onValueChange={(val: ContractType) => setContractType(val)} disabled={isSaving}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {contractTypes.map(type => (
-                                <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </fieldset>
-
             {showPasswordFields && (
                 <fieldset className="border-t pt-4 space-y-4">
                     <legend className="text-sm font-medium text-muted-foreground">{isEditing ? "Criar Acesso ao Portal" : "Acesso ao Portal do Cliente"}</legend>
