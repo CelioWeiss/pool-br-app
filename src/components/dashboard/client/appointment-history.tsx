@@ -12,6 +12,8 @@ import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 const ReportDetailCard = ({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) => (
     <Card>
@@ -117,9 +119,16 @@ const AppointmentAccordionContent = ({ appointment }: { appointment: Appointment
     }
 
     return (
-         <p className="text-muted-foreground text-sm text-center py-4">
-          Nenhum relatório detalhado disponível para este atendimento.
-        </p>
+        <div className="text-center py-6">
+            <p className="text-muted-foreground text-sm mb-4">
+                O técnico ainda não finalizou o relatório para este atendimento.
+            </p>
+            <Button asChild variant="outline" size="sm">
+                <Link href={`/relatorio/${appointment.id}`}>
+                    Finalizar Relatório (Técnico)
+                </Link>
+            </Button>
+        </div>
     );
 }
 
@@ -146,7 +155,7 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
         
         return (
           <AccordionItem value={appt.id} key={appt.id}>
-            <AccordionTrigger className="p-4 bg-card hover:bg-accent rounded-lg border data-[state=open]:rounded-b-none" disabled={!appt.serviceReportId}>
+            <AccordionTrigger className="p-4 bg-card hover:bg-accent rounded-lg border data-[state=open]:rounded-b-none" disabled={!appt.serviceReportId && appt.status !== 'in_progress'}>
               <div className="flex items-center justify-between w-full">
                 <div className="flex flex-col text-left">
                   <span className="font-bold">{format(new Date(appt.scheduledDateTime), "dd 'de' MMMM, yyyy 'às' HH:mm", { locale: ptBR })}</span>
@@ -159,13 +168,7 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
               </div>
             </AccordionTrigger>
             <AccordionContent className="p-4 border border-t-0 rounded-lg rounded-t-none bg-card">
-              {appt.serviceReportId ? (
-                <AppointmentAccordionContent appointment={appt} />
-              ) : (
-                <p className="text-muted-foreground text-sm text-center py-4">
-                  Nenhum relatório detalhado disponível para este atendimento.
-                </p>
-              )}
+               <AppointmentAccordionContent appointment={appt} />
             </AccordionContent>
           </AccordionItem>
         )
@@ -173,5 +176,3 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
     </Accordion>
   );
 }
-
-    

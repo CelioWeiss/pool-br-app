@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useFirestore, FirestorePermissionError, errorEmitter } from "@/firebase";
-import { writeBatch, doc, collection } from "firebase/firestore";
+import { writeBatch, doc, collection, addDoc } from "firebase/firestore";
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -112,12 +112,22 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
     if (!firestore) return;
     
     setIsSaving(true);
-    const { id: appointmentId, franchiseId, clientId, technicianId, locationId } = appointment;
+    let { id: appointmentId, franchiseId, clientId, technicianId, locationId, status } = appointment;
 
     try {
         const batch = writeBatch(firestore);
         
-        // Generate a new unique ID for the service report beforehand
+        // If the appointment was auto-generated, create it in the database first
+        if (appointment.id.startsWith('auto-')) {
+            const newAppointmentRef = doc(collection(firestore, `franchises/${franchiseId}/appointments`));
+            const newAppointmentData: Omit<Appointment, 'id'> = {
+                ...appointment,
+                status: 'in_progress', // Update status
+            };
+            batch.set(newAppointmentRef, newAppointmentData);
+            appointmentId = newAppointmentRef.id;
+        }
+
         const newReportId = uuidv4();
         const reportRef = doc(firestore, `franchises/${franchiseId}/serviceReports`, newReportId);
 
@@ -125,8 +135,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
         const rawData = Object.fromEntries(formData.entries());
         const photoUrls = previews.filter((p): p is string => p !== null);
 
-        const newReportData: ServiceReport = {
-            id: newReportId,
+        const newReportData: Omit<ServiceReport, 'id'> = {
             franchiseId,
             appointmentId,
             technicianId,
@@ -147,7 +156,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             createdAt: new Date().toISOString(),
         };
         
-        batch.set(reportRef, newReportData);
+        batch.set(reportRef, { ...newReportData, id: newReportId });
 
         const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId);
         batch.update(appointmentRef, {

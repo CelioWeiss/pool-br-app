@@ -5,11 +5,11 @@ import { useMemo, useState } from 'react';
 import type { Appointment, Client, Technician, ServiceLocation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Check, X, Calendar, PlayCircle, History } from 'lucide-react';
+import { Clock, Check, X, Calendar, PlayCircle, History, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection, doc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -33,39 +33,40 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
     if (!firestore || !userInfo?.franchiseId) return;
 
     setIsCreating(true);
-
     let appointmentIdToRedirect = appointment.id;
 
-    // If it's a recurring/auto-generated appointment, it needs to be created in the DB first.
-    if (appointment.id.startsWith('auto-')) {
-      const appointmentsRef = collection(firestore, 'franchises', userInfo.franchiseId, 'appointments');
-      
-      const newAppointmentData: Omit<Appointment, 'id' | 'serviceReportId'> = {
-        clientId: appointment.clientId,
-        locationId: appointment.locationId,
-        technicianId: appointment.technicianId,
-        franchiseId: appointment.franchiseId,
-        scheduledDateTime: appointment.scheduledDateTime,
-        status: 'in_progress', // Set to "in progress" immediately
-      };
-      
-      try {
-        const docRef = await addDoc(appointmentsRef, newAppointmentData);
-        appointmentIdToRedirect = docRef.id;
-      } catch (error) {
-         console.error("Error creating appointment document:", error);
-         const permissionError = new FirestorePermissionError({
-            path: appointmentsRef.path,
+    try {
+        // If it's a recurring/auto-generated appointment, it needs to be created in the DB first.
+        if (appointment.id.startsWith('auto-')) {
+            const appointmentsRef = collection(firestore, 'franchises', userInfo.franchiseId, 'appointments');
+            const newAppointmentRef = doc(appointmentsRef); // Create a reference with a new ID
+            
+            const newAppointmentData: Appointment = {
+                id: newAppointmentRef.id, // Use the new ID
+                clientId: appointment.clientId,
+                locationId: appointment.locationId,
+                technicianId: appointment.technicianId,
+                franchiseId: appointment.franchiseId,
+                scheduledDateTime: appointment.scheduledDateTime,
+                status: 'in_progress', // Set to "in progress" immediately
+            };
+
+            await addDoc(appointmentsRef, newAppointmentData);
+            appointmentIdToRedirect = newAppointmentRef.id;
+        }
+        
+        router.push(`/relatorio/${appointmentIdToRedirect}`);
+    } catch (error) {
+        console.error("Error creating appointment document:", error);
+        const permissionError = new FirestorePermissionError({
+            path: `franchises/${userInfo.franchiseId}/appointments`,
             operation: 'create',
-            requestResourceData: newAppointmentData,
+            requestResourceData: appointment,
         });
         errorEmitter.emit('permission-error', permissionError);
         setIsCreating(false);
         return;
-      }
     }
-    
-    router.push(`/relatorio/${appointmentIdToRedirect}`);
   };
 
 
@@ -99,6 +100,7 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
        {appointment.status === 'completed' && appointment.serviceReportId && (
           <Button asChild variant="outline" size="sm">
             <Link href={`/relatorio/${appointment.id}`}>
+              <FileText className="mr-2 h-4 w-4" />
               Ver Relatório
             </Link>
           </Button>
@@ -152,11 +154,11 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
   }
 
   const sortedPending = [...pendingAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
-  const sortedCompleted = [...completedAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
+  const sortedCompleted = [...completedAppointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
 
 
   return (
-    <Accordion type="multiple" defaultValue={['pendentes']} className="w-full">
+    <Accordion type="multiple" defaultValue={['pendentes', 'concluídos no dia']} className="w-full">
       <AppointmentList 
         title="Pendentes"
         icon={Clock}

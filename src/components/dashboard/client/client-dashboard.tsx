@@ -75,9 +75,9 @@ export function ClientDashboard() {
   const clientData = useMemo(() => clientQueryResult?.[0], [clientQueryResult]);
   const clientId = clientData?.id;
 
-  // Find the service location for this client
+  // Find the service locations for this client
   const locationsQuery = useMemoFirebase(() =>
-    firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/locations`), where('clientId', '==', clientId), limit(1)) : null,
+    firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/locations`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
   const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsQuery);
   const primaryLocation = useMemo(() => locations?.[0], [locations]);
@@ -210,5 +210,3 @@ export function ClientDashboard() {
     </div>
   );
 }
-
-    

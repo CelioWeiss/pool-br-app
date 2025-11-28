@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import type { Appointment, ServiceLocation, DayOfWeek } from '@/lib/types';
 import { 
   startOfMonth,
@@ -11,7 +11,8 @@ import {
   eachDayOfInterval,
   getDay,
   set,
-  format
+  format,
+  isSameDay
 } from 'date-fns';
 
 const dayOfWeekMap: Record<DayOfWeek, number> = {
@@ -36,11 +37,18 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
     }, [firestore, franchiseId]);
     const { data: allLocations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(allLocationsQuery);
 
-    // Fetch manual appointments as before
+    // Fetch manual appointments for the current month interval
+    const start = startOfMonth(month);
+    const end = endOfMonth(month);
+    
     const manualAppointmentsQuery = useMemoFirebase(() => {
         if (!firestore || !franchiseId) return null;
-        return collection(firestore, 'franchises', franchiseId, 'appointments');
-    }, [firestore, franchiseId]);
+        return query(
+            collection(firestore, 'franchises', franchiseId, 'appointments'),
+            where('scheduledDateTime', '>=', start.toISOString()),
+            where('scheduledDateTime', '<=', end.toISOString())
+        );
+    }, [firestore, franchiseId, start, end]);
 
     const { data: manualAppointments, isLoading: isLoadingManualAppointments } = useCollection<Appointment>(manualAppointmentsQuery);
 
@@ -60,9 +68,7 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
         });
       
         // 2. Generate and add recurring appointments from service locations
-        const start = startOfMonth(month);
-        const end = endOfMonth(month);
-        const daysInMonth = eachDayOfInterval({ start, end });
+        const daysInMonth = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
       
         (allLocations || []).forEach(location => {
           if (location.serviceDays && location.serviceDays.length > 0 && location.technicianId) {
