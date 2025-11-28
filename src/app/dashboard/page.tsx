@@ -112,7 +112,7 @@ export default function DashboardPage() {
           
            // Fetch data for charts
           const now = new Date();
-          const revenuePromises: Promise<number>[] = [];
+          const revenuePromises: Promise<{ faturado: number, recebido: number }>[] = [];
           const clientStatsPromises: Promise<{ new: number, inactive: number }>[] = [];
           const monthLabels: string[] = [];
           
@@ -126,12 +126,22 @@ export default function DashboardPage() {
             // Revenue
             const paymentsQuery = query(
               collection(firestore, 'franchises', userInfo.franchiseId, 'payments'),
-              where('status', '==', 'paid'),
-              where('paidAt', '>=', start.toISOString()),
-              where('paidAt', '<=', end.toISOString())
+              where('dueDate', '>=', start.toISOString()),
+              where('dueDate', '<=', end.toISOString())
             );
             revenuePromises.push(
-                getDocs(paymentsQuery).then(snap => snap.docs.reduce((sum, doc) => sum + (doc.data() as Payment).amount, 0))
+                getDocs(paymentsQuery).then(snap => {
+                    let faturado = 0;
+                    let recebido = 0;
+                    snap.docs.forEach(doc => {
+                        const payment = doc.data() as Payment;
+                        faturado += payment.amount;
+                        if (payment.status === 'paid') {
+                            recebido += payment.amount;
+                        }
+                    });
+                    return { faturado, recebido };
+                })
             );
 
             // Client stats
@@ -146,7 +156,11 @@ export default function DashboardPage() {
           }
 
           const revenueResults = await Promise.all(revenuePromises);
-          setRevenueData(monthLabels.map((month, index) => ({ month, revenue: revenueResults[index] })));
+          setRevenueData(monthLabels.map((month, index) => ({ 
+            month, 
+            faturado: revenueResults[index].faturado,
+            recebido: revenueResults[index].recebido,
+          })));
 
           const clientStatsResults = await Promise.all(clientStatsPromises);
            setClientStatsData(monthLabels.map((month, index) => ({

@@ -155,3 +155,10 @@ export interface Payment {
     month: number; // e.g., 1 for January
     year: number;
 }
+
+
+export interface MonthlyRevenueData {
+    month: string;
+    faturado: number;
+    recebido: number;
+}

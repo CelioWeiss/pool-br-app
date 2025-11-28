@@ -15,11 +15,13 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import { Spinner } from "@/components/ui/spinner"
-import { TrendingUp } from "lucide-react"
+import { TrendingUp, TrendingDown } from "lucide-react"
+import { useMemo } from "react"
 
 export interface MonthlyRevenueData {
     month: string;
-    revenue: number;
+    faturado: number;
+    recebido: number;
 }
 
 interface MonthlyRevenueChartProps {
@@ -28,15 +30,25 @@ interface MonthlyRevenueChartProps {
 }
 
 const chartConfig = {
-  revenue: {
-    label: "Faturamento",
+  faturado: {
+    label: "Faturado",
+    color: "hsl(var(--chart-2))",
+  },
+  recebido: {
+    label: "Recebido",
     color: "hsl(var(--chart-1))",
   },
 }
 
 export function MonthlyRevenueChart({ data, isLoading }: MonthlyRevenueChartProps) {
 
-  const totalRevenue = data.reduce((acc, item) => acc + item.revenue, 0);
+  const totals = useMemo(() => {
+    return data.reduce((acc, item) => {
+        acc.faturado += item.faturado;
+        acc.recebido += item.recebido;
+        return acc;
+    }, { faturado: 0, recebido: 0 });
+  }, [data]);
 
   return (
     <Card>
@@ -44,11 +56,19 @@ export function MonthlyRevenueChart({ data, isLoading }: MonthlyRevenueChartProp
         <div className="flex items-start justify-between">
             <div>
                 <CardTitle>Faturamento Mensal</CardTitle>
-                <CardDescription>Faturamento dos últimos 6 meses</CardDescription>
+                <CardDescription>Faturado vs. Recebido nos últimos 6 meses</CardDescription>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <TrendingUp className="h-4 w-4" />
-                <span>Total: {totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+            <div className="flex flex-col items-end gap-2 text-sm">
+                 <div className="flex items-center gap-2 font-medium">
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-recebido)' }} />
+                    <span className="text-muted-foreground">Recebido:</span>
+                    <span>{totals.recebido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
+                 <div className="flex items-center gap-2">
+                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--color-faturado)' }} />
+                    <span className="text-muted-foreground">Faturado:</span>
+                    <span>{totals.faturado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                </div>
             </div>
         </div>
       </CardHeader>
@@ -83,26 +103,46 @@ export function MonthlyRevenueChart({ data, isLoading }: MonthlyRevenueChartProp
                         />}
                     />
                     <defs>
-                    <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop
-                        offset="5%"
-                        stopColor="var(--color-revenue)"
-                        stopOpacity={0.8}
-                        />
-                        <stop
-                        offset="95%"
-                        stopColor="var(--color-revenue)"
-                        stopOpacity={0.1}
-                        />
-                    </linearGradient>
+                        <linearGradient id="fillRecebido" x1="0" y1="0" x2="0" y2="1">
+                            <stop
+                            offset="5%"
+                            stopColor="var(--color-recebido)"
+                            stopOpacity={0.8}
+                            />
+                            <stop
+                            offset="95%"
+                            stopColor="var(--color-recebido)"
+                            stopOpacity={0.1}
+                            />
+                        </linearGradient>
+                         <linearGradient id="fillFaturado" x1="0" y1="0" x2="0" y2="1">
+                            <stop
+                            offset="5%"
+                            stopColor="var(--color-faturado)"
+                            stopOpacity={0.6}
+                            />
+                            <stop
+                            offset="95%"
+                            stopColor="var(--color-faturado)"
+                            stopOpacity={0.05}
+                            />
+                        </linearGradient>
                     </defs>
                     <Area
-                    dataKey="revenue"
-                    type="natural"
-                    fill="url(#fillRevenue)"
-                    fillOpacity={0.4}
-                    stroke="var(--color-revenue)"
-                    stackId="a"
+                        dataKey="faturado"
+                        type="natural"
+                        fill="url(#fillFaturado)"
+                        fillOpacity={0.4}
+                        stroke="var(--color-faturado)"
+                        stackId="a"
+                    />
+                    <Area
+                        dataKey="recebido"
+                        type="natural"
+                        fill="url(#fillRecebido)"
+                        fillOpacity={0.4}
+                        stroke="var(--color-recebido)"
+                        stackId="b"
                     />
                 </AreaChart>
             </ChartContainer>
