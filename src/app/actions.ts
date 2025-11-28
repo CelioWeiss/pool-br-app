@@ -156,3 +156,43 @@ export async function submitReportAction(
         return { success: false, error: e.message || "Ocorreu um erro ao finalizar o relatório." };
     }
 }
+
+
+export interface UpdateFranchiseProfileState {
+  success: boolean;
+  error?: string;
+}
+
+export async function updateFranchiseProfileAction(
+  prevState: UpdateFranchiseProfileState,
+  formData: FormData
+): Promise<UpdateFranchiseProfileState> {
+  const firestore = getAdminFirestore();
+  
+  const franchiseId = formData.get('franchiseId') as string;
+  const pixKey = formData.get('pixKey') as string;
+  const logoUrl = formData.get('logoUrl') as string;
+
+  if (!franchiseId) {
+    return { success: false, error: "ID da franquia não encontrado." };
+  }
+
+  try {
+    const franchiseRef = firestore.doc(`franchises/${franchiseId}`);
+    
+    await franchiseRef.update({
+      pixKey,
+      logoUrl,
+    });
+    
+    revalidatePath('/dashboard/profile');
+    revalidatePath('/dashboard/client-portal'); // Assuming client portal needs this data
+
+    return { success: true };
+  } catch (e: any) {
+    console.error("Error updating franchise profile:", e);
+    return { success: false, error: e.message || "Não foi possível atualizar o perfil da franquia." };
+  }
+}
+
+    

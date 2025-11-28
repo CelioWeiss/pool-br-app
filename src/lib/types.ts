@@ -1,6 +1,7 @@
 
 
 
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -22,6 +23,8 @@ export interface Franchise {
   contactEmail: string;
   contactPhone: string;
   createdAt: string; // ISO string
+  logoUrl?: string;
+  pixKey?: string;
 }
 
 export type NewFranchiseData = Omit<Franchise, 'id'>
@@ -124,3 +127,5 @@ export interface Quote {
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: string; // ISO string
 }
+
+    
