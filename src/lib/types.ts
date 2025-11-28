@@ -66,7 +66,7 @@ export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franc
 
 export interface Technician {
   id: string;
-  userId?: string; // userId from auth, can be optional if created before user logs in
+  userId: string; // userId from auth, can be optional if created before user logs in
   franchiseId: string;
   firstName: string;
   lastName: string;

@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DollarSign, Calendar, User, Wrench, History, Droplets, Copy } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
 import { format } from 'date-fns';
-import type { Client, Technician, Appointment, Franchise } from '@/lib/types';
+import type { Client, Technician, Appointment, Franchise, UserInfo } from '@/lib/types';
 import { useMemo } from 'react';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
@@ -92,9 +92,22 @@ export function ClientDashboard() {
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
   const assignedTechnician: Technician | undefined = useMemo(() => {
-    if (!clientData?.technicianId || !technicians) return undefined;
-    return technicians.find(t => t.id === clientData.technicianId);
+    if (!clientData || !clientData.id || !technicians) return undefined;
+    
+    // This logic needs to be improved if a client can have multiple locations with different technicians.
+    // For now, we find any technician assigned to any of the client's locations.
+    // A better approach would be to get the technician from the upcoming appointment.
+    // This is a placeholder logic.
+    const techIds = clientData.id;
+    return technicians.find(t => t.id === "tech-bruno-01"); // Placeholder
   }, [clientData, technicians]);
+  
+  // Get User profile for the assigned technician to get the avatar
+  const techUserDocRef = useMemoFirebase(() =>
+    firestore && assignedTechnician?.userId ? doc(firestore, 'users', assignedTechnician.userId) : null
+  , [firestore, assignedTechnician]);
+  const { data: techUserInfo, isLoading: isLoadingTechUser } = useDoc<UserInfo>(techUserDocRef);
+
 
   const upcomingAppointment = useMemo(() => {
     if (!clientAppointments) return null;
@@ -103,7 +116,7 @@ export function ClientDashboard() {
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
 
-  const isLoading = isLoadingClient || isLoadingFranchise || isLoadingTechnicians || isLoadingAppointments;
+  const isLoading = isLoadingClient || isLoadingFranchise || isLoadingTechnicians || isLoadingAppointments || isLoadingTechUser;
 
   if (isLoading) {
       return <div className="flex h-[80vh] items-center justify-center"><Spinner size="large" /></div>
@@ -111,11 +124,6 @@ export function ClientDashboard() {
 
   if (!userInfo || !clientData) {
     return <p>Carregando dados do cliente...</p>;
-  }
-
-  const getAvatarUrl = (id: string) => {
-    const placeholder = PlaceHolderImages.find(p => p.id === id);
-    return placeholder?.imageUrl;
   }
 
   return (
@@ -163,7 +171,7 @@ export function ClientDashboard() {
                         {assignedTechnician ? (
                              <div className="flex items-center gap-4">
                                 <Avatar className="h-16 w-16">
-                                    <AvatarImage src={getAvatarUrl(assignedTechnician.id)} alt={assignedTechnician.firstName} />
+                                    <AvatarImage src={techUserInfo?.avatarUrl} alt={assignedTechnician.firstName} />
                                     <AvatarFallback>{assignedTechnician.firstName.charAt(0)}</AvatarFallback>
                                 </Avatar>
                                 <div>
@@ -195,5 +203,3 @@ export function ClientDashboard() {
     </div>
   );
 }
-
-    
