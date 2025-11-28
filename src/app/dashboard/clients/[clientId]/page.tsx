@@ -12,6 +12,7 @@ import { doc, collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useMemo } from 'react';
 
 const InfoCard = ({ title, value, icon: Icon }: { title: string, value: string | number, icon: React.ElementType }) => (
   <div>
@@ -52,7 +53,7 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
   );
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
-  const assignedTechnician = useMemoFirebase(() => {
+  const assignedTechnician = useMemo(() => {
     if (!client || !client.technicianId || !technicians) return null;
     return technicians.find(t => t.id === client.technicianId);
   }, [client, technicians]);
@@ -145,3 +146,5 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
     </div>
   );
 }
+
+    

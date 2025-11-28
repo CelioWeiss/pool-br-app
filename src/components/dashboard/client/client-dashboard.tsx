@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAuth } from '@/hooks/use-auth';
@@ -60,34 +61,20 @@ const PixCard = ({ pixKey }: { pixKey: string }) => {
 }
 
 export function ClientDashboard() {
-  const { user } = useAuth(); // We use the direct firebase user here
+  const { user, userInfo } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  
+  const franchiseId = userInfo?.franchiseId;
 
+  // Find the client document using the user's ID
   const clientQuery = useMemoFirebase(() => 
-    firestore && user ? query(collection(firestore, 'clients'), where('userId', '==', user.uid)) : null, 
-  [firestore, user]);
+    firestore && franchiseId && user ? query(collection(firestore, `franchises/${franchiseId}/clients`), where('userId', '==', user.uid)) : null, 
+  [firestore, franchiseId, user]);
   
-  // This is a workaround because we store clients in a subcollection, but our rules prevent a client from listing all clients.
-  // A better solution would be to have the client's franchiseId available in their auth claims or user profile.
-  // For now, we assume a client belongs to only one franchise and is identified by their userId.
-  // This query is inefficient as it scans all top-level `clients` collections.
-  // A proper implementation would have clients in a franchise subcollection.
-  // Let's assume for now clients are in a top-level collection for this component to work.
-  
-  // CORRECTED APPROACH: The user's franchiseId is on their user info object!
-  const { userInfo } = useAuth();
-  const clientDocRef = useMemoFirebase(() => {
-    if (!firestore || !userInfo || !userInfo.franchiseId) return null;
-    // Client ID might not be the same as User ID. We need to query for the client document using userId.
-    // This is still not ideal. A client document should ideally be found via the user's direct ID if they are the same.
-    // Let's assume the client's ID *is* the user's ID for simplicity for now.
-    return doc(firestore, `franchises/${userInfo.franchiseId}/clients`, userInfo.id);
-  }, [firestore, userInfo]);
-  const { data: clientData, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
-
-
-  const franchiseId = clientData?.franchiseId;
+  const { data: clientQueryResult, isLoading: isLoadingClient } = useCollection<Client>(clientQuery);
+  const clientData = useMemo(() => clientQueryResult?.[0], [clientQueryResult]);
+  const clientId = clientData?.id;
 
   const franchiseDocRef = useMemoFirebase(() => 
     firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null,
@@ -99,11 +86,10 @@ export function ClientDashboard() {
   [firestore, franchiseId]);
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollectionRef);
 
-  const appointmentsCollectionRef = useMemoFirebase(() => 
-    firestore && franchiseId && clientData?.id ? query(collection(firestore, `franchises/${franchiseId}/appointments`), where('clientId', '==', clientData.id)) : null,
-  [firestore, franchiseId, clientData?.id]);
-  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsCollectionRef);
-
+  const appointmentsQuery = useMemoFirebase(() => 
+    firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/appointments`), where('clientId', '==', clientId)) : null,
+  [firestore, franchiseId, clientId]);
+  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
   const assignedTechnician: Technician | undefined = useMemo(() => {
     if (!clientData?.technicianId || !technicians) return undefined;
