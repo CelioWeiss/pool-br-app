@@ -42,7 +42,7 @@ export interface Client {
   avatarUrl?: string;
   monthlyFee?: number;
   dueDay?: number;
-  isActive?: boolean;
+  isActive: boolean;
   createdAt: string; // ISO string
 }
 
