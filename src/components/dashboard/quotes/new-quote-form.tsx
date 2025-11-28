@@ -33,6 +33,7 @@ const standardServices = [
 ];
 
 const abntNote = "Importante: Nossos serviços de tratamento de água seguem rigorosamente as normas técnicas da ABNT, incluindo NBR 10818, 10339 e outras legislações pertinentes para garantir a máxima qualidade e segurança.";
+const cleaningDetailsNote = "O serviço de limpeza inclui: Limpeza Física (aspiração, peneiração, escovação, limpeza de bordas), leituras dos parâmetros e correção se necessário conforme as normas vigentes, limpeza de pré-filtro, retrolavagem ou limpeza do filtro de poliéster.";
 
 export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFormProps) {
     const { toast } = useToast();
@@ -45,6 +46,7 @@ export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFo
 
     const [items, setItems] = useState<{ service: string; price: number }[]>([{ service: '', price: 0 }]);
     const [customService, setCustomService] = useState('');
+    const [notes, setNotes] = useState('');
 
     useEffect(() => {
         if (clientType === 'existing' && selectedClientId) {
@@ -60,6 +62,22 @@ export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFo
             setClientPhone('');
         }
     }, [clientType, selectedClientId, clients]);
+
+    useEffect(() => {
+        const hasSpecialService = items.some(item => 
+            item.service.includes("Limpeza") || item.service.includes("Recuperação de água")
+        );
+        const hasCleaningService = items.some(item =>
+            item.service === "Limpeza de piscina mensal" || item.service === "Limpeza avulsa"
+        );
+
+        let combinedNotes = [];
+        if (hasSpecialService) combinedNotes.push(abntNote);
+        if (hasCleaningService) combinedNotes.push(cleaningDetailsNote);
+
+        setNotes(combinedNotes.join('\n\n'));
+    }, [items]);
+
 
     const handleAddItem = () => {
         setItems([...items, { service: '', price: 0 }]);
@@ -87,13 +105,6 @@ export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFo
     };
 
     const totalValue = useMemo(() => items.reduce((sum, item) => sum + item.price, 0), [items]);
-
-    const notes = useMemo(() => {
-        const hasSpecialService = items.some(item => 
-            item.service.includes("Limpeza") || item.service.includes("Recuperação de água")
-        );
-        return hasSpecialService ? abntNote : '';
-    }, [items]);
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -215,11 +226,10 @@ export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFo
 
             </fieldset>
             
-            {notes && (
-                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-md text-xs">
-                    {notes}
-                </div>
-            )}
+            <div className="space-y-2">
+                <Label htmlFor="notes">Observações</Label>
+                <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} rows={8}/>
+            </div>
 
             <Separator />
             
