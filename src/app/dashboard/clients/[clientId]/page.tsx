@@ -28,11 +28,10 @@ const InfoCard = ({ title, value, icon: Icon }: { title: string, value: string |
 );
 
 
-export default function ClientProfilePage({ params }: { params: { clientId: string } }) {
+export default function ClientProfilePage({ params: { clientId } }: { params: { clientId: string } }) {
   const { userInfo } = useAuth();
   const firestore = useFirestore();
-  const { clientId } = params;
-
+  
   const franchiseId = userInfo?.franchiseId;
 
   // --- State for Dialog ---
