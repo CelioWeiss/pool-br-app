@@ -49,11 +49,14 @@ export default function DashboardPage() {
 
   const franchiseId = userInfo?.franchiseId;
 
+  // Memoize the current date to prevent re-renders
+  const currentDate = useMemo(() => new Date(), []);
+
   // --- Data Fetching Hooks ---
   const {
     allAppointments,
     isLoading: isLoadingAppointments
-  } = useUnifiedAppointments(franchiseId, new Date());
+  } = useUnifiedAppointments(franchiseId, currentDate);
 
 
   const [stats, setStats] = useState({
