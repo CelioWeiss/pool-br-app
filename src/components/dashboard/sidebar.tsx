@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -34,7 +33,7 @@ const menuItems = [
   { href: '/dashboard/accounts-receivable', label: 'Contas a Receber', icon: DollarSign, roles: ['owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
   { href: '/dashboard/scanner', label: 'Escanear QR Code', icon: QrCode, roles: ['technician'] },
-  { href: '/dashboard/university', label: 'Universidade', icon: BookOpen, roles: ['master', 'owner', 'technician'] },
+  { href: '/dashboard/university', label: 'Universidade', icon: BookOpen, roles: ['master', 'owner'] },
   // { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner'] },
 ];
 
