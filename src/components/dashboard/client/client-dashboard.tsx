@@ -11,7 +11,6 @@ import type { Client, Technician, Appointment, Franchise, UserInfo } from '@/lib
 import { useMemo } from 'react';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -91,30 +90,25 @@ export function ClientDashboard() {
   [firestore, franchiseId, clientId]);
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
-  const assignedTechnician: Technician | undefined = useMemo(() => {
-    if (!clientData || !clientData.id || !technicians) return undefined;
-    
-    // This logic needs to be improved if a client can have multiple locations with different technicians.
-    // For now, we find any technician assigned to any of the client's locations.
-    // A better approach would be to get the technician from the upcoming appointment.
-    // This is a placeholder logic.
-    const techIds = clientData.id;
-    return technicians.find(t => t.id === "tech-bruno-01"); // Placeholder
-  }, [clientData, technicians]);
   
-  // Get User profile for the assigned technician to get the avatar
-  const techUserDocRef = useMemoFirebase(() =>
-    firestore && assignedTechnician?.userId ? doc(firestore, 'users', assignedTechnician.userId) : null
-  , [firestore, assignedTechnician]);
-  const { data: techUserInfo, isLoading: isLoadingTechUser } = useDoc<UserInfo>(techUserDocRef);
-
-
   const upcomingAppointment = useMemo(() => {
     if (!clientAppointments) return null;
     return clientAppointments
       .filter(a => new Date(a.scheduledDateTime) >= new Date())
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
+  
+  const assignedTechnician: Technician | undefined = useMemo(() => {
+    if (!upcomingAppointment || !technicians) return undefined;
+    return technicians.find(t => t.id === upcomingAppointment.technicianId);
+  }, [upcomingAppointment, technicians]);
+
+  // Get User profile for the assigned technician to get the avatar
+  const techUserDocRef = useMemoFirebase(() =>
+    firestore && assignedTechnician?.userId ? doc(firestore, 'users', assignedTechnician.userId) : null
+  , [firestore, assignedTechnician]);
+  const { data: techUserInfo, isLoading: isLoadingTechUser } = useDoc<UserInfo>(techUserDocRef);
+
 
   const isLoading = isLoadingClient || isLoadingFranchise || isLoadingTechnicians || isLoadingAppointments || isLoadingTechUser;
 
