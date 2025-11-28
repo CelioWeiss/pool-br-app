@@ -239,6 +239,10 @@
             "type": "string",
             "description": "Reference to the ServiceLocation for this appointment."
         },
+        "technicianId": {
+          "type": "string",
+          "description": "Reference to Technician assigned to the appointment."
+        },
         "scheduledDateTime": {
           "type": "string",
           "description": "The date and time the appointment is scheduled for.",
@@ -505,7 +509,7 @@
         "definition": {
             "entityName": "ServiceLocation",
             "schema": { "$ref": "#/backend/entities/ServiceLocation" },
-            "description": "Stores the specific service locations for a client.",
+            "description": "Stores the specific service locations for a client. This is now a top-level collection under a franchise for easier querying.",
             "params": [
                 { "name": "franchiseId", "description": "The ID of the franchise." },
                 { "name": "locationId", "description": "The unique ID of the service location." }

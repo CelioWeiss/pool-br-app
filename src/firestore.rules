@@ -45,6 +45,11 @@ service cloud.firestore {
                otherUserDoc.exists == true &&
                userDoc.data.franchiseId == otherUserDoc.data.franchiseId;
     }
+    
+    function isClientOwnerOfLocation() {
+        let clientDoc = get(/databases/$(database)/documents/franchises/$(resource.data.franchiseId)/clients/$(resource.data.clientId));
+        return clientDoc.exists == true && clientDoc.data.userId == request.auth.uid;
+    }
 
     // =============================
     // Collection: users
@@ -81,14 +86,11 @@ service cloud.firestore {
       }
 
       match /clients/{clientId} {
-        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && getUserRole(request.auth.uid) == 'client');
+          allow read, list, create, write: if isMaster() || isFranchiseOwner(franchiseId);
       }
       
       match /locations/{locationId} {
-          // Owners can manage all locations in their franchise.
-          // Technicians can read locations in their franchise to get schedule info.
-          // Clients can read their own location data.
-          allow create, write: if isMaster() || isFranchiseOwner(franchiseId);
+          allow create, write: if isMaster() || isFranchiseOwner(franchiseId) || isClientOwnerOfLocation();
           allow read, list: if isMaster() || isUserInFranchise(franchiseId);
       }
       

@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { DialogFooter } from '@/components/ui/dialog';
 import type { ServiceLocation, Technician, DayOfWeek } from '@/lib/types';
 import { states, cities } from '@/lib/brazil-locations';
 import { Spinner } from '@/components/ui/spinner';
+import { v4 as uuidv4 } from 'uuid';
 
 interface NewLocationFormProps {
     clientId: string;
@@ -69,7 +70,9 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
 
         setIsSaving(true);
 
-        const locationData: Omit<ServiceLocation, 'id'> = {
+        const newLocationId = uuidv4();
+        const locationData: ServiceLocation = {
+            id: newLocationId,
             clientId,
             franchiseId,
             address,
@@ -83,8 +86,8 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
         };
 
         try {
-            const locationsRef = collection(firestore, `franchises/${franchiseId}/locations`);
-            await addDoc(locationsRef, locationData);
+            const locationRef = doc(firestore, `franchises/${franchiseId}/locations`, newLocationId);
+            await addDoc(collection(firestore, `franchises/${franchiseId}/locations`), locationData);
 
             toast({
                 title: "Local Adicionado!",
