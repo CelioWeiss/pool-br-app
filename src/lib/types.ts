@@ -34,27 +34,17 @@ export type DayOfWeek = 'segunda' | 'terca' | 'quarta' | 'quinta' | 'sexta' | 's
 
 export interface Client {
   id: string;
-  userId: string; // Firebase Auth UID
+  userId?: string; // Firebase Auth UID
   name: string;
-  // address is deprecated, moved to ServiceLocation
-  // address: string;
   contactName: string;
   contactPhone: string;
   contactEmail: string;
   franchiseId: string;
   avatarUrl?: string;
-  // poolDetails is deprecated, moved to ServiceLocation
-  // poolDetails: string;
-  // technicianId is deprecated, moved to ServiceLocation
-  // technicianId: string | null;
   createdAt: string; // ISO string
-  // locationLatitude?: number;
-  // locationLongitude?: number;
   monthlyFee?: number;
   dueDay?: number;
   contractType?: ContractType;
-  // serviceDays is deprecated, moved to ServiceLocation
-  // serviceDays?: DayOfWeek[];
 }
 
 export interface ServiceLocation {

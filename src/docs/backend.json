@@ -1,0 +1,572 @@
+
+{
+  "entities": {
+    "Franchise": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Franchise",
+      "type": "object",
+      "description": "Represents a franchise within the pool cleaning and maintenance business.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Franchise entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the franchise."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Reference to User representing the owner of this franchise. (Relationship: User 1:1 Franchise)"
+        },
+        "details": {
+          "type": "string",
+          "description": "Additional details or notes about the franchise."
+        },
+        "configuration": {
+          "type": "string",
+          "description": "JSON configuration data for the franchise."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "URL for the franchise's logo image."
+        },
+        "pixKey": {
+          "type": "string",
+          "description": "PIX key for the franchise to receive payments."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "ownerId"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user within the system, regardless of their role.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "franchiseId": {
+          "type": "string",
+          "description": "Reference to Franchise to which the user belongs. Null if the user is a master user. (Relationship: Franchise 1:N User)"
+        },
+        "role": {
+          "type": "string",
+          "description": "The role of the user (master, owner, technician, client)."
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the user."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the user.",
+          "format": "email"
+        },
+        "phone": {
+          "type": "string",
+          "description": "The phone number of the user."
+        },
+        "avatarUrl": {
+            "type": "string",
+            "description": "URL for the user's profile picture."
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "firstName",
+        "lastName",
+        "email"
+      ]
+    },
+    "Client": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Client",
+      "type": "object",
+      "description": "Represents a client of a franchise. A client can have multiple service locations.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Client entity."
+        },
+        "franchiseId": {
+          "type": "string",
+          "description": "Reference to Franchise to which the client belongs. (Relationship: Franchise 1:N Client)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User auth object for this client, if they have portal access."
+        },
+        "name": {
+            "type": "string",
+            "description": "The name of the client (individual or company)."
+        },
+        "contactName": {
+          "type": "string",
+          "description": "The name of the primary contact person for the client."
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "The phone number of the client."
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "The email address of the client.",
+          "format": "email"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "URL for the client's profile picture."
+        },
+        "contractDetails": {
+          "type": "string",
+          "description": "Details about the client's contract."
+        }
+      },
+      "required": [
+        "id",
+        "franchiseId",
+        "name"
+      ]
+    },
+    "ServiceLocation": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ServiceLocation",
+        "type": "object",
+        "description": "Represents a specific address where service is provided for a client.",
+        "properties": {
+            "id": { "type": "string", "description": "Unique identifier for the service location." },
+            "clientId": { "type": "string", "description": "Reference to the Client this location belongs to." },
+            "franchiseId": { "type": "string", "description": "Reference to the Franchise this location belongs to." },
+            "address": { "type": "string", "description": "Full street address." },
+            "city": { "type": "string", "description": "City" },
+            "state": { "type": "string", "description": "State" },
+            "zipCode": { "type": "string", "description": "Postal or ZIP code." },
+            "poolDetails": { "type": "string", "description": "Specific details about the pool at this location." },
+            "technicianId": { "type": "string", "description": "ID of the technician assigned to this location." },
+            "serviceDays": { "type": "array", "items": { "type": "string" }, "description": "Days of the week for recurring service." }
+        },
+        "required": ["id", "clientId", "franchiseId", "address", "city", "state"]
+    },
+    "Technician": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Technician",
+      "type": "object",
+      "description": "Represents a technician employed by a franchise.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Technician entity."
+        },
+        "franchiseId": {
+          "type": "string",
+          "description": "Reference to Franchise to which the technician belongs. (Relationship: Franchise 1:N Technician)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to User. (Relationship: User 1:1 Technician)"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "The first name of the technician."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "The last name of the technician."
+        },
+        "location": {
+          "type": "string",
+          "description": "Current location coordinates of the technician (e.g., latitude, longitude)."
+        },
+        "availability": {
+          "type": "string",
+          "description": "Technician availability."
+        }
+      },
+      "required": [
+        "id",
+        "franchiseId",
+        "firstName",
+        "lastName"
+      ]
+    },
+    "Appointment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Appointment",
+      "type": "object",
+      "description": "Represents an appointment scheduled for a client at a specific service location.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Appointment entity."
+        },
+        "franchiseId": {
+          "type": "string",
+          "description": "Reference to Franchise to which the appointment belongs."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to Client for whom the appointment is scheduled."
+        },
+        "locationId": {
+            "type": "string",
+            "description": "Reference to the ServiceLocation for this appointment."
+        },
+        "technicianId": {
+          "type": "string",
+          "description": "Reference to Technician assigned to the appointment."
+        },
+        "scheduledTime": {
+          "type": "string",
+          "description": "The date and time the appointment is scheduled for.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the appointment (e.g., scheduled, in progress, completed, cancelled)."
+        },
+        "serviceReportId": {
+          "type": "string",
+          "description": "Reference to ServiceReport. (Relationship: ServiceReport 1:1 Appointment)"
+        }
+      },
+      "required": [
+        "id",
+        "franchiseId",
+        "clientId",
+        "locationId",
+        "technicianId",
+        "scheduledTime",
+        "status"
+      ]
+    },
+    "ServiceReport": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ServiceReport",
+      "type": "object",
+      "description": "Represents a service report generated for an appointment.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ServiceReport entity."
+        },
+        "franchiseId": {
+          "type": "string",
+          "description": "Reference to Franchise to which the service report belongs."
+        },
+        "appointmentId": {
+          "type": "string",
+          "description": "Reference to Appointment for which the service report was generated."
+        },
+        "technicianId": {
+          "type": "string",
+          "description": "Reference to Technician who created the service report."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to Client for this service report."
+        },
+        "locationId": {
+            "type": "string",
+            "description": "Reference to the ServiceLocation for this service report."
+        },
+        "chlorine": {
+          "type": "number",
+          "description": "Chlorine level (ppm)."
+        },
+        "alkalinity": {
+          "type": "number",
+          "description": "Alkalinity level (ppm)."
+        },
+        "ph": {
+          "type": "number",
+          "description": "pH level."
+        },
+        "cya": {
+          "type": "number",
+          "description": "Cyanuric acid level (ppm)."
+        },
+        "calciumHardness": {
+          "type": "number",
+          "description": "Calcium hardness level (ppm)."
+        },
+        "orp": {
+          "type": "number",
+          "description": "Oxidation-Reduction Potential (mV)."
+        },
+        "tds": {
+          "type": "number",
+          "description": "Total Dissolved Solids (ppm)."
+        },
+        "temperature": {
+          "type": "number",
+          "description": "Water temperature (Celsius)."
+        },
+        "servicesPerformed": {
+          "type": "array",
+          "description": "List of services performed.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "missingProducts": {
+          "type": "array",
+          "description": "List of products that are out of stock.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "observations": {
+          "type": "string",
+          "description": "Additional notes or comments about the service."
+        },
+        "photoUrls": {
+          "type": "array",
+          "description": "Array of URLs pointing to photos taken during the service.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the report was created."
+        }
+      },
+      "required": [
+        "id",
+        "franchiseId",
+        "appointmentId",
+        "technicianId",
+        "clientId",
+        "locationId",
+        "createdAt"
+      ]
+    },
+    "Quote": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Quote",
+      "description": "Represents a price quote for services offered to a client or prospect.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the quote." },
+        "franchiseId": { "type": "string", "description": "The ID of the franchise that created the quote." },
+        "clientId": { "type": "string", "description": "The ID of the existing client, if applicable." },
+        "clientName": { "type": "string", "description": "Client's name (for new or existing clients)." },
+        "clientEmail": { "type": "string", "description": "Client's email." },
+        "clientPhone": { "type": "string", "description": "Client's phone number." },
+        "items": {
+          "type": "array",
+          "description": "List of services or products being quoted.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "service": { "type": "string", "description": "Name of the service or product." },
+              "price": { "type": "number", "description": "Price of the service or product." }
+            },
+            "required": ["service", "price"]
+          }
+        },
+        "totalValue": { "type": "number", "description": "The total value of the quote." },
+        "notes": { "type": "string", "description": "Additional notes, like ABNT norms." },
+        "status": { "type": "string", "description": "Status of the quote (e.g., 'pending', 'accepted', 'rejected')." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of quote creation." }
+      },
+      "required": ["id", "franchiseId", "clientName", "items", "totalValue", "status", "createdAt"]
+    },
+    "UniversityVideo": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UniversityVideo",
+      "description": "Represents an educational video for the University Pool feature.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the video." },
+        "title": { "type": "string", "description": "The title of the video." },
+        "description": { "type": "string", "description": "A brief description of the video content." },
+        "videoUrl": { "type": "string", "description": "The URL of the video (e.g., from YouTube)." },
+        "thumbnailUrl": { "type": "string", "description": "The URL of the video's thumbnail image." },
+        "category": {
+          "type": "string",
+          "description": "The category of the video.",
+          "enum": ["Institucional", "Treinamentos", "Técnico"]
+        },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the video was posted." }
+      },
+      "required": ["id", "title", "videoUrl", "category", "createdAt"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/franchises/{franchiseId}",
+        "definition": {
+          "entityName": "Franchise",
+          "schema": {
+            "$ref": "#/backend/entities/Franchise"
+          },
+          "description": "Stores franchise information. Franchise documents are created by Master Users.",
+          "params": [
+            {
+              "name": "franchiseId",
+              "description": "The unique identifier of the franchise."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user information within a franchise. Includes denormalized 'franchiseId' for authorization independence.",
+          "params": [
+            {
+              "name": "franchiseId",
+              "description": "The unique identifier of the franchise."
+            },
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/clients/{clientId}",
+        "definition": {
+          "entityName": "Client",
+          "schema": {
+            "$ref": "#/backend/entities/Client"
+          },
+          "description": "Stores client information within a franchise. A client can have multiple service locations.",
+          "params": [
+            {
+              "name": "franchiseId",
+              "description": "The unique identifier of the franchise."
+            },
+            {
+              "name": "clientId",
+              "description": "The unique identifier of the client."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/clients/{clientId}/locations/{locationId}",
+        "definition": {
+            "entityName": "ServiceLocation",
+            "schema": { "$ref": "#/backend/entities/ServiceLocation" },
+            "description": "Stores the specific service locations for a client.",
+            "params": [
+                { "name": "franchiseId", "description": "The ID of the franchise." },
+                { "name": "clientId", "description": "The ID of the client." },
+                { "name": "locationId", "description": "The unique ID of the service location." }
+            ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/technicians/{technicianId}",
+        "definition": {
+          "entityName": "Technician",
+          "schema": {
+            "$ref": "#/backend/entities/Technician"
+          },
+          "description": "Stores technician information within a franchise. Includes denormalized 'franchiseId' for authorization independence.",
+          "params": [
+            {
+              "name": "franchiseId",
+              "description": "The unique identifier of the franchise."
+            },
+            {
+              "name": "technicianId",
+              "description": "The unique identifier of the technician."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/appointments/{appointmentId}",
+        "definition": {
+          "entityName": "Appointment",
+          "schema": {
+            "$ref": "#/backend/entities/Appointment"
+          },
+          "description": "Stores appointment information within a franchise. Includes denormalized 'franchiseId' for authorization independence.",
+          "params": [
+            {
+              "name": "franchiseId",
+              "description": "The unique identifier of the franchise."
+            },
+            {
+              "name": "appointmentId",
+              "description": "The unique identifier of the appointment."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/franchises/{franchiseId}/serviceReports/{serviceReportId}",
+        "definition": {
+          "entityName": "ServiceReport",
+          "schema": {
+            "$ref": "#/backend/entities/ServiceReport"
+          },
+          "description": "Stores service report information within a franchise. Includes denormalized 'franchiseId' for authorization independence.",
+          "params": [
+            {
+              "name": "franchiseId",
+              "description": "The unique identifier of the franchise."
+            },
+            {
+              "name": "serviceReportId",
+              "description": "The unique identifier of the service report."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/franchises/{franchiseId}/quotes/{quoteId}",
+        "definition": {
+          "entityName": "Quote",
+          "schema": { "$ref": "#/backend/entities/Quote" },
+          "description": "Stores quotes for services within a franchise.",
+          "params": [
+            { "name": "franchiseId", "description": "The ID of the franchise." },
+            { "name": "quoteId", "description": "The unique ID of the quote." }
+          ]
+        }
+      },
+      {
+        "path": "/universityVideos/{videoId}",
+        "definition": {
+          "entityName": "UniversityVideo",
+          "schema": { "$ref": "#/backend/entities/UniversityVideo" },
+          "description": "Top-level collection for educational videos. Managed by master users, viewable by all authenticated users.",
+          "params": [
+            { "name": "videoId", "description": "The unique ID of the video." }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\n\n**Key Design Choices & Justifications:**\n\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\n4.  **/franchises/{franchiseId}/clients/{clientId}/locations/{locationId}:** A new sub-collection to handle multiple service addresses for a single client, each with its own QR code target.\n5.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\n6.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. The `franchiseId` in the path establishes the relationship.\n7.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\n8.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\n9.  **/universityVideos/{videoId}:** This is a new top-level collection to store educational videos. It's a global resource managed by master users and viewable by all authenticated users, so it doesn't belong under any specific franchise.\n\n**Authorization Independence:**\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\n\n**QAPs (Rules are not Filters):**\n*   **Structural Segregation:** The use of subcollections for franchise-specific data remains a core principle. This simplifies security rules and prevents the need to filter data within a large collection. For example, all documents within `/franchises/{franchiseId}/clients` belong to that franchise and can be secured with a single rule checking for ownership.\n\n**DBAC (Database-Based Access Control):**\n*   The `role` field in the `users` collection is the foundation of DBAC. Security rules check this field to determine user permissions for creating, reading, and writing data. There are no custom claims."
+  }
+}

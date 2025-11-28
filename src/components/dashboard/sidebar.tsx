@@ -19,6 +19,7 @@ import {
   FileText,
   BookOpen,
   QrCode,
+  User as UserIcon
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -31,8 +32,9 @@ const menuItems = [
   { href: '/dashboard/quotes', label: 'Orçamentos', icon: FileText, roles: ['master', 'owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
   { href: '/dashboard/scanner', label: 'Escanear QR Code', icon: QrCode, roles: ['technician'] },
-  { href: '/dashboard/university', label: 'Universidade', icon: BookOpen, roles: ['master', 'owner'] },
+  { href: '/dashboard/university', label: 'Universidade', icon: BookOpen, roles: ['master', 'owner', 'technician'] },
   { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner'] },
+  { href: '/dashboard/profile', label: 'Perfil', icon: UserIcon, roles: ['master', 'owner', 'technician'] },
 ];
 
 export function AppSidebar() {
