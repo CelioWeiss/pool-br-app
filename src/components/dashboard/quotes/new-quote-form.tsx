@@ -116,7 +116,7 @@ export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFo
         }
 
         const quoteData: NewQuoteFormData = {
-            clientId: clientType === 'existing' ? selectedClientId : null,
+            clientId: clientType === 'existing' ? selectedClientId : undefined,
             clientName,
             clientEmail,
             clientPhone,
@@ -150,7 +150,7 @@ export function NewQuoteForm({ clients, onSave, onCancel, isSaving }: NewQuoteFo
                         </SelectTrigger>
                         <SelectContent>
                             {clients.map(client => (
-                                <SelectItem key={client.id} value={client.id}>{client.name} - {client.address}</SelectItem>
+                                <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
