@@ -10,7 +10,8 @@ import {
   endOfMonth,
   eachDayOfInterval,
   getDay,
-  set
+  set,
+  format
 } from 'date-fns';
 
 const dayOfWeekMap: Record<DayOfWeek, number> = {
@@ -87,7 +88,7 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
             daysInMonth.forEach(day => {
               if (serviceDaysAsNumbers.includes(getDay(day))) {
                 const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
-                const key = `${location.id}-${format(scheduledDateTime, 'yyyy-MM-dd')}`;
+                const key = `${location.id}-${format(day, 'yyyy-MM-dd')}`;
       
                 // Only add if no manual appointment exists for this location and day
                 if (!appointmentsMap.has(key)) {
