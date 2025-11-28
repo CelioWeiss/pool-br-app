@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useRef } from "react";
@@ -17,7 +16,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useFirestore, FirestorePermissionError, errorEmitter } from "@/firebase";
-import { writeBatch, doc, collection, serverTimestamp } from "firebase/firestore";
+import { writeBatch, doc, collection } from "firebase/firestore";
+import { uploadImage } from "@/ai/flows/upload-image-flow";
 
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
@@ -120,9 +120,14 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
 
         const reportRef = doc(collection(firestore, `franchises/${franchiseId}/serviceReports`));
         
-        // This is a placeholder. In a real app, you'd upload to Firebase Storage
-        // and get the download URLs. For now, we'll store Data URIs if they are small enough.
-        const photoUrls = previews.filter(p => p !== null) as string[];
+        // Upload images to external service and get URLs
+        const imageUploadPromises = previews
+            .filter((p): p is string => p !== null)
+            .map(imageDataUri => uploadImage({ imageDataUri }));
+        
+        const uploadedImageResults = await Promise.all(imageUploadPromises);
+        const photoUrls = uploadedImageResults.map(result => result.imageUrl);
+
 
         const newReportData: Omit<ServiceReport, 'id' | 'createdAt'> = {
             franchiseId,
@@ -159,9 +164,6 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
             description: "O relatório de serviço foi salvo e o cliente será notificado.",
         });
         
-        // TODO: In a real app, send notification to client
-        // await fetch("/api/notificacao-cliente", { ... });
-
         router.push('/dashboard/schedule');
 
     } catch (err: any) {
