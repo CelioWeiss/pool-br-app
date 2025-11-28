@@ -4,7 +4,7 @@
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { User, Droplets, Phone, Mail, MapPin, History, Wrench, PlusCircle } from 'lucide-react';
+import { User, Phone, Mail, History, PlusCircle } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
 import type { Client, Technician, Appointment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
@@ -12,7 +12,7 @@ import { doc, collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ClientLocations } from '@/components/dashboard/clients/client-locations';
 import { NewLocationForm } from '@/components/dashboard/clients/new-location-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
