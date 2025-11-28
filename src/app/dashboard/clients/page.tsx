@@ -4,7 +4,7 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle, MoreHorizontal, Edit, UserX } from 'lucide-react';
@@ -85,7 +85,6 @@ export default function ClientsPage() {
                lastName: lastNameParts.join(' ') || '',
                email: clientData.contactEmail,
                isActive: true,
-               createdAt: new Date().toISOString(),
            };
            batch.set(userRef, newUserProfile);
         }
@@ -121,7 +120,6 @@ export default function ClientsPage() {
             lastName: lastNameParts.join(' ') || '',
             email: clientData.contactEmail,
             isActive: true,
-            createdAt: new Date().toISOString(),
         };
         batch.set(userRef, newUserProfile);
       }
