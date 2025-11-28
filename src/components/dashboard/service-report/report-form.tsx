@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,18 +16,18 @@ import type { Client, Appointment, ServiceReport } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useFirestore } from "@/firebase";
-import { writeBatch, doc, collection } from "firebase/firestore";
+import { useFirestore, FirestorePermissionError, errorEmitter } from "@/firebase";
+import { writeBatch, doc, collection, serverTimestamp } from "firebase/firestore";
 
 const waterParameters = [
-  { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5 },
-  { name: "Alcalinidade", key: "alkalinity", min: 0, max: 200, step: 10, defaultValue: 100 },
-  { name: "pH", key: "ph", min: 6, max: 9, step: 0.1, defaultValue: 7.4 },
-  { name: "CYA", key: "cya", min: 0, max: 100, step: 5, defaultValue: 30 },
-  { name: "Dureza Cálcica", key: "calciumHardness", min: 0, max: 500, step: 10, defaultValue: 250 },
-  { name: "ORP", key: "orp", min: 0, max: 1000, step: 10, defaultValue: 650 },
-  { name: "TDS", key: "tds", min: 0, max: 3000, step: 100, defaultValue: 1500 },
-  { name: "Temperatura", key: "temperature", min: 0, max: 40, step: 1, defaultValue: 25 },
+  { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
+  { name: "pH", key: "ph", min: 6, max: 9, step: 0.1, defaultValue: 7.4, unit: "" },
+  { name: "Alcalinidade", key: "alkalinity", min: 0, max: 200, step: 10, defaultValue: 100, unit: "ppm" },
+  { name: "Ác. Cianúrico (CYA)", key: "cya", min: 0, max: 100, step: 5, defaultValue: 30, unit: "ppm" },
+  { name: "Dureza Cálcica", key: "calciumHardness", min: 0, max: 500, step: 10, defaultValue: 250, unit: "ppm" },
+  { name: "ORP", key: "orp", min: 0, max: 1000, step: 10, defaultValue: 650, unit: "mV" },
+  { name: "TDS", key: "tds", min: 0, max: 3000, step: 100, defaultValue: 1500, unit: "ppm" },
+  { name: "Temperatura", key: "temperature", min: 0, max: 40, step: 1, defaultValue: 25, unit: "°C" },
 ];
 
 const servicesPerformedItems = [
@@ -74,6 +74,14 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+        toast({
+          variant: "destructive",
+          title: "Arquivo muito grande",
+          description: "Por favor, selecione uma imagem com menos de 2MB."
+        });
+        return;
+      }
       const reader = new FileReader();
       reader.onloadend = () => {
         const newPreviews = [...previews];
@@ -105,55 +113,39 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
     const formData = new FormData(e.currentTarget);
     const rawData = Object.fromEntries(formData.entries());
 
-    let appointmentId = rawData.appointmentId as string;
-    const franchiseId = rawData.franchiseId as string;
+    const { appointmentId, franchiseId, clientId, technicianId } = appointment;
     
     try {
         const batch = writeBatch(firestore);
-        let appointmentRef;
-
-        if (appointmentId === 'new') {
-            appointmentRef = doc(collection(firestore, `franchises/${franchiseId}/appointments`));
-            appointmentId = appointmentRef.id;
-            
-            const newAppointment: Omit<Appointment, 'id' | 'serviceReportId'> = {
-                franchiseId,
-                clientId: rawData.clientId as string,
-                technicianId: rawData.technicianId as string,
-                scheduledDateTime: rawData.scheduledDateTime as string,
-                status: 'completed',
-            };
-            batch.set(appointmentRef, newAppointment);
-        } else {
-            appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments/${appointmentId}`);
-        }
 
         const reportRef = doc(collection(firestore, `franchises/${franchiseId}/serviceReports`));
+        
+        // This is a placeholder. In a real app, you'd upload to Firebase Storage
+        // and get the download URLs. For now, we'll store Data URIs if they are small enough.
+        const photoUrls = previews.filter(p => p !== null) as string[];
 
-        const newReport: Omit<ServiceReport, 'id' | 'createdAt'> = {
+        const newReportData: Omit<ServiceReport, 'id' | 'createdAt'> = {
             franchiseId,
-            appointmentId: appointmentId,
-            technicianId: rawData.technicianId as string,
-            clientId: rawData.clientId as string,
-            chlorine: Number(rawData.chlorine),
-            alkalinity: Number(rawData.alkalinity),
-            ph: Number(rawData.ph),
-            cya: Number(rawData.cya),
-            calciumHardness: Number(rawData.calciumHardness),
-            orp: Number(rawData.orp),
-            tds: Number(rawData.tds),
-            temperature: Number(rawData.temperature),
+            appointmentId,
+            technicianId,
+            clientId,
+            chlorine: parameters['chlorine'],
+            ph: parameters['ph'],
+            alkalinity: parameters['alkalinity'],
+            cya: parameters['cya'],
+            calciumHardness: parameters['calciumHardness'],
+            orp: parameters['orp'],
+            tds: parameters['tds'],
+            temperature: parameters['temperature'],
             servicesPerformed: formData.getAll('servicesPerformed') as string[],
             missingProducts: formData.getAll('missingProducts') as string[],
             observations: rawData.observations as string,
-            // TODO: Handle photo uploads
-            photoUrls: ['photo1.jpg', 'photo2.jpg', 'photo3.jpg', 'photo4.jpg'].filter((_, i) => {
-              const file = rawData[`photo-${i}`] as File;
-              return file && file.size > 0;
-            }),
+            photoUrls: photoUrls,
         };
-        batch.set(reportRef, { ...newReport, createdAt: new Date().toISOString() });
+        
+        batch.set(reportRef, { ...newReportData, createdAt: new Date().toISOString() });
 
+        const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId);
         batch.update(appointmentRef, {
             serviceReportId: reportRef.id,
             status: 'completed',
@@ -166,10 +158,21 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
             title: "Relatório Finalizado!",
             description: "O relatório de serviço foi salvo e o cliente será notificado.",
         });
+        
+        // TODO: In a real app, send notification to client
+        // await fetch("/api/notificacao-cliente", { ... });
+
         router.push('/dashboard/schedule');
 
     } catch (err: any) {
         console.error("Error submitting report:", err);
+        const permissionError = new FirestorePermissionError({
+          path: `franchises/${franchiseId}/serviceReports`,
+          operation: 'create',
+          requestResourceData: {}, // simplified
+        });
+        errorEmitter.emit('permission-error', permissionError);
+
         toast({
             variant: "destructive",
             title: "Erro ao Finalizar",
@@ -194,14 +197,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
   }
 
   return (
-    <form onSubmit={handleSubmit} encType="multipart/form-data">
-      <input type="hidden" name="appointmentId" value={appointment.id} />
-      <input type="hidden" name="franchiseId" value={appointment.franchiseId} />
-      <input type="hidden" name="clientId" value={client.id} />
-      <input type="hidden" name="technicianId" value={appointment.technicianId} />
-      <input type="hidden" name="scheduledDateTime" value={appointment.scheduledDateTime} />
-
-
+    <form onSubmit={handleSubmit}>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         <div className="space-y-6">
             <Card>
@@ -214,7 +210,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                         <div key={param.key} className="grid gap-2">
                             <div className="flex justify-between">
                                 <Label htmlFor={param.key}>{param.name}</Label>
-                                <span className="text-sm font-medium text-muted-foreground">{parameters[param.key]}</span>
+                                <span className="text-sm font-medium text-muted-foreground">{parameters[param.key]} {param.unit}</span>
                             </div>
                             <Slider
                                 name={param.key}
@@ -237,7 +233,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                 <CardContent className="grid grid-cols-2 gap-4">
                     {[0, 1, 2, 3].map(index => (
                         <div key={index} className="space-y-2">
-                          <Label htmlFor={`photo-${index}`}>Foto {index + 1}</Label>
+                          <Label htmlFor={`photo-${index}`} className="sr-only">Foto {index + 1}</Label>
                           {previews[index] ? (
                             <div className="relative">
                                 <Image src={previews[index] as string} alt={`Preview ${index+1}`} width={300} height={400} className="rounded-md object-cover aspect-[3/4] w-full" />
@@ -306,7 +302,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
                 </CardContent>
             </Card>
             
-            <Button type="submit" disabled={isSaving} className="w-full">
+            <Button type="submit" disabled={isSaving} className="w-full" size="lg">
                 {isSaving ? <><Spinner size="small" className="mr-2"/> Finalizando...</> : "Finalizar Relatório"}
             </Button>
         </div>
