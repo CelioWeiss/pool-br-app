@@ -46,6 +46,7 @@ export const clients: Client[] = [
         poolDetails: 'Piscina de fibra 30,000L',
         technicianId: 'tech-bruno-01',
         createdAt: new Date().toISOString(),
+        isActive: true,
     },
     {
         id: 'client-souza-02',
@@ -58,6 +59,7 @@ export const clients: Client[] = [
         poolDetails: 'Piscina de alvenaria 50,000L',
         technicianId: 'tech-carlos-01',
         createdAt: new Date().toISOString(),
+        isActive: true,
     },
 ];
 
