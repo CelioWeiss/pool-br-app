@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { Franchise } from '@/lib/types';
 import { Info, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { revalidatePath } from 'next/cache';
 
 export default function ProfilePage() {
   const { userInfo } = useAuth();
