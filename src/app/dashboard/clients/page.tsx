@@ -100,8 +100,7 @@ export default function ClientsPage() {
         const newUserId = userCredential.user.uid;
 
         const clientRef = doc(collection(firestore, 'franchises', franchiseId, 'clients'));
-        const newClient: Omit<Client, 'createdAt'> = {
-          id: clientRef.id,
+        const newClient: Omit<Client, 'createdAt' | 'id'> = {
           userId: newUserId,
           franchiseId: franchiseId,
           isActive: true,
@@ -111,7 +110,7 @@ export default function ClientsPage() {
           contactPhone: clientData.contactPhone,
           contactEmail: clientData.contactEmail,
         };
-        batch.set(clientRef, {...newClient, createdAt: new Date().toISOString()});
+        batch.set(clientRef, {...newClient, id: clientRef.id, createdAt: new Date().toISOString()});
         
         const userRef = doc(firestore, 'users', newUserId);
         const [firstName, ...lastNameParts] = clientData.name.split(' ');
@@ -190,7 +189,7 @@ export default function ClientsPage() {
     }
   };
   
-  const activeClients = useMemo(() => clientList?.filter(c => c.isActive) || [], [clientList]);
+  const activeClients = useMemo(() => clientList?.filter(c => c.isActive !== false) || [], [clientList]);
 
   return (
     <>
@@ -310,5 +309,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    
