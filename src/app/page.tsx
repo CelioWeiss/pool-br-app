@@ -21,7 +21,7 @@ export default function Home() {
             />
           )}
         <p className="text-muted-foreground -mt-2">
-          Limpeza e Manutenção
+          Gestão de Piscinas
         </p>
       </div>
       <div className="w-full max-w-sm mt-10">
