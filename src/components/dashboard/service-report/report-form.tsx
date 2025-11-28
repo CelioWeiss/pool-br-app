@@ -18,6 +18,8 @@ import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useFirestore, FirestorePermissionError, errorEmitter } from "@/firebase";
 import { writeBatch, doc, collection } from "firebase/firestore";
+import { v4 as uuidv4 } from 'uuid';
+
 
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
@@ -108,21 +110,23 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firestore) return;
-
-    setIsSaving(true);
-    const formData = new FormData(e.currentTarget);
-    const rawData = Object.fromEntries(formData.entries());
-
-    const { id: appointmentId, franchiseId, clientId, technicianId, locationId } = appointment;
     
+    setIsSaving(true);
+    const { id: appointmentId, franchiseId, clientId, technicianId, locationId } = appointment;
+
     try {
         const batch = writeBatch(firestore);
-
-        const reportRef = doc(collection(firestore, `franchises/${franchiseId}/serviceReports`));
         
+        // Generate a new unique ID for the service report beforehand
+        const newReportId = uuidv4();
+        const reportRef = doc(firestore, `franchises/${franchiseId}/serviceReports`, newReportId);
+
+        const formData = new FormData(e.currentTarget);
+        const rawData = Object.fromEntries(formData.entries());
         const photoUrls = previews.filter((p): p is string => p !== null);
 
-        const newReportData: Omit<ServiceReport, 'id'|'createdAt'> = {
+        const newReportData: ServiceReport = {
+            id: newReportId,
             franchiseId,
             appointmentId,
             technicianId,
@@ -140,9 +144,10 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             missingProducts: formData.getAll('missingProducts') as string[],
             observations: rawData.observations as string,
             photoUrls: photoUrls,
+            createdAt: new Date().toISOString(),
         };
         
-        batch.set(reportRef, { ...newReportData, createdAt: new Date().toISOString() });
+        batch.set(reportRef, newReportData);
 
         const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId);
         batch.update(appointmentRef, {
@@ -306,5 +311,3 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
     </form>
   );
 }
-
-    
