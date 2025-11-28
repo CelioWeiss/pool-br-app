@@ -38,7 +38,7 @@ const servicesPerformedItems = [
     { id: "limpeza_bordas", label: "Limpeza de bordas" },
     { id: "limpeza_pre_filtro", label: "Limpeza pré-filtro" },
     { id: "retrolavagem_filtro", label: "Retrolavagem do elemento filtrante" },
-    { id: "lavagem_filtro_poliester", label: "Lavagem filtro poliéster (Sistema Drypomp IGUI)" },
+    { id: "lavagem_filtro_poliester", label: "Lavagem filtro poliéster (Sistema Dry Pump IGUI)" },
 ];
 
 const missingProductsItems = [
