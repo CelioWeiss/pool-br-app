@@ -23,11 +23,15 @@ export default function ScannerPage() {
     useEffect(() => {
         const getCameraPermission = async () => {
             try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera not supported on this browser.');
+                }
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
                 setHasCameraPermission(true);
 
                 if (videoRef.current) {
                     videoRef.current.srcObject = stream;
+                    videoRef.current.play(); // Ensure video plays
                 }
             } catch (error) {
                 console.error('Error accessing camera:', error);
