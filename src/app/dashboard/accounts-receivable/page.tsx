@@ -28,7 +28,7 @@ export default function AccountsReceivablePage() {
 
     // --- Data Fetching ---
     const clientsQuery = useMemoFirebase(() =>
-        firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients'), where('isActive', '==', true)) : null,
+        firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null,
         [firestore, franchiseId]
     );
 
@@ -55,6 +55,9 @@ export default function AccountsReceivablePage() {
     useEffect(() => {
         const generateMonthlyPayments = async () => {
             if (!clients || !franchiseId || !firestore) return;
+            
+            const activeClients = clients.filter(c => c.isActive);
+            if(activeClients.length === 0) return;
 
             setIsProcessing(true);
             const month = currentMonth.getMonth() + 1;
@@ -71,7 +74,7 @@ export default function AccountsReceivablePage() {
             const batch = writeBatch(firestore);
             let hasNewPayments = false;
 
-            for (const client of clients) {
+            for (const client of activeClients) {
                 if (client.monthlyFee && client.dueDay && !existingClientIds.has(client.id)) {
                     const dueDate = new Date(year, month - 1, client.dueDay);
                     const newPayment: Omit<Payment, 'id'> = {
@@ -117,13 +120,21 @@ export default function AccountsReceivablePage() {
         const clientsMap = new Map(clients.map(c => [c.id, c]));
         const paymentsMap = new Map(payments.map(p => [p.clientId, p]));
 
-        const combinedData: ReceivablesData[] = clients
+        // Create a set of client IDs that have payments this month
+        const clientsWithPaymentsThisMonth = new Set(payments.map(p => p.clientId));
+
+        // Filter clients: show active clients OR inactive clients that have a payment record for the current month
+        const filteredClients = clients.filter(client => {
+            return client.isActive || clientsWithPaymentsThisMonth.has(client.id);
+        });
+
+        const combinedData: ReceivablesData[] = filteredClients
             .filter(client => client.monthlyFee && client.dueDay) // Only include clients with billing info
             .map(client => {
                 const payment = paymentsMap.get(client.id);
                 return {
                     client,
-                    payment: payment || null, // payment can be null if it hasn't been created yet
+                    payment: payment || null,
                 };
             });
 
@@ -145,7 +156,7 @@ export default function AccountsReceivablePage() {
 
             toast({
                 title: "Cliente Inativado!",
-                description: `${clientToDeactivate.name} foi marcado como inativo.`,
+                description: `${clientToDeactivate.name} foi marcado como inativo e não será incluído em faturas futuras.`,
             });
         } catch (error) {
             console.error("Error deactivating client: ", error);
@@ -212,7 +223,7 @@ export default function AccountsReceivablePage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>Inativar Cliente?</AlertDialogTitle>
                     <AlertDialogDescription>
-                    Esta ação marcará o cliente <span className="font-bold">{clientToDeactivate?.name}</span> como inativo. Ele não aparecerá mais nas listas principais e faturamento, mas seus dados serão mantidos. Deseja continuar?
+                    Esta ação marcará o cliente <span className="font-bold">{clientToDeactivate?.name}</span> como inativo. Ele não aparecerá em faturamentos futuros, mas o registro deste mês será mantido. Deseja continuar?
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
