@@ -105,7 +105,9 @@ export default function SchedulePage() {
   
     // 1. Add manual appointments first, they have priority
     manualAppointments.forEach(appt => {
-      const key = `${appt.locationId}-${format(new Date(appt.scheduledDateTime), 'yyyy-MM-dd')}`;
+      // Use scheduledDateTime from Firestore
+      const scheduledDate = new Date(appt.scheduledDateTime);
+      const key = `${appt.locationId}-${format(scheduledDate, 'yyyy-MM-dd')}`;
       appointmentsMap.set(key, appt);
     });
   
@@ -171,9 +173,24 @@ export default function SchedulePage() {
 
   const appointmentDates = useMemo(() => filteredAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [filteredAppointments]);
 
-  const selectedAppointments = useMemo(() => {
-    if (!selectedDate || !filteredAppointments) return [];
-    return filteredAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), selectedDate));
+ const { pendingAppointments, completedAppointments } = useMemo(() => {
+    if (!selectedDate || !filteredAppointments) return { pendingAppointments: [], completedAppointments: [] };
+    
+    const todaysAppointments = filteredAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), selectedDate));
+    
+    const pending: Appointment[] = [];
+    const completed: Appointment[] = [];
+
+    todaysAppointments.forEach(appt => {
+      if (appt.status === 'scheduled' || appt.status === 'in_progress') {
+        pending.push(appt);
+      } else {
+        completed.push(appt);
+      }
+    });
+
+    return { pendingAppointments: pending, completedAppointments: completed };
+
   }, [selectedDate, filteredAppointments]);
 
 
@@ -258,7 +275,7 @@ export default function SchedulePage() {
                 Atendimentos para {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : 'Nenhuma data selecionada'}
             </CardTitle>
             <CardDescription>
-                {isLoading ? 'Carregando agendamentos...' : (selectedAppointments.length > 0 ? `${selectedAppointments.length} serviço(s) agendado(s) para este dia.` : "Nenhum serviço agendado para este dia.")}
+                {isLoading ? 'Carregando agendamentos...' : `Encontrado(s) ${pendingAppointments.length} serviço(s) pendente(s) e ${completedAppointments.length} concluído(s).`}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -268,7 +285,8 @@ export default function SchedulePage() {
               </div>
             ) : (
               <DailySchedule 
-                appointments={selectedAppointments} 
+                pendingAppointments={pendingAppointments}
+                completedAppointments={completedAppointments}
                 clients={clients || []}
                 technicians={technicians || []}
                 locations={allLocations || []}

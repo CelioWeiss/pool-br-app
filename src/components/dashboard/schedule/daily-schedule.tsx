@@ -5,13 +5,14 @@ import { useMemo, useState } from 'react';
 import type { Appointment, Client, Technician, ServiceLocation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Check, X, Calendar, PlayCircle } from 'lucide-react';
+import { Clock, Check, X, Calendar, PlayCircle, History } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { addDoc, collection } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 const AppointmentItem = ({ appointment, client, technician, location }: { appointment: Appointment, client?: Client, technician?: Technician, location?: ServiceLocation }) => {
   const router = useRouter();
@@ -39,7 +40,7 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
     if (appointment.id.startsWith('auto-')) {
       const appointmentsRef = collection(firestore, 'franchises', userInfo.franchiseId, 'appointments');
       
-      const newAppointmentData: Omit<Appointment, 'id'> = {
+      const newAppointmentData: Omit<Appointment, 'id' | 'serviceReportId'> = {
         clientId: appointment.clientId,
         locationId: appointment.locationId,
         technicianId: appointment.technicianId,
@@ -86,26 +87,62 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
             </Badge>
         </div>
       </div>
-       {appointment.status === 'scheduled' && (
+       {(appointment.status === 'scheduled' || appointment.status === 'in_progress') && (
         <Button onClick={handleStartAppointment} size="sm" disabled={isCreating}>
             {isCreating ? (
                 <><Spinner size="small" className="mr-2" /> Criando...</>
             ) : (
-                <><PlayCircle className="mr-2 h-4 w-4" /> Iniciar Atendimento</>
+                <><PlayCircle className="mr-2 h-4 w-4" /> {appointment.status === 'in_progress' ? 'Continuar' : 'Iniciar'}</>
             )}
         </Button>
+       )}
+       {appointment.status === 'completed' && appointment.serviceReportId && (
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/relatorio/${appointment.id}`}>
+              Ver Relatório
+            </Link>
+          </Button>
        )}
     </div>
   );
 };
 
+const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, techniciansMap, locationsMap }: { title: string, appointments: Appointment[], icon: React.ElementType, clientsMap: Map<string, Client>, techniciansMap: Map<string, Technician>, locationsMap: Map<string, ServiceLocation> }) => {
+  if (appointments.length === 0) {
+    return null;
+  }
+  return (
+     <AccordionItem value={title.toLowerCase()}>
+        <AccordionTrigger className="px-4">
+            <div className="flex items-center gap-2">
+                <Icon className="h-5 w-5" />
+                <h3 className="font-semibold">{title}</h3>
+                <Badge variant="secondary">{appointments.length}</Badge>
+            </div>
+        </AccordionTrigger>
+        <AccordionContent className="p-0">
+            <div className="divide-y border-t">
+              {appointments.map(appt => (
+                <AppointmentItem 
+                    key={appt.id} 
+                    appointment={appt} 
+                    client={clientsMap.get(appt.clientId)}
+                    technician={techniciansMap.get(appt.technicianId)}
+                    location={locationsMap.get(appt.locationId)}
+                />
+              ))}
+            </div>
+        </AccordionContent>
+    </AccordionItem>
+  )
+}
 
-export function DailySchedule({ appointments, clients, technicians, locations }: { appointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[] }) {
+export function DailySchedule({ pendingAppointments, completedAppointments, clients, technicians, locations }: { pendingAppointments: Appointment[], completedAppointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[] }) {
   const clientsMap = useMemo(() => new Map(clients?.map(c => [c.id, c])), [clients]);
   const techniciansMap = useMemo(() => new Map(technicians?.map(t => [t.id, t])), [technicians]);
   const locationsMap = useMemo(() => new Map(locations?.map(l => [l.id, l])), [locations]);
   
-  if (appointments.length === 0) {
+  if (pendingAppointments.length === 0 && completedAppointments.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground">
         <Calendar className="h-12 w-12 mb-4" />
@@ -114,19 +151,28 @@ export function DailySchedule({ appointments, clients, technicians, locations }:
     )
   }
 
-  const sortedAppointments = [...appointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
+  const sortedPending = [...pendingAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
+  const sortedCompleted = [...completedAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
+
 
   return (
-    <div className="divide-y">
-      {sortedAppointments.map(appt => (
-        <AppointmentItem 
-            key={appt.id} 
-            appointment={appt} 
-            client={clientsMap.get(appt.clientId)}
-            technician={techniciansMap.get(appt.technicianId)}
-            location={locationsMap.get(appt.locationId)}
-        />
-      ))}
-    </div>
+    <Accordion type="multiple" defaultValue={['pendentes']} className="w-full">
+      <AppointmentList 
+        title="Pendentes"
+        icon={Clock}
+        appointments={sortedPending}
+        clientsMap={clientsMap}
+        techniciansMap={techniciansMap}
+        locationsMap={locationsMap}
+      />
+      <AppointmentList 
+        title="Concluídos no Dia"
+        icon={History}
+        appointments={sortedCompleted}
+        clientsMap={clientsMap}
+        techniciansMap={techniciansMap}
+        locationsMap={locationsMap}
+      />
+    </Accordion>
   );
 }
