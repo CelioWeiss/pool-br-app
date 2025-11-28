@@ -3,7 +3,8 @@
 
 import React, { useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useFormState } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -40,7 +41,7 @@ export default function ProfilePage() {
   const { data: franchise, isLoading } = useDoc<Franchise>(franchiseDocRef);
 
   const initialState = { success: false, error: undefined };
-  const [state, formAction] = useFormState(updateFranchiseProfileAction, initialState);
+  const [state, formAction] = useActionState(updateFranchiseProfileAction, initialState);
   
   useEffect(() => {
     if (state.success) {
@@ -120,5 +121,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
