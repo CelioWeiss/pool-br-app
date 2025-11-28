@@ -10,7 +10,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import FormData from 'form-data';
 
 const UploadImageInputSchema = z.object({
@@ -37,30 +37,36 @@ async function uploadImageToPostimages(
   base64Image: string
 ): Promise<string> {
   const form = new FormData();
+  // The Postimages API token and the field name 'upload'
   form.append('token', '19a48ae66735528347f35e893e43a9a83852e6f4'); 
-  
-  // The API expects the base64 string directly, not as a file/blob
   form.append('upload', base64Image);
 
-  const response = await fetch('https://api.postimages.org/1/upload', {
-    method: 'POST',
-    body: form as any, // Cast to any to handle type mismatch with Node's fetch
-    headers: form.getHeaders(), // Use getHeaders() from form-data package
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(
-      `Failed to upload image: ${response.statusText} - ${errorBody}`
+  try {
+    const response = await axios.post(
+      'https://api.postimages.org/1/upload',
+      form,
+      {
+        headers: form.getHeaders(),
+        timeout: 30000, // 30 second timeout
+      }
     );
-  }
 
-  const result = await response.json();
-  if (result.status !== 'OK' || !result.data?.url) {
-    throw new Error(`Postimages API error: ${JSON.stringify(result)}`);
-  }
+    const result = response.data;
+    if (result.status !== 'OK' || !result.data?.url) {
+      throw new Error(`Postimages API error: ${JSON.stringify(result)}`);
+    }
 
-  return result.data.url;
+    return result.data.url;
+  } catch (error: any) {
+    // Axios wraps the response error in `error.response`
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(
+        `Failed to upload image: ${error.response.status} ${error.response.statusText} - ${JSON.stringify(error.response.data)}`
+      );
+    }
+    // Handle other errors (network, timeout, etc.)
+    throw new Error(`Failed to upload image: ${error.message}`);
+  }
 }
 
 const uploadImageFlow = ai.defineFlow(
