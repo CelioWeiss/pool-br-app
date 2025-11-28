@@ -53,15 +53,17 @@ export default function ClientsPage() {
     return technician ? `${technician.firstName} ${technician.lastName}` : 'N/A';
   }
 
-  const handleSaveClient = async (clientData: NewClientFormData) => {
+  const handleSaveClient = async (clientData: NewClientFormData, clientId?: string) => {
     if (!firestore || !auth || !franchiseId) return;
   
     setIsSaving(true);
+    
+    const isEditing = !!clientId;
   
     try {
       const batch = writeBatch(firestore);
   
-      const dataToSave: Partial<Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'>> = {
+      const dataToSave: Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> = {
           name: clientData.name,
           address: clientData.address,
           contactName: clientData.contactName,
@@ -75,11 +77,34 @@ export default function ClientsPage() {
           serviceDays: clientData.serviceDays,
       };
 
-      if (editingClient) {
-        const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', editingClient.id);
-        batch.update(clientRef, dataToSave);
+      if (isEditing) {
+        const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', clientId);
+        let finalData: Partial<Client> = { ...dataToSave };
 
-      } else {
+        // Logic to create auth user if it doesn't exist during an edit
+        if (!editingClient?.userId && clientData.password) {
+           const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
+           const newUserId = userCredential.user.uid;
+           finalData.userId = newUserId;
+           
+           const userRef = doc(firestore, 'users', newUserId);
+           const [firstName, ...lastNameParts] = clientData.name.split(' ');
+           const newUserProfile: UserInfo = {
+               id: newUserId,
+               franchiseId: franchiseId,
+               role: 'client',
+               firstName: firstName,
+               lastName: lastNameParts.join(' ') || '',
+               email: clientData.contactEmail,
+               isActive: true,
+               createdAt: new Date().toISOString(),
+           };
+           batch.set(userRef, newUserProfile);
+        }
+
+        batch.update(clientRef, finalData);
+
+      } else { // Creating a new client
         if (!clientData.password) {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
@@ -112,23 +137,14 @@ export default function ClientsPage() {
         batch.set(userRef, newUserProfile);
       }
 
-      batch.commit().then(() => {
-        toast({
-          title: editingClient ? "Cliente Atualizado!" : "Cliente Criado!",
-          description: `Os dados de ${clientData.name} foram salvos com sucesso.`,
-        });
-        setIsNewClientDialogOpen(false);
-        setEditingClient(null);
-      }).catch((error: any) => {
-        const permissionError = new FirestorePermissionError({
-            path: `/franchises/${franchiseId}/clients`,
-            operation: editingClient ? 'update' : 'create',
-            requestResourceData: clientData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-      }).finally(() => {
-        setIsSaving(false);
+      await batch.commit();
+
+      toast({
+        title: isEditing ? "Cliente Atualizado!" : "Cliente Criado!",
+        description: `Os dados de ${clientData.name} foram salvos com sucesso.`,
       });
+      setIsNewClientDialogOpen(false);
+      setEditingClient(null);
   
     } catch (error: any) {
         let description = "Ocorreu um erro ao salvar os dados do cliente.";
@@ -142,6 +158,7 @@ export default function ClientsPage() {
             title: "Erro ao Salvar",
             description: description,
         });
+    } finally {
         setIsSaving(false);
     }
   };

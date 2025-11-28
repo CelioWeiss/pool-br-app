@@ -18,7 +18,7 @@ export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franc
 
 interface NewClientFormProps {
   technicians: Technician[];
-  onSave: (data: NewClientFormData) => void;
+  onSave: (data: NewClientFormData, clientId?: string) => void;
   onCancel: () => void;
   client?: Client | null;
   isSaving: boolean;
@@ -57,6 +57,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
 
 
     const isEditing = !!client;
+    const showPasswordFields = !isEditing || (isEditing && !client.userId);
     
     useEffect(() => {
         if (client) {
@@ -95,7 +96,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!isEditing && password !== confirmPassword) {
+        if (showPasswordFields && password !== confirmPassword) {
             toast({
                 variant: 'destructive',
                 title: 'Erro',
@@ -118,11 +119,11 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             serviceDays: serviceDays,
         };
 
-        if (!isEditing) {
+        if (showPasswordFields) {
             clientData.password = password;
         }
 
-        onSave(clientData);
+        onSave(clientData, client?.id);
     };
 
     return (
@@ -135,7 +136,7 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="email">Email de Contato</Label>
-                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || isEditing} />
+                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || (isEditing && !!client.userId) } />
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="phone">Telefone de Contato</Label>
@@ -225,17 +226,17 @@ export function NewClientForm({ technicians, onSave, onCancel, client = null, is
                 </div>
             </fieldset>
 
-            {!isEditing && (
+            {showPasswordFields && (
                 <fieldset className="border-t pt-4 space-y-4">
-                    <legend className="text-sm font-medium text-muted-foreground">Acesso ao Portal do Cliente</legend>
+                    <legend className="text-sm font-medium text-muted-foreground">{isEditing ? "Criar Acesso ao Portal" : "Acesso ao Portal do Cliente"}</legend>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
                             <Label htmlFor="password">Senha</Label>
-                            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isSaving}/>
+                            <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required={showPasswordFields} disabled={isSaving}/>
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="confirmPassword">Confirmar Senha</Label>
-                            <Input id="confirmPassword" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isSaving}/>
+                            <Input id="confirmPassword" type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required={showPasswordFields} disabled={isSaving}/>
                         </div>
                     </div>
                 </fieldset>
