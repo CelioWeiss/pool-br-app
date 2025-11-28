@@ -152,12 +152,12 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
           
             <div className="grid gap-2">
                 <Label htmlFor="technicianId">Técnico Responsável</Label>
-                <Select value={technicianId || ''} onValueChange={(val) => setTechnicianId(val)} disabled={isSaving}>
+                <Select value={technicianId ?? ''} onValueChange={(val) => setTechnicianId(val === 'none' ? null : val)} disabled={isSaving}>
                     <SelectTrigger>
                         <SelectValue placeholder="Selecione um técnico" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">Nenhum</SelectItem>
+                        <SelectItem value="none">Nenhum</SelectItem>
                         {technicians.map(tech => (
                             <SelectItem key={tech.id} value={tech.id}>{tech.firstName} {tech.lastName}</SelectItem>
                         ))}
