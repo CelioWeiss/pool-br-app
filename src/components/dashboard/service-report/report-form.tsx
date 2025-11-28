@@ -17,7 +17,6 @@ import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useFirestore, FirestorePermissionError, errorEmitter } from "@/firebase";
 import { writeBatch, doc, collection } from "firebase/firestore";
-import { uploadImage } from "@/ai/flows/upload-image-flow";
 
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
@@ -74,11 +73,11 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      if (file.size > 1 * 1024 * 1024) { // 1MB limit
         toast({
           variant: "destructive",
           title: "Arquivo muito grande",
-          description: "Por favor, selecione uma imagem com menos de 2MB."
+          description: "Por favor, selecione uma imagem com menos de 1MB."
         });
         return;
       }
@@ -120,16 +119,9 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
 
         const reportRef = doc(collection(firestore, `franchises/${franchiseId}/serviceReports`));
         
-        // Upload images to external service and get URLs
-        const imageUploadPromises = previews
-            .filter((p): p is string => p !== null)
-            .map(imageDataUri => uploadImage({ imageDataUri }));
-        
-        const uploadedImageResults = await Promise.all(imageUploadPromises);
-        const photoUrls = uploadedImageResults.map(result => result.imageUrl);
+        const photoUrls = previews.filter((p): p is string => p !== null);
 
-
-        const newReportData: Omit<ServiceReport, 'id' | 'createdAt'> = {
+        const newReportData: Omit<ServiceReport, 'id'|'createdAt'> = {
             franchiseId,
             appointmentId,
             technicianId,
@@ -230,7 +222,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
             <Card>
                 <CardHeader>
                     <CardTitle>Upload de Fotos</CardTitle>
-                    <CardDescription>Anexe até 4 fotos do serviço.</CardDescription>
+                    <CardDescription>Anexe até 4 fotos do serviço (máx 1MB cada).</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-2 gap-4">
                     {[0, 1, 2, 3].map(index => (
