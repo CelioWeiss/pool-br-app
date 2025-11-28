@@ -11,6 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { v4 as uuidv4 } from 'uuid';
+import FormData from 'form-data';
 
 const UploadImageInputSchema = z.object({
   imageDataUri: z
@@ -35,13 +36,16 @@ export async function uploadImage(
 async function uploadImageToPostimages(
   base64Image: string
 ): Promise<string> {
-  const formData = new FormData();
-  formData.append('token', '19a48ae66735528347f35e893e43a9a83852e6f4'); 
-  formData.append('upload', base64Image);
+  const form = new FormData();
+  form.append('token', '19a48ae66735528347f35e893e43a9a83852e6f4'); 
+  
+  // The API expects the base64 string directly, not as a file/blob
+  form.append('upload', base64Image);
 
   const response = await fetch('https://api.postimages.org/1/upload', {
     method: 'POST',
-    body: formData,
+    body: form as any, // Cast to any to handle type mismatch with Node's fetch
+    headers: form.getHeaders(), // Use getHeaders() from form-data package
   });
 
   if (!response.ok) {
