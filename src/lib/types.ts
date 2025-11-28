@@ -42,6 +42,7 @@ export interface Client {
   contactPhone: string;
   contactEmail: string;
   franchiseId: string;
+  avatarUrl?: string;
   // poolDetails is deprecated, moved to ServiceLocation
   // poolDetails: string;
   // technicianId is deprecated, moved to ServiceLocation

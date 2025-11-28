@@ -91,6 +91,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     <div className="space-y-8">
       <div className="flex items-center gap-6">
         <Avatar className="h-24 w-24 border-4 border-primary">
+          <AvatarImage src={client.avatarUrl} alt={client.name} />
           <AvatarFallback className="text-3xl">{clientInitials}</AvatarFallback>
         </Avatar>
         <div>

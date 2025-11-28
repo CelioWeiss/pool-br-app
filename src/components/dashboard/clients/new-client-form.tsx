@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { Client, ContractType } from '@/lib/types';
 import { DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { User, UploadCloud } from 'lucide-react';
 
 export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> {
     password?: string;
@@ -29,6 +31,7 @@ const contractTypes: { value: ContractType, label: string }[] = [
 
 export function NewClientForm({ onSave, onCancel, client = null, isSaving }: NewClientFormProps) {
     const { toast } = useToast();
+    const avatarFileInputRef = useRef<HTMLInputElement>(null);
     const [name, setName] = useState('');
     const [contactName, setContactName] = useState('');
     const [email, setEmail] = useState('');
@@ -38,6 +41,8 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
     const [monthlyFee, setMonthlyFee] = useState<number | string>('');
     const [dueDay, setDueDay] = useState<number | undefined>(undefined);
     const [contractType, setContractType] = useState<ContractType | undefined>(undefined);
+    const [avatarUrl, setAvatarUrl] = useState<string | undefined>('');
+
 
     const isEditing = !!client;
     const showPasswordFields = !isEditing || (isEditing && !client.userId);
@@ -51,6 +56,7 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             setMonthlyFee(client.monthlyFee || '');
             setDueDay(client.dueDay || undefined);
             setContractType(client.contractType || undefined);
+            setAvatarUrl(client.avatarUrl || '');
         } else {
             setName('');
             setContactName('');
@@ -61,8 +67,29 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             setMonthlyFee('');
             setDueDay(undefined);
             setContractType(undefined);
+            setAvatarUrl('');
         }
     }, [client]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.size > 1024 * 1024) { // 1MB limit
+                toast({
+                    variant: "destructive",
+                    title: "Arquivo muito grande",
+                    description: "Por favor, selecione uma imagem com menos de 1MB."
+                });
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setAvatarUrl(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
 
     const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -81,6 +108,7 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             contactName: contactName || name,
             contactPhone: phone,
             contactEmail: email,
+            avatarUrl: avatarUrl,
             monthlyFee: Number(monthlyFee),
             dueDay: dueDay,
             contractType: contractType,
@@ -95,25 +123,46 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
 
     return (
         <form onSubmit={handleSubmit} className="grid gap-4 pt-4 max-h-[70vh] overflow-y-auto px-1">
-            <div className="grid gap-2">
-                <Label htmlFor="name">Nome do Cliente (Empresa ou Pessoa)</Label>
-                <Input id="name" value={name} onChange={e => setName(e.target.value)} required disabled={isSaving} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                 <div className="grid gap-2">
-                    <Label htmlFor="contactName">Nome de Contato</Label>
-                    <Input id="contactName" value={contactName} onChange={e => setContactName(e.target.value)} required disabled={isSaving} />
+            <div className="grid gap-2 items-center grid-cols-3">
+                <div className="flex flex-col items-center gap-2">
+                     <Avatar className="h-20 w-20">
+                        <AvatarImage src={avatarUrl} alt={name} />
+                        <AvatarFallback><User className="h-10 w-10" /></AvatarFallback>
+                    </Avatar>
+                    <Button type="button" size="sm" variant="outline" onClick={() => avatarFileInputRef.current?.click()}>
+                        <UploadCloud className="mr-2 h-4 w-4" />
+                        Alterar
+                    </Button>
+                     <Input
+                      id="avatarUrlInput"
+                      ref={avatarFileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={handleFileChange}
+                  />
                 </div>
+                <div className="col-span-2 space-y-2">
+                    <div className="grid gap-2">
+                        <Label htmlFor="name">Nome do Cliente (Empresa ou Pessoa)</Label>
+                        <Input id="name" value={name} onChange={e => setName(e.target.value)} required disabled={isSaving} />
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="contactName">Nome de Contato</Label>
+                        <Input id="contactName" value={contactName} onChange={e => setContactName(e.target.value)} required disabled={isSaving} />
+                    </div>
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="phone">Telefone de Contato</Label>
                     <Input id="phone" value={phone} onChange={e => setPhone(e.target.value)} required disabled={isSaving} />
                 </div>
-            </div>
-
-             <div className="grid gap-2">
-                <Label htmlFor="email">Email de Contato</Label>
-                <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || (isEditing && !!client.userId) } />
+                 <div className="grid gap-2">
+                    <Label htmlFor="email">Email de Contato</Label>
+                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || (isEditing && !!client.userId) } />
+                </div>
             </div>
             
             <fieldset className="border-t pt-4 space-y-4">

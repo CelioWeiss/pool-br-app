@@ -62,6 +62,7 @@ export default function ClientsPage() {
           contactName: clientData.contactName,
           contactPhone: clientData.contactPhone,
           contactEmail: clientData.contactEmail,
+          avatarUrl: clientData.avatarUrl,
           monthlyFee: clientData.monthlyFee,
           dueDay: clientData.dueDay,
           contractType: clientData.contractType,

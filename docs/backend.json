@@ -121,6 +121,10 @@
           "description": "The email address of the client.",
           "format": "email"
         },
+        "avatarUrl": {
+          "type": "string",
+          "description": "URL for the client's profile picture."
+        },
         "contractDetails": {
           "type": "string",
           "description": "Details about the client's contract."
