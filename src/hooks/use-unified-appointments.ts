@@ -11,11 +11,11 @@ import {
   eachDayOfInterval,
   getDay,
   set,
-  format,
-  isSameDay
+  format
 } from 'date-fns';
 
 const dayOfWeekMap: Record<DayOfWeek, number> = {
+  // Sunday is 0, Monday is 1, etc.
   domingo: 0,
   segunda: 1,
   terca: 2,
@@ -75,7 +75,10 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
             const serviceDaysAsNumbers = location.serviceDays.map(d => dayOfWeekMap[d]);
       
             daysInMonth.forEach(day => {
-              if (serviceDaysAsNumbers.includes(getDay(day))) {
+              // getDay() from date-fns returns 0 for Sunday, 1 for Monday etc. which matches our map.
+              const currentDayOfWeek = getDay(day);
+
+              if (serviceDaysAsNumbers.includes(currentDayOfWeek)) {
                 const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
                 const key = `${location.id}-${format(day, 'yyyy-MM-dd')}`;
       
