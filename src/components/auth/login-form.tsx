@@ -14,7 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 export function LoginForm() {
   const { login, isLoggingIn } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = React.useState('master@poolbr.com');
+  const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState(''); // Senha em branco por padrão
   const { toast } = useToast();
 
