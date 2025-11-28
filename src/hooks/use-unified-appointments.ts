@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import type { Appointment, ServiceLocation, DayOfWeek } from '@/lib/types';
 import { 
   startOfMonth,
@@ -24,13 +24,19 @@ const dayOfWeekMap: Record<DayOfWeek, number> = {
   sabado: 6,
 };
 
-
+// This hook now unifies manual appointments with automatically generated recurring appointments
+// for a given month, providing a complete schedule.
 export function useUnifiedAppointments(franchiseId: string | null | undefined, month: Date) {
     const firestore = useFirestore();
 
-    const [allLocations, setAllLocations] = useState<ServiceLocation[]>([]);
-    const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+    // Fetch all locations for the franchise directly
+    const allLocationsQuery = useMemoFirebase(() => {
+        if (!firestore || !franchiseId) return null;
+        return query(collection(firestore, `franchises/${franchiseId}/locations`));
+    }, [firestore, franchiseId]);
+    const { data: allLocations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(allLocationsQuery);
 
+    // Fetch manual appointments as before
     const manualAppointmentsQuery = useMemoFirebase(() => {
         if (!firestore || !franchiseId) return null;
         return collection(firestore, 'franchises', franchiseId, 'appointments');
@@ -38,30 +44,7 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
 
     const { data: manualAppointments, isLoading: isLoadingManualAppointments } = useCollection<Appointment>(manualAppointmentsQuery);
 
-    useEffect(() => {
-        if (!firestore || !franchiseId) {
-            setIsLoadingLocations(false);
-            return;
-        };
-        setIsLoadingLocations(true);
-        const fetchAllLocations = async () => {
-            const clientsSnapshot = await getDocs(query(collection(firestore, `franchises/${franchiseId}/clients`)));
-            const locationsPromises = clientsSnapshot.docs.map(clientDoc => 
-                getDocs(collection(firestore, `franchises/${franchiseId}/clients/${clientDoc.id}/locations`))
-            );
-            const locationsSnapshots = await Promise.all(locationsPromises);
-            const allLocs: ServiceLocation[] = [];
-            locationsSnapshots.forEach(locSnap => {
-                locSnap.docs.forEach(doc => {
-                    allLocs.push({ id: doc.id, ...doc.data() } as ServiceLocation);
-                });
-            });
-            setAllLocations(allLocs);
-            setIsLoadingLocations(false);
-        }
-        fetchAllLocations();
-    }, [firestore, franchiseId]);
-
+    // Memoized calculation to combine manual and recurring appointments
     const allAppointments = useMemo(() => {
         if (isLoadingLocations || isLoadingManualAppointments) {
           return [];
@@ -113,8 +96,7 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
 
       return {
         allAppointments,
-        allLocations,
+        allLocations: allLocations || [],
         isLoading: isLoadingLocations || isLoadingManualAppointments,
       };
-
 }

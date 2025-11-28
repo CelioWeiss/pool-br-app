@@ -80,6 +80,10 @@
         "avatarUrl": {
             "type": "string",
             "description": "URL for the user's profile picture."
+        },
+        "isActive": {
+            "type": "boolean",
+            "description": "Whether the user account is active."
         }
       },
       "required": [
@@ -132,6 +136,18 @@
         "contractDetails": {
           "type": "string",
           "description": "Details about the client's contract."
+        },
+        "monthlyFee": {
+          "type": "number",
+          "description": "The monthly fee charged to the client."
+        },
+        "dueDay": {
+            "type": "integer",
+            "description": "The day of the month the payment is due (1-31)."
+        },
+        "isActive": {
+            "type": "boolean",
+            "description": "Whether the client is currently active."
         }
       },
       "required": [
@@ -227,7 +243,7 @@
           "type": "string",
           "description": "Reference to Technician assigned to the appointment."
         },
-        "scheduledTime": {
+        "scheduledDateTime": {
           "type": "string",
           "description": "The date and time the appointment is scheduled for.",
           "format": "date-time"
@@ -247,7 +263,7 @@
         "clientId",
         "locationId",
         "technicianId",
-        "scheduledTime",
+        "scheduledDateTime",
         "status"
       ]
     },
@@ -404,6 +420,24 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the video was posted." }
       },
       "required": ["id", "title", "videoUrl", "category", "createdAt"]
+    },
+    "Payment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Payment",
+      "description": "Represents a monthly payment record for a client.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the payment." },
+        "franchiseId": { "type": "string", "description": "The ID of the franchise this payment belongs to." },
+        "clientId": { "type": "string", "description": "The ID of the client this payment is for." },
+        "amount": { "type": "number", "description": "The amount of the payment." },
+        "dueDate": { "type": "string", "format": "date-time", "description": "The date the payment is due." },
+        "paidAt": { "type": "string", "format": "date-time", "description": "The date the payment was made." },
+        "status": { "type": "string", "enum": ["pending", "paid"], "description": "The status of the payment." },
+        "month": { "type": "integer", "description": "The month of the payment (1-12)." },
+        "year": { "type": "integer", "description": "The year of the payment." }
+      },
+      "required": ["id", "franchiseId", "clientId", "amount", "dueDate", "status", "month", "year"]
     }
   },
   "auth": {
@@ -471,16 +505,15 @@
         }
       },
       {
-        "path": "/franchises/{franchiseId}/clients/{clientId}/locations/{locationId}",
+        "path": "/franchises/{franchiseId}/locations/{locationId}",
         "definition": {
-            "entityName": "ServiceLocation",
-            "schema": { "$ref": "#/backend/entities/ServiceLocation" },
-            "description": "Stores the specific service locations for a client.",
-            "params": [
-                { "name": "franchiseId", "description": "The ID of the franchise." },
-                { "name": "clientId", "description": "The ID of the client." },
-                { "name": "locationId", "description": "The unique ID of the service location." }
-            ]
+          "entityName": "ServiceLocation",
+          "schema": { "$ref": "#/backend/entities/ServiceLocation" },
+          "description": "Top-level collection for all service locations across all franchises for efficient querying. Contains denormalized franchiseId and clientId.",
+          "params": [
+            { "name": "franchiseId", "description": "The ID of the franchise." },
+            { "name": "locationId", "description": "The unique ID of the service location." }
+          ]
         }
       },
       {
@@ -565,8 +598,20 @@
             { "name": "videoId", "description": "The unique ID of the video." }
           ]
         }
+      },
+      {
+        "path": "/franchises/{franchiseId}/payments/{paymentId}",
+        "definition": {
+            "entityName": "Payment",
+            "schema": { "$ref": "#/backend/entities/Payment" },
+            "description": "Stores monthly payment records for all clients within a franchise.",
+            "params": [
+                { "name": "franchiseId", "description": "The ID of the franchise." },
+                { "name": "paymentId", "description": "The unique ID of the payment record." }
+            ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\n\n**Key Design Choices & Justifications:**\n\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\n4.  **/franchises/{franchiseId}/clients/{clientId}/locations/{locationId}:** A new sub-collection to handle multiple service addresses for a single client, each with its own QR code target.\n5.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\n6.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. The `franchiseId` in the path establishes the relationship.\n7.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\n8.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\n9.  **/universityVideos/{videoId}:** This is a new top-level collection to store educational videos. It's a global resource managed by master users and viewable by all authenticated users, so it doesn't belong under any specific franchise.\n\n**Authorization Independence:**\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\n\n**QAPs (Rules are not Filters):**\n*   **Structural Segregation:** The use of subcollections for franchise-specific data remains a core principle. This simplifies security rules and prevents the need to filter data within a large collection. For example, all documents within `/franchises/{franchiseId}/clients` belong to that franchise and can be secured with a single rule checking for ownership.\n\n**DBAC (Database-Based Access Control):**\n*   The `role` field in the `users` collection is the foundation of DBAC. Security rules check this field to determine user permissions for creating, reading, and writing data. There are no custom claims."
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\\n\\n**Key Design Choices & Justifications:**\\n\\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\\n4.  **/franchises/{franchiseId}/locations/{locationId}:** A new top-level collection `locations` is introduced to store all service locations across all franchises. This significantly optimizes queries for recurring appointments, as we no longer need to perform a subcollection query for every client. Each location document contains `franchiseId` and `clientId` for security and data retrieval.\\n5.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\\n6.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. These represent manually created or edited appointments and override any auto-generated ones for a specific day and location.\\n7.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\\n8.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\\n9.  **/franchises/{franchiseId}/payments/{paymentId}:** This is a new subcollection to store payment records. It allows franchise owners to manage all payments in one place, simplifying queries for financial reporting.\\n10.  **/universityVideos/{videoId}:** This is a new top-level collection to store educational videos. It's a global resource managed by master users and viewable by all authenticated users, so it doesn't belong under any specific franchise.\\n\\n**Authorization Independence:**\\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\\n\\n**QAPs (Rules are not Filters):**\\n*   **Structural Segregation:** The use of subcollections for franchise-specific data and the new top-level `locations` collection are core to this design. This simplifies security rules and prevents the need to filter data within a large collection."
   }
 }

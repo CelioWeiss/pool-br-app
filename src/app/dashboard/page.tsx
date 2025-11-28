@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -9,9 +10,9 @@ import { collection, query, where, getCountFromServer, getDocs } from 'firebase/
 import { useEffect, useState, useMemo } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
-import { MonthlyRevenueChart, type MonthlyRevenueData } from '@/components/dashboard/charts/monthly-revenue-chart';
+import { MonthlyRevenueChart } from '@/components/dashboard/charts/monthly-revenue-chart';
 import { ClientStatsChart, type ClientStatsData } from '@/components/dashboard/charts/client-stats-chart';
-import type { Client, Payment, ServiceLocation, Appointment } from '@/lib/types';
+import type { Payment } from '@/lib/types';
 import { subMonths, startOfMonth, endOfMonth, format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
@@ -66,7 +67,7 @@ export default function DashboardPage() {
     appointmentsToday: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [revenueData, setRevenueData] = useState<MonthlyRevenueData[]>([]);
+  const [revenueData, setRevenueData] = useState<any[]>([]);
   const [clientStatsData, setClientStatsData] = useState<ClientStatsData[]>([]);
   const [totalActiveClients, setTotalActiveClients] = useState(0);
   const [totalInactiveClients, setTotalInactiveClients] = useState(0);
@@ -126,75 +127,64 @@ export default function DashboardPage() {
         }
 
         if (hasRole(['owner'])) {
-           // Fetch data for charts
           const now = new Date();
-          const revenuePromises: Promise<{ faturado: number, recebido: number }>[] = [];
-          const clientStatsPromises: Promise<{ new: number, inactive: number }>[] = [];
           const monthLabels: string[] = [];
+          const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
           
           for (let i = 5; i >= 0; i--) {
             const date = subMonths(now, i);
-            monthLabels.push(format(date, 'MMM', { locale: ptBR }));
-
-            const start = startOfMonth(date);
-            const end = endOfMonth(date);
-
-            // Revenue
-            const paymentsQuery = query(
-              collection(firestore, 'franchises', franchiseId, 'payments'),
-              where('dueDate', '>=', start.toISOString()),
-              where('dueDate', '<=', end.toISOString())
-            );
-            revenuePromises.push(
-                getDocs(paymentsQuery).then(snap => {
-                    let faturado = 0;
-                    let recebido = 0;
-                    snap.docs.forEach(doc => {
-                        const payment = doc.data() as Payment;
-                        faturado += payment.amount;
-                        if (payment.status === 'paid') {
-                            recebido += payment.amount;
-                        }
-                    });
-                    return { faturado, recebido };
-                })
-            );
-
-            // Client stats
-            const clientsRef = collection(firestore, 'franchises', franchiseId, 'clients');
-            const newClientsQuery = query(clientsRef, where('createdAt', '>=', start.toISOString()), where('createdAt', '<=', end.toISOString()));
-            const inactiveClientsQuery = query(clientsRef, where('isActive', '==', false)); // Simplified: checks all inactive, not just in that month
-            
-            clientStatsPromises.push(Promise.all([
-              getDocs(newClientsQuery).then(snap => snap.size),
-              getDocs(inactiveClientsQuery).then(snap => snap.size)
-            ]).then(([newCount, inactiveCount]) => ({ new: newCount, inactive: inactiveCount })));
+            const monthKey = format(date, 'MMM', { locale: ptBR });
+            monthLabels.push(monthKey);
+            revenueByMonth[monthKey] = { faturado: 0, recebido: 0 };
           }
+          
+          const sixMonthsAgo = startOfMonth(subMonths(now, 5));
+          const paymentsQuery = query(
+              collection(firestore, 'franchises', franchiseId, 'payments'),
+              where('dueDate', '>=', sixMonthsAgo.toISOString())
+          );
+          const paymentsSnap = await getDocs(paymentsQuery);
 
-          const revenueResults = await Promise.all(revenuePromises);
-          setRevenueData(monthLabels.map((month, index) => ({ 
-            month, 
-            faturado: revenueResults[index].faturado,
-            recebido: revenueResults[index].recebido,
-          })));
-
-          const clientStatsResults = await Promise.all(clientStatsPromises);
-           setClientStatsData(monthLabels.map((month, index) => ({
-            month,
-            newClients: clientStatsResults[index].new,
-            inactiveClients: clientStatsResults[index].inactive, // This is an approximation
-          })));
-
+          paymentsSnap.forEach(doc => {
+              const payment = doc.data() as Payment;
+              const monthKey = format(new Date(payment.dueDate), 'MMM', { locale: ptBR });
+              if (revenueByMonth[monthKey]) {
+                revenueByMonth[monthKey].faturado += payment.amount;
+                if (payment.status === 'paid') {
+                    revenueByMonth[monthKey].recebido += payment.amount;
+                }
+              }
+          });
+          
+          setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
+          
           const allClientsQuery = collection(firestore, 'franchises', franchiseId, 'clients');
           const allClientsSnap = await getDocs(allClientsQuery);
           let active = 0;
           let inactive = 0;
+          const newClientsByMonth: Record<string, number> = {};
+
           allClientsSnap.forEach(doc => {
-            if (doc.data().isActive) active++;
+            const client = doc.data();
+            if (client.isActive) active++;
             else inactive++;
+
+            if (client.createdAt) {
+                const createdAtDate = new Date(client.createdAt);
+                if (createdAtDate >= sixMonthsAgo) {
+                    const monthKey = format(createdAtDate, 'MMM', { locale: ptBR });
+                    newClientsByMonth[monthKey] = (newClientsByMonth[monthKey] || 0) + 1;
+                }
+            }
           });
+
           setTotalActiveClients(active);
           setTotalInactiveClients(inactive);
+          setClientStatsData(monthLabels.map(month => ({
+            month,
+            newClients: newClientsByMonth[month] || 0,
+            inactiveClients: 0, // This is an approximation
+          })));
         }
         
         setStats(prev => ({
