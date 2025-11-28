@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, MoreHorizontal, Edit, UserX } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Edit, UserX, UserCheck } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
@@ -38,6 +38,7 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
+  const [clientToActivate, setClientToActivate] = useState<Client | null>(null);
 
 
   const isOwner = userInfo?.role === 'owner';
@@ -100,7 +101,7 @@ export default function ClientsPage() {
         const newUserId = userCredential.user.uid;
 
         const clientRef = doc(collection(firestore, 'franchises', franchiseId, 'clients'));
-        const newClient: Omit<Client, 'createdAt' | 'id'> = {
+        const newClient: Omit<Client, 'id' | 'createdAt'> = {
           userId: newUserId,
           franchiseId: franchiseId,
           isActive: true,
@@ -171,7 +172,6 @@ export default function ClientsPage() {
     try {
         await updateDoc(clientRef, { isActive: false });
         
-        // Optionally deactivate the user profile as well
         if (clientToDeactivate.userId) {
             const userRef = doc(firestore, 'users', clientToDeactivate.userId);
             await updateDoc(userRef, { isActive: false });
@@ -189,7 +189,42 @@ export default function ClientsPage() {
     }
   };
   
-  const activeClients = useMemo(() => clientList?.filter(c => c.isActive !== false) || [], [clientList]);
+  const handleActivateClient = async () => {
+    if (!clientToActivate || !firestore || !franchiseId) return;
+
+    const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', clientToActivate.id);
+    try {
+        await updateDoc(clientRef, { isActive: true });
+        
+        if (clientToActivate.userId) {
+            const userRef = doc(firestore, 'users', clientToActivate.userId);
+            await updateDoc(userRef, { isActive: true });
+        }
+
+        toast({
+            title: "Cliente Ativado!",
+            description: `${clientToActivate.name} foi reativado com sucesso.`,
+        });
+    } catch (error) {
+        console.error("Error activating client: ", error);
+        toast({ variant: "destructive", title: "Erro", description: "Não foi possível ativar o cliente." });
+    } finally {
+        setClientToActivate(null);
+    }
+  };
+  
+  const { activeClients, inactiveClients } = useMemo(() => {
+    const active: Client[] = [];
+    const inactive: Client[] = [];
+    (clientList || []).forEach(c => {
+        if (c.isActive === false) {
+            inactive.push(c);
+        } else {
+            active.push(c);
+        }
+    });
+    return { activeClients: active, inactiveClients: inactive };
+  }, [clientList]);
 
   return (
     <>
@@ -282,7 +317,7 @@ export default function ClientsPage() {
                     </TableRow>
                   )) : (
                     <TableRow>
-                        <TableCell colSpan={4} className="text-center">Nenhum cliente encontrado.</TableCell>
+                        <TableCell colSpan={4} className="text-center">Nenhum cliente ativo encontrado.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -290,6 +325,40 @@ export default function ClientsPage() {
             )}
           </CardContent>
         </Card>
+
+        {inactiveClients.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Clientes Inativos</CardTitle>
+              <CardDescription>Lista de clientes que foram inativados.</CardDescription>
+            </CardHeader>
+            <CardContent>
+               <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Contato</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inactiveClients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell className="font-medium">{client.name}</TableCell>
+                      <TableCell>{client.contactEmail}</TableCell>
+                      <TableCell className="text-right">
+                         <Button variant="outline" size="sm" onClick={() => setClientToActivate(client)}>
+                            <UserCheck className="mr-2 h-4 w-4" />
+                            Ativar
+                         </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
        <AlertDialog open={!!clientToDeactivate} onOpenChange={(open) => !open && setClientToDeactivate(null)}>
@@ -303,6 +372,21 @@ export default function ClientsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setClientToDeactivate(null)}>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeactivateClient} className={buttonVariants({ variant: "destructive" })}>Inativar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!clientToActivate} onOpenChange={(open) => !open && setClientToActivate(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ativar Cliente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação reativará o cliente <span className="font-bold">{clientToActivate?.name}</span>. Ele voltará a aparecer na lista de clientes ativos. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setClientToActivate(null)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleActivateClient}>Ativar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -60,7 +60,7 @@ export interface ServiceLocation {
   createdAt: string; // ISO string
 }
 
-export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> {
+export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt' | 'isActive'> {
     password?: string;
 }
 
