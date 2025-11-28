@@ -59,12 +59,14 @@ export default function ClientsPage() {
       const batch = writeBatch(firestore);
   
       // Explicitly define the type for dataToSave to ensure it matches Client properties
-      const dataToSave: Partial<Pick<Client, 'name' | 'contactName' | 'contactPhone' | 'contactEmail' | 'avatarUrl'>> = {
+      const dataToSave: Partial<Pick<Client, 'name' | 'contactName' | 'contactPhone' | 'contactEmail' | 'avatarUrl' | 'monthlyFee' | 'dueDay'>> = {
           name: clientData.name,
           contactName: clientData.contactName,
           contactPhone: clientData.contactPhone,
           contactEmail: clientData.contactEmail,
           avatarUrl: clientData.avatarUrl,
+          monthlyFee: clientData.monthlyFee,
+          dueDay: clientData.dueDay,
       };
 
       if (isEditing) {

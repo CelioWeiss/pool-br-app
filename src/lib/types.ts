@@ -40,6 +40,8 @@ export interface Client {
   contactEmail: string;
   franchiseId: string;
   avatarUrl?: string;
+  monthlyFee?: number;
+  dueDay?: number;
   createdAt: string; // ISO string
 }
 
@@ -137,4 +139,18 @@ export interface UniversityVideo {
     thumbnailUrl: string;
     category: VideoCategory;
     createdAt: string; // ISO string
+}
+
+export type PaymentStatus = 'pending' | 'paid';
+
+export interface Payment {
+    id: string;
+    franchiseId: string;
+    clientId: string;
+    amount: number;
+    dueDate: string; // ISO string
+    paidAt?: string; // ISO string
+    status: PaymentStatus;
+    month: number; // e.g., 1 for January
+    year: number;
 }

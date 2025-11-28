@@ -94,6 +94,10 @@ service cloud.firestore {
 
       match /clients/{clientId} {
         allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
+        
+        match /locations/{locationId} {
+            allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
+        }
       }
       
       match /appointments/{appointmentId} {
@@ -112,6 +116,11 @@ service cloud.firestore {
       
       match /quotes/{quoteId} {
         // Allow master or the franchise owner to manage quotes.
+        allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+
+      match /payments/{paymentId} {
+        // Allow master or the franchise owner to manage payments.
         allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
