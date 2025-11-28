@@ -113,7 +113,7 @@ export function ServiceReportForm({ appointment, client }: { appointment: Appoin
     const formData = new FormData(e.currentTarget);
     const rawData = Object.fromEntries(formData.entries());
 
-    const { appointmentId, franchiseId, clientId, technicianId } = appointment;
+    const { id: appointmentId, franchiseId, clientId, technicianId } = appointment;
     
     try {
         const batch = writeBatch(firestore);
