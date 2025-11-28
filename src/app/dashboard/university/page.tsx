@@ -1,18 +1,17 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import type { UniversityVideo } from '@/lib/types';
+import { collection, addDoc, deleteDoc, doc } from 'firebase/firestore';
+import type { UniversityVideo, VideoCategory } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Trash2, BookOpen } from 'lucide-react';
+import { PlusCircle, BookOpen } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { NewVideoForm } from '@/components/dashboard/university/new-video-form';
+import { NewVideoForm, type NewVideoFormData } from '@/components/dashboard/university/new-video-form';
 import { VideoCard } from '@/components/dashboard/university/video-card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
@@ -33,7 +32,7 @@ export default function UniversityPage() {
 
     const isMaster = hasRole('master');
 
-    const handleSaveVideo = async (data: { title: string; description: string; videoUrl: string; }) => {
+    const handleSaveVideo = async (data: NewVideoFormData) => {
         if (!firestore) return;
         setIsSaving(true);
         
@@ -43,7 +42,8 @@ export default function UniversityPage() {
 
             const thumbnailUrl = `https://img.youtube.com/vi/${youtubeVideoId}/hqdefault.jpg`;
             
-            await addDoc(collection(firestore, 'universityVideos'), {
+            const videosRef = collection(firestore, 'universityVideos');
+            await addDoc(videosRef, {
                 ...data,
                 thumbnailUrl,
                 createdAt: new Date().toISOString(),
@@ -84,7 +84,35 @@ export default function UniversityPage() {
         }
     }
 
-    const sortedVideos = videos?.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const categorizedVideos = useMemo(() => {
+        if (!videos) return {};
+        
+        const sorted = [...videos].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        return sorted.reduce((acc, video) => {
+            const category = video.category || 'Outros';
+            if (!acc[category]) {
+                acc[category] = [];
+            }
+            acc[category].push(video);
+            return acc;
+        }, {} as Record<string, UniversityVideo[]>);
+
+    }, [videos]);
+
+    const categoryOrder: VideoCategory[] = ['Institucional', 'Treinamentos', 'Técnico'];
+
+    const sortedCategories = useMemo(() => {
+        return Object.keys(categorizedVideos).sort((a, b) => {
+            const indexA = categoryOrder.indexOf(a as VideoCategory);
+            const indexB = categoryOrder.indexOf(b as VideoCategory);
+            if (indexA === -1 && indexB === -1) return a.localeCompare(b);
+            if (indexA === -1) return 1;
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+        });
+    }, [categorizedVideos]);
+
 
     return (
         <>
@@ -121,7 +149,7 @@ export default function UniversityPage() {
                     </div>
                 )}
                 
-                {!isLoading && (!sortedVideos || sortedVideos.length === 0) && (
+                {!isLoading && sortedCategories.length === 0 && (
                     <div className="flex flex-col items-center justify-center text-center py-16 px-4 rounded-lg border-2 border-dashed">
                         <BookOpen className="h-16 w-16 text-muted-foreground mb-4" />
                         <h2 className="text-2xl font-semibold tracking-tight">Nenhum Conteúdo Disponível</h2>
@@ -129,15 +157,22 @@ export default function UniversityPage() {
                     </div>
                 )}
 
-                {!isLoading && sortedVideos && sortedVideos.length > 0 && (
-                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {sortedVideos.map(video => (
-                            <VideoCard 
-                                key={video.id} 
-                                video={video} 
-                                isMaster={isMaster} 
-                                onDelete={() => setVideoToDelete(video)} 
-                            />
+                {!isLoading && sortedCategories.length > 0 && (
+                     <div className="space-y-12">
+                        {sortedCategories.map(category => (
+                            <section key={category}>
+                                <h2 className="text-2xl font-semibold tracking-tight border-b pb-2 mb-6">{category}</h2>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                    {categorizedVideos[category].map(video => (
+                                         <VideoCard 
+                                            key={video.id} 
+                                            video={video} 
+                                            isMaster={isMaster} 
+                                            onDelete={() => setVideoToDelete(video)} 
+                                        />
+                                    ))}
+                                </div>
+                            </section>
                         ))}
                     </div>
                 )}
@@ -161,5 +196,3 @@ export default function UniversityPage() {
         </>
     );
 }
-
-    

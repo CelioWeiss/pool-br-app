@@ -9,30 +9,42 @@ import { Textarea } from "@/components/ui/textarea";
 import { DialogFooter } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import type { VideoCategory } from '@/lib/types';
+
+export interface NewVideoFormData {
+    title: string;
+    description: string;
+    videoUrl: string;
+    category: VideoCategory;
+}
 
 interface NewVideoFormProps {
-    onSave: (data: { title: string; description: string; videoUrl: string }) => Promise<void>;
+    onSave: (data: NewVideoFormData) => Promise<void>;
     onCancel: () => void;
     isSaving: boolean;
 }
+
+const videoCategories: VideoCategory[] = ['Institucional', 'Treinamentos', 'Técnico'];
 
 export function NewVideoForm({ onSave, onCancel, isSaving }: NewVideoFormProps) {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [videoUrl, setVideoUrl] = useState('');
+    const [category, setCategory] = useState<VideoCategory | undefined>();
     const { toast } = useToast();
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title || !videoUrl) {
+        if (!title || !videoUrl || !category) {
             toast({
                 variant: 'destructive',
                 title: 'Campos Obrigatórios',
-                description: 'Título e URL do vídeo são obrigatórios.'
+                description: 'Título, URL e Categoria são obrigatórios.'
             });
             return;
         }
-        onSave({ title, description, videoUrl });
+        onSave({ title, description, videoUrl, category });
     }
 
     return (
@@ -40,6 +52,19 @@ export function NewVideoForm({ onSave, onCancel, isSaving }: NewVideoFormProps) 
             <div className="space-y-2">
                 <Label htmlFor="title">Título do Vídeo</Label>
                 <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required disabled={isSaving} />
+            </div>
+             <div className="space-y-2">
+                <Label htmlFor="category">Categoria</Label>
+                <Select value={category} onValueChange={(value: VideoCategory) => setCategory(value)} required>
+                    <SelectTrigger id="category">
+                        <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {videoCategories.map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="space-y-2">
                 <Label htmlFor="videoUrl">URL do Vídeo (YouTube)</Label>
@@ -58,5 +83,3 @@ export function NewVideoForm({ onSave, onCancel, isSaving }: NewVideoFormProps) 
         </form>
     );
 }
-
-    

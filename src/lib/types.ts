@@ -119,13 +119,14 @@ export interface Quote {
   createdAt: string; // ISO string
 }
 
+export type VideoCategory = 'Institucional' | 'Treinamentos' | 'Técnico';
+
 export interface UniversityVideo {
     id: string;
     title: string;
     description: string;
     videoUrl: string;
     thumbnailUrl: string;
+    category: VideoCategory;
     createdAt: string; // ISO string
 }
-
-    
