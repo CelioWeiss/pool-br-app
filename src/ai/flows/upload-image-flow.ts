@@ -12,7 +12,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { v4 as uuidv4 } from 'uuid';
 
-export const UploadImageInputSchema = z.object({
+const UploadImageInputSchema = z.object({
   imageDataUri: z
     .string()
     .describe(
@@ -21,7 +21,7 @@ export const UploadImageInputSchema = z.object({
 });
 export type UploadImageInput = z.infer<typeof UploadImageInputSchema>;
 
-export const UploadImageOutputSchema = z.object({
+const UploadImageOutputSchema = z.object({
   imageUrl: z.string().url().describe('The direct URL of the uploaded image.'),
 });
 export type UploadImageOutput = z.infer<typeof UploadImageOutputSchema>;
