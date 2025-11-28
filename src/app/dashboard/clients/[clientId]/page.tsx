@@ -1,6 +1,7 @@
 
 "use client";
 
+import React from "react";
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -28,8 +29,8 @@ const InfoCard = ({ title, value, icon: Icon }: { title: string, value: string |
 );
 
 
-export default function ClientProfilePage({ params }: { params: { clientId: string } }) {
-  const { clientId } = params;
+export default function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
+  const { clientId } = React.use(params);
   const { userInfo } = useAuth();
   const firestore = useFirestore();
   
