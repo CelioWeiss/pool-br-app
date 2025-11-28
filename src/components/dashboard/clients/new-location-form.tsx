@@ -83,7 +83,7 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
         };
 
         try {
-            const locationsRef = collection(firestore, `franchises/${franchiseId}/clients/${clientId}/locations`);
+            const locationsRef = collection(firestore, `franchises/${franchiseId}/locations`);
             await addDoc(locationsRef, locationData);
 
             toast({
@@ -94,7 +94,7 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
         } catch (error) {
             console.error("Error adding service location:", error);
              const permissionError = new FirestorePermissionError({
-                path: `franchises/${franchiseId}/clients/${clientId}/locations`,
+                path: `franchises/${franchiseId}/locations`,
                 operation: 'create',
                 requestResourceData: locationData,
             });
@@ -191,3 +191,5 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
         </form>
     )
 }
+
+    

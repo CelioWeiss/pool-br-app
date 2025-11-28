@@ -77,7 +77,7 @@ export function ClientDashboard() {
 
   // Find the service location for this client
   const locationsQuery = useMemoFirebase(() =>
-    firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/clients/${clientId}/locations`), limit(1)) : null,
+    firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/locations`), where('clientId', '==', clientId), limit(1)) : null,
   [firestore, franchiseId, clientId]);
   const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsQuery);
   const primaryLocation = useMemo(() => locations?.[0], [locations]);
@@ -210,3 +210,5 @@ export function ClientDashboard() {
     </div>
   );
 }
+
+    

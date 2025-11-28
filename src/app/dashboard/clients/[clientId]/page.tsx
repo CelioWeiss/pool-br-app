@@ -49,7 +49,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
   
   const locationsCollectionRef = useMemoFirebase(() =>
-    firestore && franchiseId && clientId ? collection(firestore, 'franchises', franchiseId, 'clients', clientId, 'locations') : null,
+    firestore && franchiseId && clientId ? query(collection(firestore, 'franchises', franchiseId, 'locations'), where('clientId', '==', clientId)) : null,
     [firestore, franchiseId, clientId]
   );
   const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsCollectionRef);
@@ -191,3 +191,5 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     </div>
   );
 }
+
+    

@@ -81,7 +81,7 @@ service cloud.firestore {
       }
 
       match /clients/{clientId} {
-        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && getUserRole(request.auth.uid) == 'client');
       }
       
       match /locations/{locationId} {
@@ -116,3 +116,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
