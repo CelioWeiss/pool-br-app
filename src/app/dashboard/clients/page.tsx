@@ -60,9 +60,7 @@ export default function ClientsPage() {
   
     try {
       const batch = writeBatch(firestore);
-      let newUserId: string | null = null;
   
-      // This is a partial type because some fields might be undefined from the form
       const dataToSave: Partial<Client> = {
           name: clientData.name,
           address: clientData.address,
@@ -87,7 +85,7 @@ export default function ClientsPage() {
         }
 
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
-        newUserId = userCredential.user.uid;
+        const newUserId = userCredential.user.uid;
 
         const clientRef = doc(collection(firestore, 'franchises', franchiseId, 'clients'));
         const newClient: Client = {
@@ -95,8 +93,8 @@ export default function ClientsPage() {
           userId: newUserId,
           franchiseId: franchiseId,
           createdAt: new Date().toISOString(),
-          ...dataToSave, // Spread the rest of the data
-        } as Client; // Cast to Client to ensure all fields are there
+          ...dataToSave,
+        } as Client;
         batch.set(clientRef, newClient);
         
         const userRef = doc(firestore, 'users', newUserId);

@@ -55,7 +55,7 @@ export interface Client {
   serviceDays?: DayOfWeek[];
 }
 
-export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'locationLatitude' | 'locationLongitude'>{
+export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId'>{
     name: string;
     contactEmail: string;
     contactName: string;
