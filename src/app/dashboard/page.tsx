@@ -7,6 +7,7 @@ import { ClientDashboard } from '@/components/dashboard/client/client-dashboard'
 import { useFirestore } from '@/firebase';
 import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
+import { PendingClients } from '@/components/dashboard/pending-clients';
 
 const StatCard = ({
   title,
@@ -164,7 +165,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* We can add charts or recent activity here in the future */}
+        {hasRole('owner') && userInfo.franchiseId && <PendingClients franchiseId={userInfo.franchiseId} />}
       </div>
     </div>
   );
