@@ -8,6 +8,8 @@ import { useFirestore } from '@/firebase';
 import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
+import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
+
 
 const StatCard = ({
   title,
@@ -87,7 +89,7 @@ export default function DashboardPage() {
           counts.technicians = techniciansSnap.data().count;
         }
 
-        if (hasRole(['owner', 'technician']) && userInfo.franchiseId) {
+        if (hasRole(['owner']) && userInfo.franchiseId) {
           const apptQuery = query(
             collection(
               firestore,
@@ -116,6 +118,10 @@ export default function DashboardPage() {
 
   if (hasRole('client')) {
     return <ClientDashboard />;
+  }
+
+  if (hasRole('technician')) {
+    return <TechnicianDashboard />;
   }
 
   return (
@@ -154,7 +160,7 @@ export default function DashboardPage() {
             isLoading={isLoading}
           />
         )}
-        {hasRole(['owner', 'technician']) && (
+        {hasRole(['owner']) && (
           <StatCard
             title="Serviços Agendados"
             value={stats.appointments}
