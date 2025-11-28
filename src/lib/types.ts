@@ -2,6 +2,7 @@
 
 
 
+
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -13,6 +14,7 @@ export interface UserInfo {
   franchiseId: string | null;
   isActive: boolean;
   createdAt: string; // ISO string
+  avatarUrl?: string;
 }
 
 export interface Franchise {

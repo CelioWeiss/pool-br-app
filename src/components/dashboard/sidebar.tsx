@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import React from 'react';
@@ -35,7 +36,6 @@ export function AppSidebar() {
   const pathname = usePathname();
   const { userInfo, hasRole, logout } = useAuth();
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
-  const avatarUrl = PlaceHolderImages.find(p => p.id.startsWith('avatar'))?.imageUrl;
 
 
   if (!userInfo) return null;
@@ -83,7 +83,7 @@ export function AppSidebar() {
       <div className="p-4 border-t border-sidebar-border mt-auto">
         <div className="flex items-center gap-3">
           <Avatar>
-            <AvatarImage src={avatarUrl} alt={userInfo.firstName} />
+            <AvatarImage src={userInfo.avatarUrl} alt={userInfo.firstName} />
             <AvatarFallback>{userInfo.firstName.charAt(0)}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col text-sm truncate">
@@ -98,3 +98,4 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
+

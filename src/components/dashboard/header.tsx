@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -9,13 +10,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LogOut, User as UserIcon } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 export function AppHeader() {
   const { userInfo, logout } = useAuth();
   const isMobile = useIsMobile();
-
-  const avatarUrl = PlaceHolderImages.find(p => p.id.startsWith('avatar'))?.imageUrl;
 
   return (
     <header className="sticky top-0 z-10 flex h-14 items-center gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
@@ -28,7 +26,7 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={avatarUrl} alt={userInfo.firstName} />
+                <AvatarImage src={userInfo.avatarUrl} alt={userInfo.firstName} />
                 <AvatarFallback>{userInfo.firstName.charAt(0)}</AvatarFallback>
               </Avatar>
             </Button>
