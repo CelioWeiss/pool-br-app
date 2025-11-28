@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import type { Appointment, Technician, Client, DayOfWeek, ServiceLocation } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,7 +22,7 @@ import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -56,19 +56,7 @@ export default function SchedulePage() {
   , [firestore, franchiseId]);
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   
-  const locationsQuery = useMemoFirebase(() => {
-    if (!firestore || !franchiseId) return null;
-    // This is not ideal for performance, but for this structure it's necessary.
-    // A better approach would be a root-level 'locations' collection if the app scales.
-    return query(collection(firestore, 'franchises', franchiseId, 'clients'), where('franchiseId', '==', franchiseId))
-  }, [firestore, franchiseId]);
-  
   // We need to fetch all locations for all clients in the franchise to build the schedule
-  const serviceLocationsCollection = useMemoFirebase(() => 
-    firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null, 
-  [firestore, franchiseId]);
-
-  // This is a simplified approach. For large franchises, querying all locations could be slow.
   const [allLocations, setAllLocations] = useState<ServiceLocation[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
 
@@ -292,6 +280,3 @@ export default function SchedulePage() {
     </div>
   );
 }
-
-// Dummy getDocs for type-checking, since the real one is from firebase/firestore
-const getDocs = (query: any) => Promise.resolve({ docs: [] as any[] });
