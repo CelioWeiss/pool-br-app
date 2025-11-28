@@ -17,9 +17,12 @@ service cloud.firestore {
     function isFranchiseOwner(franchiseId) {
       // Robust check: ensures document exists before trying to access its data.
       let franchiseDoc = get(/databases/$(database)/documents/franchises/$(franchiseId));
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return request.auth != null &&
              franchiseDoc.exists == true &&
-             franchiseDoc.data.ownerId == request.auth.uid;
+             franchiseDoc.data.ownerId == request.auth.uid &&
+             userDoc.exists == true &&
+             userDoc.data.role == 'owner';
     }
     
     function isUserInFranchise(franchiseId) {
@@ -31,15 +34,10 @@ service cloud.firestore {
     
     function getUserRole(userId) {
         let userDoc = get(/databases/$(database)/documents/users/$(userId));
-        return userDoc.data.role;
-    }
-    
-    function getClientUserId(clientId) {
-      // This function assumes the client document has a userId field.
-      // This needs to be adapted based on your actual data model.
-      // If clients are not users, this function needs to change.
-      let clientDoc = get(/databases/$(database)/documents/clients/$(clientId));
-      return clientDoc.data.userId;
+        if (userDoc.exists) {
+            return userDoc.data.role;
+        }
+        return null;
     }
 
     // =============================
@@ -49,6 +47,16 @@ service cloud.firestore {
       // A user can read/write their own profile.
       // A master user can read/write any user profile.
       allow read, write: if request.auth != null && (request.auth.uid == userId || isMaster());
+    }
+    
+    // =============================
+    // Collection: universityVideos
+    // =============================
+    match /universityVideos/{videoId} {
+      // Only master can create/update/delete.
+      allow write: if isMaster();
+      // Any authenticated user can read/list.
+      allow read: if request.auth != null;
     }
 
     // =============================
@@ -63,35 +71,35 @@ service cloud.firestore {
       allow list: if request.auth != null;
 
       // --- Secure Subcollections ---
-      // The franchise owner or a master user can manage all documents within their franchise.
       
       match /technicians/{technicianId} {
-        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
 
       match /clients/{clientId} {
-        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
+        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
       }
       
       match /appointments/{appointmentId} {
         // Master/Owner can do anything.
         // Technicians/Clients can read appointments in their own franchise.
-        // Specific checks for write/create could be more granular if needed.
-        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId) || 
+        allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId) || 
                                     (isUserInFranchise(franchiseId) && (getUserRole(request.auth.uid) == 'technician' || getUserRole(request.auth.uid) == 'client'));
       }
 
       match /serviceReports/{serviceReportId} {
         // Master/Owner can do anything.
         // Technicians/Clients can read reports in their own franchise.
-        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId) || 
+        allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId) || 
                                     (isUserInFranchise(franchiseId) && (getUserRole(request.auth.uid) == 'technician' || getUserRole(request.auth.uid) == 'client'));
       }
       
       match /quotes/{quoteId} {
-        // Allow master or the franchise owner to manage quotes within their franchise.
-        allow read, write, list: if isMaster() || isFranchiseOwner(franchiseId);
+        // Allow master or the franchise owner to manage quotes.
+        allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }
   }
 }
+
+    

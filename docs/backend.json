@@ -76,11 +76,14 @@
         "phone": {
           "type": "string",
           "description": "The phone number of the user."
+        },
+        "avatarUrl": {
+            "type": "string",
+            "description": "URL for the user's profile picture."
         }
       },
       "required": [
         "id",
-        "franchiseId",
         "role",
         "firstName",
         "lastName",
@@ -350,6 +353,21 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of quote creation." }
       },
       "required": ["id", "franchiseId", "clientName", "items", "totalValue", "status", "createdAt"]
+    },
+    "UniversityVideo": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UniversityVideo",
+      "description": "Represents an educational video for the University Pool feature.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the video." },
+        "title": { "type": "string", "description": "The title of the video." },
+        "description": { "type": "string", "description": "A brief description of the video content." },
+        "videoUrl": { "type": "string", "description": "The URL of the video (e.g., from YouTube)." },
+        "thumbnailUrl": { "type": "string", "description": "The URL of the video's thumbnail image." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the video was posted." }
+      },
+      "required": ["id", "title", "videoUrl", "createdAt"]
     }
   },
   "auth": {
@@ -487,9 +505,20 @@
             { "name": "quoteId", "description": "The unique ID of the quote." }
           ]
         }
+      },
+      {
+        "path": "/universityVideos/{videoId}",
+        "definition": {
+          "entityName": "UniversityVideo",
+          "schema": { "$ref": "#/backend/entities/UniversityVideo" },
+          "description": "Top-level collection for educational videos. Managed by master users, viewable by all authenticated users.",
+          "params": [
+            { "name": "videoId", "description": "The unique ID of the video." }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\n\n**Key Design Choices & Justifications:**\n\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\n4.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\n5.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. The `franchiseId` in the path establishes the relationship.\n6.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\n7.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\n\n**Authorization Independence:**\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\n\n**QAPs (Rules are not Filters):**\n*   **Structural Segregation:** The use of subcollections for franchise-specific data remains a core principle. This simplifies security rules and prevents the need to filter data within a large collection. For example, all documents within `/franchises/{franchiseId}/clients` belong to that franchise and can be secured with a single rule checking for ownership.\n\n**DBAC (Database-Based Access Control):**\n*   The `role` field in the `users` collection is the foundation of DBAC. Security rules check this field to determine user permissions for creating, reading, and writing data. There are no custom claims."
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence, clarity, and scalability for the Pool BR Limpeza e Manutenção application. It leverages structural segregation and denormalization to simplify security rules and support efficient data access patterns. The structure is heavily influenced by the need to manage Franchises and the Users that are part of them.\n\n**Key Design Choices & Justifications:**\n\n1.  **/franchises/{franchiseId}:** This collection stores the Franchise entities. It is the top-level entity, with Franchises containing Users, Clients, Technicians, Appointments, and Service Reports.\n2.  **/users/{userId}:** This top-level collection stores all User entities, regardless of their franchise. This is a critical change to simplify role-based access control and user management, particularly for franchise owners. The user document contains the `franchiseId` and their `role`.\n3.  **/franchises/{franchiseId}/clients/{clientId}:** This subcollection stores Client entities. The `franchiseId` in the path establishes the relationship.\n4.  **/franchises/{franchiseId}/technicians/{technicianId}:** This subcollection stores Technician entities. The `franchiseId` in the path establishes the relationship.\n5.  **/franchises/{franchiseId}/appointments/{appointmentId}:** This subcollection stores Appointment entities. The `franchiseId` in the path establishes the relationship.\n6.  **/franchises/{franchiseId}/serviceReports/{serviceReportId}:** This subcollection stores ServiceReport entities. The `franchiseId` in the path establishes the relationship.\n7.  **/franchises/{franchiseId}/quotes/{quoteId}:** This subcollection stores Quote entities. The `franchiseId` in the path establishes the relationship, allowing franchise owners to manage their own quotes.\n8.  **/universityVideos/{videoId}:** This is a new top-level collection to store educational videos. It's a global resource managed by master users and viewable by all authenticated users, so it doesn't belong under any specific franchise.\n\n**Authorization Independence:**\n*   Authorization is primarily based on checking the `role` and `franchiseId` fields within the `/users/{userId}` document. For example, the `isFranchiseOwner` function can now reliably check a single user document to authorize actions across all franchise-related subcollections.\n\n**QAPs (Rules are not Filters):**\n*   **Structural Segregation:** The use of subcollections for franchise-specific data remains a core principle. This simplifies security rules and prevents the need to filter data within a large collection. For example, all documents within `/franchises/{franchiseId}/clients` belong to that franchise and can be secured with a single rule checking for ownership.\n\n**DBAC (Database-Based Access Control):**\n*   The `role` field in the `users` collection is the foundation of DBAC. Security rules check this field to determine user permissions for creating, reading, and writing data. There are no custom claims."
   }
 }
 

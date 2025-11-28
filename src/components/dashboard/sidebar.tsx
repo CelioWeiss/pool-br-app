@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React from 'react';
@@ -18,6 +17,7 @@ import {
   Map, 
   LogOut,
   FileText,
+  BookOpen,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -29,6 +29,7 @@ const menuItems = [
   { href: '/dashboard/technicians', label: 'Técnicos', icon: Wrench, roles: ['owner'] },
   { href: '/dashboard/quotes', label: 'Orçamentos', icon: FileText, roles: ['master', 'owner'] },
   { href: '/dashboard/schedule', label: 'Agenda', icon: Calendar, roles: ['owner', 'technician'] },
+  { href: '/dashboard/university', label: 'Universidade', icon: BookOpen, roles: ['master', 'owner'] },
   { href: '/dashboard/map', label: 'Mapa', icon: Map, roles: ['master', 'owner'] },
 ];
 
@@ -99,3 +100,4 @@ export function AppSidebar() {
   );
 }
 
+    

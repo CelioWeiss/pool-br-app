@@ -1,8 +1,4 @@
 
-
-
-
-
 export type UserRole = 'master' | 'owner' | 'technician' | 'client';
 
 export interface UserInfo {
@@ -55,15 +51,8 @@ export interface Client {
   serviceDays?: DayOfWeek[];
 }
 
-export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId'>{
-    name: string;
-    contactEmail: string;
-    contactName: string;
-    contactPhone: string;
-    address: string;
-    poolDetails: string;
-    technicianId: string | null;
-    createdAt: string;
+export interface NewClientData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> {
+    password?: string;
 }
 
 export interface Technician {
@@ -128,6 +117,15 @@ export interface Quote {
   notes?: string;
   status: 'pending' | 'accepted' | 'rejected';
   createdAt: string; // ISO string
+}
+
+export interface UniversityVideo {
+    id: string;
+    title: string;
+    description: string;
+    videoUrl: string;
+    thumbnailUrl: string;
+    createdAt: string; // ISO string
 }
 
     
