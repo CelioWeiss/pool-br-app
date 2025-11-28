@@ -6,12 +6,13 @@ import type { Client, Payment } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, CheckCircle, Clock } from 'lucide-react';
+import { CheckCircle, Clock, Undo } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { Spinner } from '@/components/ui/spinner';
+
 
 export interface ReceivablesData {
     client: Client;
@@ -39,7 +40,7 @@ export function ReceivablesTable({ data }: ReceivablesTableProps) {
                 status: newStatus,
                 paidAt: newStatus === 'paid' ? new Date().toISOString() : null,
             });
-            toast({ title: "Status Atualizado", description: `O pagamento de ${payment.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} foi marcado como ${newStatus === 'paid' ? 'pago' : 'pendente'}.` });
+            toast({ title: "Status Atualizado", description: `O pagamento foi marcado como ${newStatus === 'paid' ? 'pago' : 'pendente'}.` });
         } catch (error) {
             console.error("Error updating payment status:", error);
             toast({ variant: 'destructive', title: "Erro ao Atualizar", description: "Não foi possível alterar o status do pagamento." });
@@ -96,26 +97,25 @@ export function ReceivablesTable({ data }: ReceivablesTableProps) {
                                 )}
                             </TableCell>
                             <TableCell className="text-right">
-                               <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" disabled={!payment || isUpdating}>
-                                            {isUpdating ? <Spinner size="small" /> : <MoreHorizontal />}
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent>
+                                {isUpdating ? (
+                                    <Button variant="outline" size="sm" disabled>
+                                        <Spinner size="small" />
+                                    </Button>
+                                ) : (
+                                    <>
                                         {status === 'pending' ? (
-                                            <DropdownMenuItem onClick={() => handleStatusChange(payment, 'paid')}>
+                                            <Button variant="default" size="sm" onClick={() => handleStatusChange(payment, 'paid')} disabled={!payment}>
                                                 <CheckCircle className="mr-2 h-4 w-4" />
                                                 Marcar como Pago
-                                            </DropdownMenuItem>
+                                            </Button>
                                         ) : (
-                                            <DropdownMenuItem onClick={() => handleStatusChange(payment, 'pending')}>
-                                                <Clock className="mr-2 h-4 w-4" />
-                                                Marcar como Pendente
-                                            </DropdownMenuItem>
+                                            <Button variant="secondary" size="sm" onClick={() => handleStatusChange(payment, 'pending')} disabled={!payment}>
+                                                <Undo className="mr-2 h-4 w-4" />
+                                                Estornar
+                                            </Button>
                                         )}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                    </>
+                                )}
                             </TableCell>
                         </TableRow>
                     );
