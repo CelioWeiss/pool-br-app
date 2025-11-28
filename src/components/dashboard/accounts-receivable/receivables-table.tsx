@@ -6,12 +6,13 @@ import type { Client, Payment } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Clock, Undo } from 'lucide-react';
+import { CheckCircle, Clock, Undo, MoreHorizontal, UserX } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { Spinner } from '@/components/ui/spinner';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 
 export interface ReceivablesData {
@@ -21,9 +22,10 @@ export interface ReceivablesData {
 
 interface ReceivablesTableProps {
     data: ReceivablesData[];
+    onDeactivateClient: (client: Client) => void;
 }
 
-export function ReceivablesTable({ data }: ReceivablesTableProps) {
+export function ReceivablesTable({ data, onDeactivateClient }: ReceivablesTableProps) {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [updatingId, setUpdatingId] = useState<string | null>(null);
@@ -96,7 +98,7 @@ export function ReceivablesTable({ data }: ReceivablesTableProps) {
                                     </Badge>
                                 )}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right space-x-2 flex justify-end items-center">
                                 {isUpdating ? (
                                     <Button variant="outline" size="sm" disabled>
                                         <Spinner size="small" />
@@ -116,6 +118,19 @@ export function ReceivablesTable({ data }: ReceivablesTableProps) {
                                         )}
                                     </>
                                 )}
+                                 <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                        <DropdownMenuItem onClick={() => onDeactivateClient(client)} className="text-destructive">
+                                            <UserX className="mr-2 h-4 w-4" />
+                                            Inativar Cliente
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </TableCell>
                         </TableRow>
                     );

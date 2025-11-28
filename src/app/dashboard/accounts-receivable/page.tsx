@@ -5,16 +5,18 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import type { Client, Payment } from '@/lib/types';
 import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, writeBatch, getDocs, doc, addDoc } from 'firebase/firestore';
+import { collection, query, where, writeBatch, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { ReceivablesTable, type ReceivablesData } from '@/components/dashboard/accounts-receivable/receivables-table';
 import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+
 
 export default function AccountsReceivablePage() {
     const { userInfo, hasRole } = useAuth();
@@ -25,11 +27,12 @@ export default function AccountsReceivablePage() {
     const franchiseId = userInfo?.franchiseId;
 
     // --- Data Fetching ---
-    const clientsCollection = useMemoFirebase(() =>
-        firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null,
+    const clientsQuery = useMemoFirebase(() =>
+        firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients'), where('isActive', '==', true)) : null,
         [firestore, franchiseId]
     );
-    const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
+
+    const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
 
     const paymentsQuery = useMemoFirebase(() => {
         if (!firestore || !franchiseId) return null;
@@ -46,6 +49,7 @@ export default function AccountsReceivablePage() {
     // --- Data processing and state management ---
     const [receivablesData, setReceivablesData] = useState<ReceivablesData[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
     
     // --- Generate payments for the current month if they don't exist ---
     useEffect(() => {
@@ -125,6 +129,31 @@ export default function AccountsReceivablePage() {
 
         setReceivablesData(combinedData);
     }, [clients, payments]);
+    
+    const handleDeactivateClient = async () => {
+        if (!clientToDeactivate || !firestore || !franchiseId) return;
+
+        const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', clientToDeactivate.id);
+        try {
+            await updateDoc(clientRef, { isActive: false });
+            
+            // Optionally deactivate the user profile as well
+            if (clientToDeactivate.userId) {
+                const userRef = doc(firestore, 'users', clientToDeactivate.userId);
+                await updateDoc(userRef, { isActive: false });
+            }
+
+            toast({
+                title: "Cliente Inativado!",
+                description: `${clientToDeactivate.name} foi marcado como inativo.`,
+            });
+        } catch (error) {
+            console.error("Error deactivating client: ", error);
+            toast({ variant: "destructive", title: "Erro", description: "Não foi possível inativar o cliente." });
+        } finally {
+            setClientToDeactivate(null);
+        }
+    };
 
 
     if (!hasRole('owner') || !franchiseId) {
@@ -170,10 +199,28 @@ export default function AccountsReceivablePage() {
                             <p className="ml-4">Processando pagamentos...</p>
                         </div>
                     ) : (
-                        <ReceivablesTable data={receivablesData} />
+                        <ReceivablesTable 
+                            data={receivablesData} 
+                            onDeactivateClient={setClientToDeactivate}
+                        />
                     )}
                 </CardContent>
             </Card>
+
+            <AlertDialog open={!!clientToDeactivate} onOpenChange={(open) => !open && setClientToDeactivate(null)}>
+                <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Inativar Cliente?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                    Esta ação marcará o cliente <span className="font-bold">{clientToDeactivate?.name}</span> como inativo. Ele não aparecerá mais nas listas principais e faturamento, mas seus dados serão mantidos. Deseja continuar?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setClientToDeactivate(null)}>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeactivateClient} className={buttonVariants({ variant: "destructive" })}>Inativar</AlertDialogAction>
+                </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
