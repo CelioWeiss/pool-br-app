@@ -1,0 +1,21 @@
+{
+  "name": "Pool BR Gestão de Piscinas",
+  "short_name": "Pool BR",
+  "description": "Gerenciamento de franquias e serviços de limpeza de piscinas",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2962FF",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/9f4MNdf7/Design-sem-nome-1-removebg-preview-1.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.postimg.cc/9f4MNdf7/Design-sem-nome-1-removebg-preview-1.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

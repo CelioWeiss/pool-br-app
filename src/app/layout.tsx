@@ -7,6 +7,7 @@ import { FirebaseClientProvider } from '@/firebase';
 export const metadata: Metadata = {
   title: 'Pool BR Limpeza e Manutenção',
   description: 'Gerenciamento de franquias e serviços de limpeza de piscinas',
+  manifest: '/manifest.webmanifest'
 };
 
 export default function RootLayout({
@@ -17,7 +18,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
