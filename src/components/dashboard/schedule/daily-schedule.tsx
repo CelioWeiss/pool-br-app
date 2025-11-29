@@ -9,7 +9,7 @@ import { Clock, Check, X, Calendar, PlayCircle, History, FileText } from 'lucide
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { addDoc, collection, doc } from 'firebase/firestore';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -18,7 +18,7 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
   const router = useRouter();
   const firestore = useFirestore();
   const { userInfo } = useAuth();
-  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const statusInfo = {
     scheduled: { icon: Clock, color: "bg-blue-500", label: "Agendado" },
@@ -30,42 +30,22 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
   
   const handleStartAppointment = async () => {
-    if (!firestore || !userInfo?.franchiseId) return;
-
-    setIsCreating(true);
-    let appointmentIdToRedirect = appointment.id;
-
+    if (!firestore || !userInfo?.franchiseId || appointment.id.startsWith('auto-')) return;
+  
+    setIsUpdating(true);
     try {
-        // If it's a recurring/auto-generated appointment, it needs to be created in the DB first.
-        if (appointment.id.startsWith('auto-')) {
-            const appointmentsRef = collection(firestore, 'franchises', userInfo.franchiseId, 'appointments');
-            const newAppointmentRef = doc(appointmentsRef); // Create a reference with a new ID
-            
-            const newAppointmentData: Appointment = {
-                id: newAppointmentRef.id, // Use the new ID
-                clientId: appointment.clientId,
-                locationId: appointment.locationId,
-                technicianId: appointment.technicianId,
-                franchiseId: appointment.franchiseId,
-                scheduledDateTime: appointment.scheduledDateTime,
-                status: 'in_progress', // Set to "in progress" immediately
-            };
-
-            await addDoc(appointmentsRef, newAppointmentData);
-            appointmentIdToRedirect = newAppointmentRef.id;
-        }
-        
-        router.push(`/relatorio/${appointmentIdToRedirect}`);
+      const appointmentRef = doc(firestore, `franchises/${userInfo.franchiseId}/appointments`, appointment.id);
+      await updateDoc(appointmentRef, { status: 'in_progress' });
+      router.push(`/relatorio/${appointment.id}`);
     } catch (error) {
-        console.error("Error creating appointment document:", error);
-        const permissionError = new FirestorePermissionError({
-            path: `franchises/${userInfo.franchiseId}/appointments`,
-            operation: 'create',
-            requestResourceData: appointment,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        setIsCreating(false);
-        return;
+      console.error("Error updating appointment status:", error);
+      const permissionError = new FirestorePermissionError({
+          path: `franchises/${userInfo.franchiseId}/appointments/${appointment.id}`,
+          operation: 'update',
+          requestResourceData: { status: 'in_progress' },
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      setIsUpdating(false);
     }
   };
 
@@ -89,9 +69,9 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
         </div>
       </div>
        {(appointment.status === 'scheduled' || appointment.status === 'in_progress') && (
-        <Button onClick={handleStartAppointment} size="sm" disabled={isCreating}>
-            {isCreating ? (
-                <><Spinner size="small" className="mr-2" /> Criando...</>
+        <Button onClick={handleStartAppointment} size="sm" disabled={isUpdating}>
+            {isUpdating ? (
+                <><Spinner size="small" className="mr-2" /> Atualizando...</>
             ) : (
                 <><PlayCircle className="mr-2 h-4 w-4" /> {appointment.status === 'in_progress' ? 'Continuar' : 'Iniciar'}</>
             )}
@@ -153,7 +133,7 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
     )
   }
 
-  const sortedPending = [...pendingAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
+  const sortedPending = [...pendingAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
   const sortedCompleted = [...completedAppointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
 
 

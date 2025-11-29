@@ -83,13 +83,16 @@ export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'can
 export interface Appointment {
   id: string;
   clientId: string;
-  locationId: string; // Added to specify which location
+  locationId: string;
   technicianId: string;
   franchiseId: string;
   scheduledDateTime: string; // ISO string
   status: AppointmentStatus;
   serviceReportId?: string;
+  createdAt?: any; // Can be FieldValue for serverTimestamp
+  createdBy?: 'auto-system' | 'manual';
 }
+
 
 export interface ServiceReport {
   id: string;

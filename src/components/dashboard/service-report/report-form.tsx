@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +16,8 @@ import type { Client, Appointment, ServiceReport, ServiceLocation } from "@/lib/
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useFirestore, FirestorePermissionError, errorEmitter } from "@/firebase";
-import { writeBatch, doc, collection, addDoc } from "firebase/firestore";
+import { useFirestore, FirestorePermissionError, errorEmitter, useDoc } from "@/firebase";
+import { writeBatch, doc, collection } from "firebase/firestore";
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -71,8 +71,34 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
   );
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-
   
+  const reportDocRef = useMemo(() => {
+    if (!firestore || !appointment.franchiseId || !appointment.serviceReportId) return null;
+    return doc(firestore, `franchises/${appointment.franchiseId}/serviceReports`, appointment.serviceReportId);
+  }, [firestore, appointment]);
+
+  const { data: existingReport, isLoading: isLoadingReport } = useDoc<ServiceReport>(reportDocRef);
+
+  useEffect(() => {
+    if(existingReport) {
+        // Populate form with existing report data
+        const paramKeys = Object.keys(parameters);
+        const existingParams: Record<string, number> = {};
+        for(const key of paramKeys) {
+            if(existingReport.hasOwnProperty(key)) {
+                existingParams[key] = (existingReport as any)[key];
+            }
+        }
+        setParameters(existingParams);
+        
+        // This is a simplified way to handle populating checkboxes and text areas.
+        // A more robust solution might involve managing their state explicitly.
+        // For photos, we just show them if they exist.
+        setPreviews([...(existingReport.photoUrls || []), null, null, null, null].slice(0, 4));
+    }
+  }, [existingReport]);
+
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -109,35 +135,23 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!firestore) return;
+    if (!firestore || existingReport) return;
     
     setIsSaving(true);
-    let { id: appointmentId, franchiseId, clientId, technicianId, locationId, status } = appointment;
+    const { franchiseId, clientId, technicianId, locationId } = appointment;
 
     try {
         const batch = writeBatch(firestore);
         
-        // If the appointment was auto-generated, create it in the database first
-        if (appointment.id.startsWith('auto-')) {
-            const newAppointmentRef = doc(collection(firestore, `franchises/${franchiseId}/appointments`));
-            const newAppointmentData: Omit<Appointment, 'id'> = {
-                ...appointment,
-                status: 'in_progress', // Update status
-            };
-            batch.set(newAppointmentRef, newAppointmentData);
-            appointmentId = newAppointmentRef.id;
-        }
-
         const newReportId = uuidv4();
         const reportRef = doc(firestore, `franchises/${franchiseId}/serviceReports`, newReportId);
 
         const formData = new FormData(e.currentTarget);
-        const rawData = Object.fromEntries(formData.entries());
         const photoUrls = previews.filter((p): p is string => p !== null);
 
         const newReportData: Omit<ServiceReport, 'id'> = {
             franchiseId,
-            appointmentId,
+            appointmentId: appointment.id,
             technicianId,
             clientId,
             locationId,
@@ -151,14 +165,14 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             temperature: parameters['temperature'],
             servicesPerformed: formData.getAll('servicesPerformed') as string[],
             missingProducts: formData.getAll('missingProducts') as string[],
-            observations: rawData.observations as string,
+            observations: formData.get("observations") as string,
             photoUrls: photoUrls,
             createdAt: new Date().toISOString(),
         };
         
         batch.set(reportRef, { ...newReportData, id: newReportId });
 
-        const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId);
+        const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointment.id);
         batch.update(appointmentRef, {
             serviceReportId: reportRef.id,
             status: 'completed',
@@ -172,14 +186,15 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             description: "O relatório de serviço foi salvo e o cliente será notificado.",
         });
         
-        router.push('/dashboard/schedule');
+        // Wait 2 seconds before redirecting to give user feedback
+        setTimeout(() => router.push('/dashboard/schedule'), 2000);
 
     } catch (err: any) {
         console.error("Error submitting report:", err);
         const permissionError = new FirestorePermissionError({
           path: `franchises/${franchiseId}/serviceReports`,
           operation: 'create',
-          requestResourceData: {}, // simplified
+          requestResourceData: {}, // simplified for brevity
         });
         errorEmitter.emit('permission-error', permissionError);
 
@@ -194,16 +209,26 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
   };
 
 
-  if (isSuccess) {
+  if (isSuccess || (existingReport && !isSaving)) {
     return (
         <Alert>
             <CheckCircle className="h-4 w-4" />
-            <AlertTitle>Relatório Enviado com Sucesso!</AlertTitle>
+            <AlertTitle>{isSuccess ? 'Relatório Enviado com Sucesso!' : 'Relatório Já Preenchido'}</AlertTitle>
             <AlertDescription>
-                Você será redirecionado para a agenda.
+                {isSuccess ? 'Você será redirecionado para a agenda.' : 'Este atendimento já foi finalizado. Você pode voltar para a agenda.'}
+                 <Button onClick={() => router.push('/dashboard/schedule')} className="mt-4 w-full">Voltar para a Agenda</Button>
             </AlertDescription>
         </Alert>
     )
+  }
+
+  if (isLoadingReport) {
+      return (
+          <div className="flex h-64 items-center justify-center">
+              <Spinner />
+              <p className="ml-4">Carregando relatório existente...</p>
+          </div>
+      )
   }
 
   return (
@@ -277,7 +302,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                 <CardContent className="grid grid-cols-2 gap-4">
                     {servicesPerformedItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} />
+                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} defaultChecked={existingReport?.servicesPerformed?.includes(item.label)} />
                             <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -291,7 +316,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                 <CardContent className="grid grid-cols-2 gap-4">
                     {missingProductsItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} />
+                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} defaultChecked={existingReport?.missingProducts?.includes(item.label)} />
                             <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -308,11 +333,12 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                         name="observations"
                         placeholder="Alguma observação importante sobre o serviço ou a piscina..."
                         rows={4}
+                        defaultValue={existingReport?.observations}
                     />
                 </CardContent>
             </Card>
             
-            <Button type="submit" disabled={isSaving} className="w-full" size="lg">
+            <Button type="submit" disabled={isSaving || !!existingReport} className="w-full" size="lg">
                 {isSaving ? <><Spinner size="small" className="mr-2"/> Finalizando...</> : "Finalizar Relatório"}
             </Button>
         </div>

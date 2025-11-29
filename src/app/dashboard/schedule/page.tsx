@@ -17,11 +17,12 @@ import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
+import { gerarAgendaDoMesNoFirestore } from '@/lib/schedule-generator';
 
 
 export default function SchedulePage() {
@@ -48,6 +49,18 @@ export default function SchedulePage() {
     allLocations, 
     isLoading: isLoadingAppointments 
   } = useUnifiedAppointments(franchiseId, currentDate);
+
+
+  useEffect(() => {
+    if (!firestore || !franchiseId || !allLocations.length) return;
+  
+    gerarAgendaDoMesNoFirestore({
+      firestore,
+      franchiseId,
+      locations: allLocations,
+      month: currentDate
+    });
+  }, [firestore, franchiseId, allLocations, currentDate]);
 
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('all');
   

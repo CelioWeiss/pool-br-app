@@ -5,43 +5,27 @@
 import { useMemo } from 'react';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Appointment, ServiceLocation, DayOfWeek } from '@/lib/types';
+import type { Appointment, ServiceLocation } from '@/lib/types';
 import { 
   startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  set,
-  format
+  endOfMonth
 } from 'date-fns';
 
-const dayOfWeekMap: Record<DayOfWeek, number> = {
-  // Sunday is 0, Monday is 1, etc.
-  domingo: 0,
-  segunda: 1,
-  terca: 2,
-  quarta: 3,
-  quinta: 4,
-  sexta: 5,
-  sabado: 6,
-};
-
-// This hook now unifies manual appointments with automatically generated recurring appointments
-// for a given month, providing a complete schedule.
+// This hook now only fetches existing appointments and locations.
+// The generation of recurring appointments is handled separately by a service function.
 export function useUnifiedAppointments(franchiseId: string | null | undefined, month: Date) {
     const firestore = useFirestore();
 
-    // Fetch all locations for the franchise directly
     const allLocationsQuery = useMemo(() => {
         if (!firestore || !franchiseId) return null;
         return query(collection(firestore, `franchises/${franchiseId}/locations`));
     }, [firestore, franchiseId]);
     const { data: allLocations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(allLocationsQuery);
 
-    // Fetch manual appointments for the current month interval
     const start = useMemo(() => startOfMonth(month), [month]);
     const end = useMemo(() => endOfMonth(month), [month]);
     
-    const manualAppointmentsQuery = useMemo(() => {
+    const appointmentsQuery = useMemo(() => {
         if (!firestore || !franchiseId) return null;
         return query(
             collection(firestore, 'franchises', franchiseId, 'appointments'),
@@ -50,60 +34,11 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
         );
     }, [firestore, franchiseId, start, end]);
 
-    const { data: manualAppointments, isLoading: isLoadingManualAppointments } = useCollection<Appointment>(manualAppointmentsQuery);
+    const { data: allAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
-    // Memoized calculation to combine manual and recurring appointments
-    const allAppointments = useMemo(() => {
-        if (isLoadingLocations || isLoadingManualAppointments) {
-          return [];
-        }
-      
-        const appointmentsMap = new Map<string, Appointment>();
-      
-        // 1. Add manual appointments first, they have priority
-        (manualAppointments || []).forEach(appt => {
-          const scheduledDate = new Date(appt.scheduledDateTime);
-          const key = `${appt.locationId}-${format(scheduledDate, 'yyyy-MM-dd')}`;
-          appointmentsMap.set(key, appt);
-        });
-      
-        // 2. Generate and add recurring appointments from service locations
-        const daysInMonth = eachDayOfInterval({ start: startOfMonth(month), end: endOfMonth(month) });
-      
-        (allLocations || []).forEach(location => {
-          if (location.serviceDays && location.serviceDays.length > 0 && location.technicianId) {
-            const serviceDaysAsNumbers = location.serviceDays.map(d => dayOfWeekMap[d]);
-      
-            daysInMonth.forEach(day => {
-              const currentDayOfWeek = day.getDay();
-
-              if (serviceDaysAsNumbers.includes(currentDayOfWeek)) {
-                const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
-                const key = `${location.id}-${format(day, 'yyyy-MM-dd')}`;
-      
-                if (!appointmentsMap.has(key)) {
-                  appointmentsMap.set(key, {
-                    id: `auto-${location.id}-${format(day, 'yyyy-MM-dd')}`,
-                    clientId: location.clientId,
-                    locationId: location.id,
-                    technicianId: location.technicianId,
-                    franchiseId: location.franchiseId,
-                    scheduledDateTime: scheduledDateTime.toISOString(),
-                    status: 'scheduled',
-                  });
-                }
-              }
-            });
-          }
-        });
-      
-        return Array.from(appointmentsMap.values());
-      }, [allLocations, manualAppointments, month, isLoadingLocations, isLoadingManualAppointments, start, end]);
-
-
-      return {
-        allAppointments,
-        allLocations: allLocations || [],
-        isLoading: isLoadingLocations || isLoadingManualAppointments,
-      };
+    return {
+      allAppointments: allAppointments || [],
+      allLocations: allLocations || [],
+      isLoading: isLoadingLocations || isLoadingAppointments,
+    };
 }
