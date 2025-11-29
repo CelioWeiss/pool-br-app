@@ -2,7 +2,7 @@
 import { collection, writeBatch, doc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { eachDayOfInterval, startOfMonth, endOfMonth, set, format } from "date-fns";
 import type { Firestore } from 'firebase/firestore';
-import type { ServiceLocation } from './types';
+import type { ServiceLocation, Appointment } from './types';
 
 const dayOfWeekMap = {
   domingo: 0,
@@ -68,7 +68,7 @@ export async function gerarAgendaDoMesNoFirestore({
         if (!existingKeys.has(key)) {
           const docRef = doc(appointmentsRef);
 
-          batch.set(docRef, {
+          const newAppointment: Omit<Appointment, 'createdAt'> = {
             id: docRef.id,
             clientId: location.clientId,
             locationId: location.id,
@@ -76,9 +76,10 @@ export async function gerarAgendaDoMesNoFirestore({
             franchiseId: location.franchiseId,
             scheduledDateTime: scheduledDateTime.toISOString(),
             status: "scheduled",
-            createdAt: serverTimestamp(),
             createdBy: "auto-system"
-          });
+          };
+
+          batch.set(docRef, newAppointment);
           hasNewAppointments = true;
         }
       }
@@ -86,6 +87,10 @@ export async function gerarAgendaDoMesNoFirestore({
   });
 
   if (hasNewAppointments) {
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch(e) {
+      console.error("Error committing schedule batch: ", e)
+    }
   }
 }
