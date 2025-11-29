@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import type { Appointment, Technician, Client, DayOfWeek, ServiceLocation } from '@/lib/types';
+import type { Appointment, Technician, Client, ServiceLocation } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ChevronLeft, ChevronRight, User } from 'lucide-react';
@@ -12,6 +12,8 @@ import {
   isSameDay,
   addMonths,
   subMonths,
+  startOfMonth,
+  endOfMonth
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
@@ -21,7 +23,6 @@ import { collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
 import { gerarAgendaDoMesNoFirestore } from '@/lib/schedule-generator';
 
 
@@ -44,15 +45,29 @@ export default function SchedulePage() {
   , [firestore, franchiseId]);
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
   
-  const { 
-    allAppointments, 
-    allLocations, 
-    isLoading: isLoadingAppointments 
-  } = useUnifiedAppointments(franchiseId, currentDate);
+  const allLocationsQuery = useMemo(() => {
+      if (!firestore || !franchiseId) return null;
+      return query(collection(firestore, `franchises/${franchiseId}/locations`));
+  }, [firestore, franchiseId]);
+  const { data: allLocations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(allLocationsQuery);
+  
+  const start = useMemo(() => startOfMonth(currentDate), [currentDate]);
+  const end = useMemo(() => endOfMonth(currentDate), [currentDate]);
+
+  const appointmentsQuery = useMemo(() => {
+      if (!firestore || !franchiseId) return null;
+      return query(
+          collection(firestore, 'franchises', franchiseId, 'appointments'),
+          where('scheduledDateTime', '>=', start.toISOString()),
+          where('scheduledDateTime', '<=', end.toISOString())
+      );
+  }, [firestore, franchiseId, start, end]);
+
+  const { data: allAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
 
   useEffect(() => {
-    if (!firestore || !franchiseId || !allLocations.length) return;
+    if (!firestore || !franchiseId || !allLocations || !allLocations.length) return;
   
     gerarAgendaDoMesNoFirestore({
       firestore,
@@ -65,15 +80,14 @@ export default function SchedulePage() {
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('all');
   
   const filteredAppointments = useMemo(() => {
-    let appointmentsToFilter = allAppointments;
+    let appointmentsToFilter = allAppointments || [];
     
     if (hasRole('technician') && userInfo?.id) {
-        // For technicians, filter by their userId, which is stored in the technician document
         const techDoc = technicians?.find(t => t.userId === userInfo.id);
         if (techDoc) {
             return appointmentsToFilter.filter(a => a.technicianId === techDoc.id);
         }
-        return []; // Technician document not found, return no appointments
+        return [];
     }
 
     if (hasRole('owner')) {
@@ -87,7 +101,7 @@ export default function SchedulePage() {
   }, [allAppointments, selectedTechnicianId, hasRole, userInfo?.id, technicians]);
   
   
-  const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
+  const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments || isLoadingLocations;
 
   const appointmentDates = useMemo(() => filteredAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [filteredAppointments]);
 
