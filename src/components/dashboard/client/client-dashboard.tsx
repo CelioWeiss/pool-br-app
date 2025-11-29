@@ -101,7 +101,7 @@ export function ClientDashboard() {
   const upcomingAppointment = useMemo(() => {
     if (!clientAppointments) return null;
     return clientAppointments
-      .filter(a => new Date(a.scheduledDateTime) >= new Date())
+      .filter(a => new Date(a.scheduledDateTime) >= new Date() && (a.status === 'scheduled' || a.status === 'in_progress'))
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
 
