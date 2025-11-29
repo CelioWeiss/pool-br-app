@@ -16,18 +16,18 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useMemo } from 'react';
 
-const ReportDetailCard = ({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) => (
-    <Card>
-        <CardHeader className="pb-2">
-            <CardTitle className="text-base font-medium flex items-center gap-2">
+const ReportDetailCard = ({ title, icon, children, className }: { title: string, icon: React.ReactNode, children: React.ReactNode, className?: string }) => (
+    <div className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}>
+        <div className="p-4">
+            <h3 className="text-base font-semibold flex items-center gap-2 text-muted-foreground">
                 {icon}
                 {title}
-            </CardTitle>
-        </CardHeader>
-        <CardContent>
-            {children}
-        </CardContent>
-    </Card>
+            </h3>
+            <div className="pt-2">
+                {children}
+            </div>
+        </div>
+    </div>
 );
 
 
@@ -68,14 +68,14 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
                 </ReportDetailCard>
             </div>
              {report.observations && (
-                <ReportDetailCard title="Observações" icon={<FileText className="h-4 w-4" />}>
-                    <p className="text-sm">{report.observations}</p>
+                <ReportDetailCard title="Observações do Técnico" icon={<FileText className="h-4 w-4" />}>
+                    <p className="text-sm whitespace-pre-wrap">{report.observations}</p>
                 </ReportDetailCard>
             )}
 
             {report.photoUrls && report.photoUrls.length > 0 && (
-                 <div className="space-y-2">
-                    <h4 className="font-medium flex items-center gap-2"><ImageIcon className="h-4 w-4" />Fotos do Atendimento</h4>
+                 <div className="space-y-4">
+                    <h3 className="font-semibold flex items-center gap-2 text-muted-foreground"><ImageIcon className="h-4 w-4" />Fotos do Atendimento</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {report.photoUrls.map((url, index) => (
                             <a key={index} href={url} target="_blank" rel="noopener noreferrer">
@@ -122,13 +122,8 @@ const AppointmentAccordionContent = ({ appointment }: { appointment: Appointment
     return (
         <div className="text-center py-6">
             <p className="text-muted-foreground text-sm mb-4">
-                O técnico ainda não finalizou o relatório para este atendimento.
+                O relatório para este atendimento ainda não foi finalizado pelo técnico.
             </p>
-            <Button asChild variant="outline" size="sm">
-                <Link href={`/relatorio/${appointment.id}`}>
-                    Finalizar Relatório (Técnico)
-                </Link>
-            </Button>
         </div>
     );
 }
@@ -159,7 +154,7 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
             <AccordionTrigger className="p-4 bg-card hover:bg-accent rounded-lg border data-[state=open]:rounded-b-none" disabled={!appt.serviceReportId && appt.status !== 'in_progress'}>
               <div className="flex items-center justify-between w-full">
                 <div className="flex flex-col text-left">
-                  <span className="font-bold">{format(new Date(appt.scheduledDateTime), "dd 'de' MMMM, yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                  <span className="font-bold">{format(new Date(appt.scheduledDateTime), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
                   <span className="text-sm text-muted-foreground">Técnico: {technician?.firstName || 'N/A'}</span>
                 </div>
                 <Badge variant={currentStatus.variant} className={currentStatus.className}>
@@ -168,7 +163,7 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
                 </Badge>
               </div>
             </AccordionTrigger>
-            <AccordionContent className="p-4 border border-t-0 rounded-lg rounded-t-none bg-card">
+            <AccordionContent className="p-6 border border-t-0 rounded-lg rounded-t-none bg-card">
                <AppointmentAccordionContent appointment={appt} />
             </AccordionContent>
           </AccordionItem>
