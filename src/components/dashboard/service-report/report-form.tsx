@@ -92,11 +92,10 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
         setParameters(existingParams);
         
         // This is a simplified way to handle populating checkboxes and text areas.
-        // A more robust solution might involve managing their state explicitly.
         // For photos, we just show them if they exist.
         setPreviews([...(existingReport.photoUrls || []), null, null, null, null].slice(0, 4));
     }
-  }, [existingReport]);
+  }, [existingReport, parameters]);
 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
@@ -210,16 +209,89 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
 
 
   if (isSuccess || (existingReport && !isSaving)) {
+    // If the form was just submitted successfully OR a report already exists, show view-only mode
+    const reportData = existingReport || null;
+    const isFormDisabled = true; // Always disable if we are in view mode
+
     return (
-        <Alert>
-            <CheckCircle className="h-4 w-4" />
-            <AlertTitle>{isSuccess ? 'Relatório Enviado com Sucesso!' : 'Relatório Já Preenchido'}</AlertTitle>
-            <AlertDescription>
-                {isSuccess ? 'Você será redirecionado para a agenda.' : 'Este atendimento já foi finalizado. Você pode voltar para a agenda.'}
-                 <Button onClick={() => router.push('/dashboard/schedule')} className="mt-4 w-full">Voltar para a Agenda</Button>
-            </AlertDescription>
-        </Alert>
-    )
+        <div className="space-y-6">
+            <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertTitle>{isSuccess ? 'Relatório Enviado com Sucesso!' : 'Visualizando Relatório Finalizado'}</AlertTitle>
+                <AlertDescription>
+                    {isSuccess ? 'Você será redirecionado para a agenda.' : 'Este atendimento já foi finalizado. As informações abaixo são somente para visualização.'}
+                     <Button onClick={() => router.push('/dashboard/schedule')} className="mt-4 w-full">Voltar para a Agenda</Button>
+                </AlertDescription>
+            </Alert>
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+              <div className="space-y-6">
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>Parâmetros da Água</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4 pt-4">
+                          {waterParameters.map(param => (
+                              <div key={param.key} className="flex justify-between items-center">
+                                  <Label htmlFor={param.key}>{param.name}</Label>
+                                  <span className="text-sm font-bold text-primary">{reportData?.[param.key as keyof ServiceReport] as string || 'N/A'} {param.unit}</span>
+                              </div>
+                          ))}
+                      </CardContent>
+                  </Card>
+                   <Card>
+                      <CardHeader>
+                          <CardTitle>Fotos do Atendimento</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-4">
+                        {(reportData?.photoUrls?.length || 0) > 0 ? reportData?.photoUrls.map((url, index) => (
+                           <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                                <Image src={url} alt={`Foto ${index + 1}`} width={300} height={400} className="rounded-md object-cover aspect-[3/4] w-full" />
+                           </a>
+                        )) : (
+                            <p className="text-sm text-muted-foreground col-span-2 text-center">Nenhuma foto foi enviada.</p>
+                        )}
+                      </CardContent>
+                  </Card>
+              </div>
+              <div className="space-y-6">
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>Serviços Realizados</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-2">
+                          {servicesPerformedItems.map(item => (
+                              <div key={item.id} className="flex items-center space-x-2">
+                                  <Checkbox id={`service-${item.id}`} checked={reportData?.servicesPerformed?.includes(item.label)} disabled={isFormDisabled} />
+                                  <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
+                              </div>
+                          ))}
+                      </CardContent>
+                  </Card>
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>Produtos Faltantes</CardTitle>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-2 gap-2">
+                          {missingProductsItems.map(item => (
+                              <div key={item.id} className="flex items-center space-x-2">
+                                  <Checkbox id={`product-${item.id}`} checked={reportData?.missingProducts?.includes(item.label)} disabled={isFormDisabled} />
+                                  <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
+                              </div>
+                          ))}
+                      </CardContent>
+                  </Card>
+                   <Card>
+                      <CardHeader>
+                          <CardTitle>Observações</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                          <Textarea value={reportData?.observations || 'Nenhuma observação.'} disabled={isFormDisabled} rows={4} />
+                      </CardContent>
+                  </Card>
+              </div>
+            </div>
+        </div>
+    );
   }
 
   if (isLoadingReport) {
@@ -302,7 +374,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                 <CardContent className="grid grid-cols-2 gap-4">
                     {servicesPerformedItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} defaultChecked={existingReport?.servicesPerformed?.includes(item.label)} />
+                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} />
                             <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -316,7 +388,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                 <CardContent className="grid grid-cols-2 gap-4">
                     {missingProductsItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} defaultChecked={existingReport?.missingProducts?.includes(item.label)} />
+                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} />
                             <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -333,7 +405,6 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                         name="observations"
                         placeholder="Alguma observação importante sobre o serviço ou a piscina..."
                         rows={4}
-                        defaultValue={existingReport?.observations}
                     />
                 </CardContent>
             </Card>
