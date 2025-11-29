@@ -104,6 +104,11 @@ export function ClientDashboard() {
       .filter(a => new Date(a.scheduledDateTime) >= new Date())
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
+
+  const completedAppointments = useMemo(() => {
+    if (!clientAppointments) return [];
+    return clientAppointments.filter(a => a.status === 'completed');
+  }, [clientAppointments]);
   
   const assignedTechnician: Technician | undefined = useMemo(() => {
     if (!primaryLocation?.technicianId || !technicians) return undefined;
@@ -201,7 +206,7 @@ export function ClientDashboard() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <AppointmentHistory appointments={clientAppointments || []} technicians={technicians || []} />
+                        <AppointmentHistory appointments={completedAppointments} technicians={technicians || []} />
                     </CardContent>
                 </Card>
             </div>
@@ -210,5 +215,3 @@ export function ClientDashboard() {
     </div>
   );
 }
-
-    
