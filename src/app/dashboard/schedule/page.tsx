@@ -78,9 +78,14 @@ export default function SchedulePage() {
 
   const appointmentDates = useMemo(() => filteredAppointments?.map(a => new Date(a.scheduledDateTime)) || [], [filteredAppointments]);
 
- const { pendingAppointments, completedAppointments } = useMemo(() => {
-    if (!selectedDate || !filteredAppointments) return { pendingAppointments: [], completedAppointments: [] };
-    
+ const [dailySchedule, setDailySchedule] = useState<{ pendingAppointments: Appointment[], completedAppointments: Appointment[] }>({ pendingAppointments: [], completedAppointments: [] });
+
+ useEffect(() => {
+    if (!selectedDate || !filteredAppointments) {
+      setDailySchedule({ pendingAppointments: [], completedAppointments: [] });
+      return;
+    }
+
     const todaysAppointments = filteredAppointments.filter(a => isSameDay(new Date(a.scheduledDateTime), selectedDate));
     
     const pending: Appointment[] = [];
@@ -94,8 +99,7 @@ export default function SchedulePage() {
       }
     });
 
-    return { pendingAppointments: pending, completedAppointments: completed };
-
+    setDailySchedule({ pendingAppointments: pending, completedAppointments: completed });
   }, [selectedDate, filteredAppointments]);
 
 
@@ -180,7 +184,7 @@ export default function SchedulePage() {
                 Atendimentos para {selectedDate ? format(selectedDate, "dd 'de' MMMM", { locale: ptBR }) : 'Nenhuma data selecionada'}
             </CardTitle>
             <CardDescription>
-                {isLoading ? 'Carregando agendamentos...' : `Encontrado(s) ${pendingAppointments.length} serviço(s) pendente(s) e ${completedAppointments.length} concluído(s).`}
+                {isLoading ? 'Carregando agendamentos...' : `Encontrado(s) ${dailySchedule.pendingAppointments.length} serviço(s) pendente(s) e ${dailySchedule.completedAppointments.length} concluído(s).`}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
@@ -190,8 +194,8 @@ export default function SchedulePage() {
               </div>
             ) : (
               <DailySchedule 
-                pendingAppointments={pendingAppointments}
-                completedAppointments={completedAppointments}
+                pendingAppointments={dailySchedule.pendingAppointments}
+                completedAppointments={dailySchedule.completedAppointments}
                 clients={clients || []}
                 technicians={technicians || []}
                 locations={allLocations || []}
