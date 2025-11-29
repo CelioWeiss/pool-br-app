@@ -45,17 +45,17 @@ service cloud.firestore {
                otherUserDoc.exists == true &&
                userDoc.data.franchiseId == otherUserDoc.data.franchiseId;
     }
+    
+    function isClientOwnerOfLocation() {
+        let clientDoc = get(/databases/$(database)/documents/franchises/$(resource.data.franchiseId)/clients/$(resource.data.clientId));
+        return clientDoc.exists == true && clientDoc.data.userId == request.auth.uid;
+    }
 
     // =============================
     // Collection: users
     // =============================
     match /users/{userId} {
-      // A user can read/write their own profile.
       allow write: if request.auth != null && request.auth.uid == userId;
-
-      // A user can read their own profile.
-      // A master user can read any profile.
-      // A user can read the profile of another user in the same franchise.
       allow read: if request.auth != null && (
         request.auth.uid == userId || 
         isMaster() ||
@@ -67,9 +67,7 @@ service cloud.firestore {
     // Collection: universityVideos
     // =============================
     match /universityVideos/{videoId} {
-      // Only master can create/update/delete.
       allow write: if isMaster();
-      // Any authenticated user can read/list.
       allow read: if request.auth != null;
     }
 
@@ -78,10 +76,7 @@ service cloud.firestore {
     // =============================
     match /franchises/{franchiseId} {
       
-      // Allow master and the specific franchise owner to read/write the franchise document.
       allow read, write: if isMaster() || isFranchiseOwner(franchiseId);
-      
-      // Any authenticated user can list franchises (e.g., for a "find a franchise" map).
       allow list: if request.auth != null;
 
       // --- Secure Subcollections ---
@@ -91,11 +86,12 @@ service cloud.firestore {
       }
 
       match /clients/{clientId} {
-        allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
-        
-        match /locations/{locationId} {
-            allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && getUserRole(request.auth.uid) == 'client');
-        }
+          allow read, list, create, write: if isMaster() || isFranchiseOwner(franchiseId);
+      }
+      
+      match /locations/{locationId} {
+          allow create, write: if isMaster() || isFranchiseOwner(franchiseId) || isClientOwnerOfLocation();
+          allow read, list: if isMaster() || isUserInFranchise(franchiseId);
       }
       
       match /appointments/{appointmentId} {
@@ -113,12 +109,10 @@ service cloud.firestore {
       }
       
       match /quotes/{quoteId} {
-        // Allow master or the franchise owner to manage quotes.
         allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId);
       }
 
       match /payments/{paymentId} {
-        // Allow master or the franchise owner to manage payments.
         allow read, write, list, create: if isMaster() || isFranchiseOwner(franchiseId);
       }
     }

@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,7 +87,7 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
 
         try {
             const locationRef = doc(firestore, `franchises/${franchiseId}/locations`, newLocationId);
-            await addDoc(collection(firestore, `franchises/${franchiseId}/locations`), locationData);
+            await setDoc(locationRef, locationData);
 
             toast({
                 title: "Local Adicionado!",
