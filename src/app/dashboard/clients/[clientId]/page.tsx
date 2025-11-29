@@ -8,12 +8,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Phone, Mail, History, PlusCircle, AlertTriangle, Clock } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
 import type { Client, Technician, Appointment, ServiceLocation } from '@/lib/types';
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc, useCollection } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ClientLocations } from '@/components/dashboard/clients/client-locations';
 import { NewLocationForm } from '@/components/dashboard/clients/new-location-form';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
@@ -42,25 +42,25 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
   const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
   // --- Data Fetching ---
-  const clientDocRef = useMemoFirebase(() =>
+  const clientDocRef = useMemo(() =>
     firestore && franchiseId && clientId ? doc(firestore, 'franchises', franchiseId, 'clients', clientId) : null,
     [firestore, franchiseId, clientId]
   );
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
   
-  const locationsCollectionRef = useMemoFirebase(() =>
+  const locationsCollectionRef = useMemo(() =>
     firestore && franchiseId && clientId ? query(collection(firestore, 'franchises', franchiseId, 'locations'), where('clientId', '==', clientId)) : null,
     [firestore, franchiseId, clientId]
   );
   const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsCollectionRef);
 
-  const techniciansCollection = useMemoFirebase(() =>
+  const techniciansCollection = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null,
     [firestore, franchiseId]
   );
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
 
-  const appointmentsQuery = useMemoFirebase(() =>
+  const appointmentsQuery = useMemo(() =>
     firestore && franchiseId && clientId ? query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('clientId', '==', clientId)) : null,
     [firestore, franchiseId, clientId]
   );

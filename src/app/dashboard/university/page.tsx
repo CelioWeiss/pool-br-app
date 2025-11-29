@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import type { UniversityVideo, VideoCategory } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
@@ -20,7 +20,7 @@ export default function UniversityPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     
-    const videosCollection = useMemoFirebase(() => 
+    const videosCollection = useMemo(() => 
         firestore ? collection(firestore, 'universityVideos') : null
     , [firestore]);
     
@@ -196,3 +196,5 @@ export default function UniversityPage() {
         </>
     );
 }
+
+    

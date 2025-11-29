@@ -1,11 +1,13 @@
+
 "use client";
 
 import { useAuth } from '@/hooks/use-auth';
 import { TechnicianMap } from '@/components/dashboard/map/technician-map';
 import type { Client, Technician, Appointment } from '@/lib/types';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
+import { useMemo } from 'react';
 
 export default function MapPage() {
   const { userInfo, hasRole } = useAuth();
@@ -15,17 +17,17 @@ export default function MapPage() {
   const franchiseId = userInfo?.franchiseId;
 
   // --- Data Fetching ---
-  const techniciansCollection = useMemoFirebase(() =>
+  const techniciansCollection = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
   , [firestore, franchiseId]);
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
 
-  const clientsCollection = useMemoFirebase(() =>
+  const clientsCollection = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
   , [firestore, franchiseId]);
   const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
   
-  const appointmentsCollection = useMemoFirebase(() => {
+  const appointmentsCollection = useMemo(() => {
     if (!firestore || !franchiseId) return null;
     return collection(firestore, 'franchises', franchiseId, 'appointments');
   }, [firestore, franchiseId]);
@@ -79,3 +81,5 @@ export default function MapPage() {
     </div>
   );
 }
+
+    

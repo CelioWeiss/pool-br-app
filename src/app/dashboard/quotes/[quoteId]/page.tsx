@@ -1,11 +1,11 @@
 
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Quote, Franchise } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,12 +31,12 @@ export default function QuoteDetailsPage() {
     const quoteId = Array.isArray(params.quoteId) ? params.quoteId[0] : params.quoteId;
     const franchiseId = userInfo?.franchiseId;
 
-    const quoteDocRef = useMemoFirebase(() => 
+    const quoteDocRef = useMemo(() => 
         firestore && franchiseId && quoteId ? doc(firestore, 'franchises', franchiseId, 'quotes', quoteId) : null
     , [firestore, franchiseId, quoteId]);
     const { data: quote, isLoading: isLoadingQuote } = useDoc<Quote>(quoteDocRef);
     
-    const franchiseDocRef = useMemoFirebase(() =>
+    const franchiseDocRef = useMemo(() =>
         firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null
     , [firestore, franchiseId]);
     const { data: franchise, isLoading: isLoadingFranchise } = useDoc<Franchise>(franchiseDocRef);
@@ -162,3 +162,4 @@ export default function QuoteDetailsPage() {
     );
 }
 
+    

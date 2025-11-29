@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 import { useParams } from "next/navigation";
-import { useFirestore, useDoc, useMemoFirebase } from "@/firebase";
+import { useFirestore, useDoc } from "@/firebase";
 import { doc } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -21,7 +21,7 @@ export default function RelatorioPage() {
   const appointmentId = Array.isArray(params.id) ? params.id[0] : params.id;
   const franchiseId = userInfo?.franchiseId;
 
-  const appointmentDocRef = useMemoFirebase(() =>
+  const appointmentDocRef = useMemo(() =>
     (firestore && franchiseId && appointmentId) ? doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId) : null
   , [firestore, franchiseId, appointmentId]);
 
@@ -30,13 +30,13 @@ export default function RelatorioPage() {
   const clientId = appointment?.clientId;
   const locationId = appointment?.locationId;
   
-  const clientDocRef = useMemoFirebase(() => 
+  const clientDocRef = useMemo(() => 
       (firestore && franchiseId && clientId) ? doc(firestore, `franchises/${franchiseId}/clients`, clientId) : null
   , [firestore, franchiseId, clientId]);
   
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
 
-  const locationDocRef = useMemoFirebase(() =>
+  const locationDocRef = useMemo(() =>
     (firestore && franchiseId && locationId) ? doc(firestore, `franchises/${franchiseId}/locations`, locationId) : null
   , [firestore, franchiseId, locationId]);
 

@@ -9,7 +9,7 @@ import { AppointmentHistory } from '@/components/dashboard/client/appointment-hi
 import { format } from 'date-fns';
 import type { Client, Technician, Appointment, Franchise, UserInfo, ServiceLocation } from '@/lib/types';
 import { useMemo } from 'react';
-import { useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc, useCollection } from '@/firebase';
 import { collection, doc, query, where, getDocs, limit } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
@@ -67,7 +67,7 @@ export function ClientDashboard() {
   const franchiseId = userInfo?.franchiseId;
 
   // Find the client document using the user's ID
-  const clientQuery = useMemoFirebase(() => 
+  const clientQuery = useMemo(() => 
     firestore && franchiseId && user ? query(collection(firestore, `franchises/${franchiseId}/clients`), where('userId', '==', user.uid), limit(1)) : null, 
   [firestore, franchiseId, user]);
   
@@ -76,23 +76,23 @@ export function ClientDashboard() {
   const clientId = clientData?.id;
 
   // Find the service locations for this client
-  const locationsQuery = useMemoFirebase(() =>
+  const locationsQuery = useMemo(() =>
     firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/locations`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
   const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsQuery);
   const primaryLocation = useMemo(() => locations?.[0], [locations]);
 
-  const franchiseDocRef = useMemoFirebase(() => 
+  const franchiseDocRef = useMemo(() => 
     firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null,
   [firestore, franchiseId]);
   const { data: franchise, isLoading: isLoadingFranchise } = useDoc<Franchise>(franchiseDocRef);
 
-  const techniciansCollectionRef = useMemoFirebase(() => 
+  const techniciansCollectionRef = useMemo(() => 
     firestore && franchiseId ? collection(firestore, `franchises/${franchiseId}/technicians`) : null,
   [firestore, franchiseId]);
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollectionRef);
 
-  const appointmentsQuery = useMemoFirebase(() => 
+  const appointmentsQuery = useMemo(() => 
     firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/appointments`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
@@ -111,7 +111,7 @@ export function ClientDashboard() {
   }, [primaryLocation, technicians]);
 
   // Get User profile for the assigned technician to get the avatar
-  const techUserDocRef = useMemoFirebase(() =>
+  const techUserDocRef = useMemo(() =>
     firestore && assignedTechnician?.userId ? doc(firestore, 'users', assignedTechnician.userId) : null
   , [firestore, assignedTechnician]);
   const { data: techUserInfo, isLoading: isLoadingTechUser } = useDoc<UserInfo>(techUserDocRef);
@@ -210,3 +210,5 @@ export function ClientDashboard() {
     </div>
   );
 }
+
+    

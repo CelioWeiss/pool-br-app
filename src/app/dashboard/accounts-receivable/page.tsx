@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import type { Client, Payment } from '@/lib/types';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, writeBatch, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,14 +27,14 @@ export default function AccountsReceivablePage() {
     const franchiseId = userInfo?.franchiseId;
 
     // --- Data Fetching ---
-    const clientsQuery = useMemoFirebase(() =>
+    const clientsQuery = useMemo(() =>
         firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null,
         [firestore, franchiseId]
     );
 
     const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
 
-    const paymentsQuery = useMemoFirebase(() => {
+    const paymentsQuery = useMemo(() => {
         if (!firestore || !franchiseId) return null;
         const start = startOfMonth(currentMonth);
         const end = endOfMonth(currentMonth);
@@ -236,3 +236,4 @@ export default function AccountsReceivablePage() {
     );
 }
 
+    

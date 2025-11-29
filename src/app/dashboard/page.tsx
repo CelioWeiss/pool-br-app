@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Users, Wrench, Calendar } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, getCountFromServer, getDocs } from 'firebase/firestore';
 import { useEffect, useState, useMemo } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
@@ -281,3 +281,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    

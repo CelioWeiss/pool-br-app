@@ -119,3 +119,5 @@ export function PendingClients({ franchiseId }: { franchiseId: string }) {
         </Card>
     );
 }
+
+    

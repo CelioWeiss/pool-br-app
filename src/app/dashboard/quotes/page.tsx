@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,7 @@ import { PlusCircle, MoreHorizontal, Eye, CheckCircle, XCircle, Clock } from 'lu
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, FirestorePermissionError, errorEmitter } from '@/firebase';
+import { useFirestore, useCollection, FirestorePermissionError, errorEmitter } from '@/firebase';
 import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import type { Quote, Client } from '@/lib/types';
@@ -27,11 +27,11 @@ export default function QuotesPage() {
 
   const franchiseId = userInfo?.franchiseId;
 
-  const quotesCollection = useMemoFirebase(() =>
+  const quotesCollection = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'quotes') : null
   , [firestore, franchiseId]);
   
-  const clientsCollection = useMemoFirebase(() =>
+  const clientsCollection = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
   , [firestore, franchiseId]);
 
@@ -232,3 +232,5 @@ export default function QuotesPage() {
     </div>
   );
 }
+
+    

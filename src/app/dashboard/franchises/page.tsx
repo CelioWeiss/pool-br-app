@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { NewFranchiseForm } from '@/components/dashboard/franchises/new-franchise-form';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useAuth as useFirebaseAuth, useMemoFirebase } from '@/firebase';
+import { useFirestore, useAuth as useFirebaseAuth } from '@/firebase';
 import { collection, doc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { useCollection } from '@/firebase';
@@ -26,7 +26,7 @@ export default function FranchisesPage() {
   const firestore = useFirestore();
   const auth = useFirebaseAuth();
 
-  const franchisesCollection = useMemoFirebase(() => 
+  const franchisesCollection = useMemo(() => 
     firestore ? collection(firestore, 'franchises') : null
   , [firestore]);
 
@@ -227,3 +227,5 @@ export default function FranchisesPage() {
     </>
   );
 }
+
+    

@@ -1,9 +1,9 @@
 
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc } from '@/firebase';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,13 +26,13 @@ export default function ProfilePage() {
 
   // Franchise Data
   const franchiseId = userInfo?.franchiseId;
-  const franchiseDocRef = useMemoFirebase(() =>
+  const franchiseDocRef = useMemo(() =>
     firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null
   , [firestore, franchiseId]);
   const { data: franchise, isLoading: isLoadingFranchise } = useDoc<Franchise>(franchiseDocRef);
   
   // User Data
-  const userDocRef = useMemoFirebase(() =>
+  const userDocRef = useMemo(() =>
       firestore && user ? doc(firestore, 'users', user.uid) : null
   , [firestore, user]);
   const { data: userData, isLoading: isLoadingUser } = useDoc<UserInfo>(userDocRef);
@@ -265,3 +265,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    

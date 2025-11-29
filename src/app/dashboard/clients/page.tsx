@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
 import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
@@ -28,7 +28,7 @@ export default function ClientsPage() {
 
   const franchiseId = userInfo?.franchiseId;
 
-  const clientsQuery = useMemoFirebase(() => 
+  const clientsQuery = useMemo(() => 
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
   , [firestore, franchiseId]);
   
@@ -393,3 +393,5 @@ export default function ClientsPage() {
     </>
   );
 }
+
+    

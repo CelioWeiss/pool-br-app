@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PlusCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
 import type { Technician, UserInfo } from '@/lib/types';
 import { Spinner } from '@/components/ui/spinner';
@@ -26,7 +26,7 @@ export default function TechniciansPage() {
 
   const franchiseId = userInfo?.franchiseId;
 
-  const techniciansCollection = useMemoFirebase(() =>
+  const techniciansCollection = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
   , [firestore, franchiseId]);
 
