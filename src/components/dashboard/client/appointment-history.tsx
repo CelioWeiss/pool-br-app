@@ -15,6 +15,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { useMemo } from 'react';
+import { cn } from '@/lib/utils';
 
 const ReportDetailCard = ({ title, icon, children, className }: { title: string, icon: React.ReactNode, children: React.ReactNode, className?: string }) => (
     <div className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}>
