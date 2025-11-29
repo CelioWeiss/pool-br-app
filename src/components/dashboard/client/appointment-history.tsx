@@ -3,7 +3,7 @@
 
 import type { Appointment, Technician, ServiceReport } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { Check, Clock, X, Microscope, Wrench, Image as ImageIcon, Droplets, ListChecks, Package, FileText } from 'lucide-react';
+import { Check, Clock, X, Microscope, Wrench, Image as ImageIcon, Droplets, ListChecks, Package, FileText, Thermometer, Wind, TestTube } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -29,27 +29,35 @@ const ReportSection = ({ title, icon: Icon, children, hasData = true }: { title:
     );
 };
 
+const ParameterDisplay = ({ label, value, unit, icon: Icon }: { label: string, value: any, unit: string, icon: React.ElementType }) => (
+    <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+        <Icon className="h-6 w-6 text-muted-foreground" />
+        <div>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="text-xl font-bold">{value ?? 'N/A'} <span className="text-sm font-normal text-muted-foreground">{unit}</span></p>
+        </div>
+    </div>
+);
+
 
 const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
     
     const parameters = [
-        { label: "Cloro", value: report.chlorine, unit: "ppm" },
-        { label: "pH", value: report.ph, unit: "" },
-        { label: "Alcalinidade", value: report.alkalinity, unit: "ppm" },
-        { label: "Ác. Cianúrico", value: report.cya, unit: "ppm" },
-        { label: "Dureza Cálcica", value: report.calciumHardness, unit: "ppm" },
+        { label: "Cloro", value: report.chlorine, unit: "ppm", icon: Droplets },
+        { label: "pH", value: report.ph, unit: "", icon: TestTube },
+        { label: "Alcalinidade", value: report.alkalinity, unit: "ppm", icon: Wind },
+        { label: "Ác. Cianúrico", value: report.cya, unit: "ppm", icon: Microscope },
+        { label: "Dureza Cálcica", value: report.calciumHardness, unit: "ppm", icon: Wrench },
+        { label: "Temperatura", value: report.temperature, unit: "°C", icon: Thermometer },
     ].filter(p => p.value !== undefined && p.value !== null);
 
     return (
-        <div className="grid md:grid-cols-3 gap-8">
-            <div className="md:col-span-2 space-y-6">
+        <div className="grid lg:grid-cols-2 gap-8">
+            <div className="space-y-6">
                 <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={parameters.length > 0}>
-                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm p-4 border rounded-lg bg-muted/50">
+                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                         {parameters.map(p => (
-                            <div key={p.label} className="flex justify-between border-b border-dashed">
-                                <span className="text-muted-foreground">{p.label}:</span>
-                                <span className="font-mono">{p.value} {p.unit}</span>
-                            </div>
+                            <ParameterDisplay key={p.label} {...p} />
                         ))}
                     </div>
                 </ReportSection>
@@ -77,17 +85,17 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
                 </ReportSection>
             </div>
             
-            <div className="md:col-span-1 space-y-4">
+            <div className="space-y-4">
                  <ReportSection title="Fotos do Atendimento" icon={ImageIcon} hasData={!!report.photoUrls?.length}>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {report.photoUrls.map((url, index) => (
                             <a key={index} href={url} target="_blank" rel="noopener noreferrer">
                                 <Image 
                                     src={url} 
                                     alt={`Foto do serviço ${index + 1}`} 
-                                    width={300} 
-                                    height={400} 
-                                    className="rounded-lg object-cover w-full aspect-[3/4] hover:opacity-80 transition-opacity shadow-md" 
+                                    width={600} 
+                                    height={800} 
+                                    className="rounded-lg object-cover w-full h-auto hover:opacity-80 transition-opacity shadow-md" 
                                 />
                             </a>
                         ))}
