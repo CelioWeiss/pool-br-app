@@ -11,25 +11,23 @@ import Image from 'next/image';
 import { useFirestore, useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { Separator } from '@/components/ui/separator';
 
-const ReportDetailCard = ({ title, icon, children, className }: { title: string, icon: React.ReactNode, children: React.ReactNode, className?: string }) => (
-    <div className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)}>
-        <div className="p-4">
-            <h3 className="text-base font-semibold flex items-center gap-2 text-muted-foreground">
-                {icon}
+const ReportSection = ({ title, icon: Icon, children, hasData = true }: { title: string, icon: React.ElementType, children: React.ReactNode, hasData?: boolean }) => {
+    if (!hasData) return null;
+
+    return (
+        <div>
+            <h3 className="text-lg font-semibold flex items-center gap-2 mb-3">
+                <Icon className="h-5 w-5 text-primary" />
                 {title}
             </h3>
-            <div className="pt-2">
-                {children}
-            </div>
+            {children}
         </div>
-    </div>
-);
+    );
+};
 
 
 const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
@@ -40,58 +38,62 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
         { label: "Alcalinidade", value: report.alkalinity, unit: "ppm" },
         { label: "Ác. Cianúrico", value: report.cya, unit: "ppm" },
         { label: "Dureza Cálcica", value: report.calciumHardness, unit: "ppm" },
-    ];
+    ].filter(p => p.value !== undefined && p.value !== null);
 
     return (
-        <div className="space-y-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <ReportDetailCard title="Parâmetros da Água" icon={<Droplets className="h-4 w-4" />}>
-                     <ul className="space-y-1 text-sm">
+        <div className="grid md:grid-cols-3 gap-8">
+            <div className="md:col-span-2 space-y-6">
+                <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={parameters.length > 0}>
+                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2 text-sm p-4 border rounded-lg bg-muted/50">
                         {parameters.map(p => (
-                            <li key={p.label} className="flex justify-between">
+                            <div key={p.label} className="flex justify-between border-b border-dashed">
                                 <span className="text-muted-foreground">{p.label}:</span>
                                 <span className="font-mono">{p.value} {p.unit}</span>
-                            </li>
+                            </div>
                         ))}
-                    </ul>
-                </ReportDetailCard>
-                 <ReportDetailCard title="Serviços Realizados" icon={<ListChecks className="h-4 w-4" />}>
-                     <ul className="space-y-1 text-sm list-disc list-inside">
+                    </div>
+                </ReportSection>
+
+                <Separator />
+                
+                <ReportSection title="Serviços Realizados" icon={ListChecks} hasData={!!report.servicesPerformed?.length}>
+                     <ul className="space-y-1 text-sm list-disc list-inside columns-2">
                         {report.servicesPerformed.map(s => <li key={s}>{s}</li>)}
                     </ul>
-                </ReportDetailCard>
-                 <ReportDetailCard title="Produtos Faltantes" icon={<Package className="h-4 w-4" />}>
-                     {report.missingProducts && report.missingProducts.length > 0 ? (
-                        <ul className="space-y-1 text-sm list-disc list-inside">
-                           {report.missingProducts.map(p => <li key={p}>{p}</li>)}
-                       </ul>
-                     ) : <p className="text-sm text-muted-foreground">Nenhum produto faltante.</p>}
-                </ReportDetailCard>
-            </div>
-             {report.observations && (
-                <ReportDetailCard title="Observações do Técnico" icon={<FileText className="h-4 w-4" />}>
-                    <p className="text-sm whitespace-pre-wrap">{report.observations}</p>
-                </ReportDetailCard>
-            )}
+                </ReportSection>
 
-            {report.photoUrls && report.photoUrls.length > 0 && (
-                 <div className="space-y-4">
-                    <h3 className="font-semibold flex items-center gap-2 text-muted-foreground"><ImageIcon className="h-4 w-4" />Fotos do Atendimento</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Separator />
+                
+                 <ReportSection title="Produtos Faltantes" icon={Package} hasData={!!report.missingProducts?.length}>
+                     <ul className="space-y-1 text-sm list-disc list-inside columns-2">
+                        {report.missingProducts.map(p => <li key={p}>{p}</li>)}
+                    </ul>
+                </ReportSection>
+
+                <Separator />
+
+                <ReportSection title="Observações do Técnico" icon={FileText} hasData={!!report.observations}>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap p-4 border rounded-lg bg-muted/50">{report.observations}</p>
+                </ReportSection>
+            </div>
+            
+            <div className="md:col-span-1 space-y-4">
+                 <ReportSection title="Fotos do Atendimento" icon={ImageIcon} hasData={!!report.photoUrls?.length}>
+                    <div className="space-y-4">
                         {report.photoUrls.map((url, index) => (
                             <a key={index} href={url} target="_blank" rel="noopener noreferrer">
                                 <Image 
                                     src={url} 
                                     alt={`Foto do serviço ${index + 1}`} 
-                                    width={250} 
-                                    height={333} 
-                                    className="rounded-lg object-cover aspect-[3/4] hover:opacity-80 transition-opacity" 
+                                    width={300} 
+                                    height={400} 
+                                    className="rounded-lg object-cover w-full aspect-[3/4] hover:opacity-80 transition-opacity shadow-md" 
                                 />
                             </a>
                         ))}
                     </div>
-                </div>
-            )}
+                </ReportSection>
+            </div>
         </div>
     );
 };
