@@ -137,7 +137,7 @@ export const useFirebase = (): FirebaseServicesAndUser => {
 };
 
 /** Hook to access Firebase Auth instance. */
-export const useAuth = (): Auth => {
+export const useAuthHook = (): Auth => {
   const { auth } = useFirebase();
   return auth;
 };
@@ -159,11 +159,17 @@ type MemoFirebase <T> = T & {__memo?: boolean};
 export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T {
   const memoized = useMemo(factory, deps);
   
-  if(typeof memoized === 'object' && memoized !== null) {
-    Object.defineProperty(memoized, '__memo', {
+  // Use a symbol for a more robust "private" property.
+  const memoSymbol = Symbol.for('__firebase_memo__');
+
+  // We are using a factory that returns a value that might be null.
+  // Only attempt to mark non-null objects.
+  if (typeof memoized === 'object' && memoized !== null) {
+      Object.defineProperty(memoized, '__memo', {
       value: true,
       writable: false,
-      enumerable: false,
+      enumerable: false, // Don't show this in `for...in` loops or `JSON.stringify`
+      configurable: false, // It cannot be deleted.
     });
   }
   
