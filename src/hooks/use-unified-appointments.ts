@@ -77,7 +77,7 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
       
             daysInMonth.forEach(day => {
               // getDay() from date-fns returns 0 for Sunday, 1 for Monday etc. which matches our map.
-              const currentDayOfWeek = getDay(day);
+              const currentDayOfWeek = day.getDay(); // Correct way to get day of week
 
               if (serviceDaysAsNumbers.includes(currentDayOfWeek)) {
                 const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
@@ -101,7 +101,7 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
         });
       
         return Array.from(appointmentsMap.values());
-      }, [allLocations, manualAppointments, month, isLoadingLocations, isLoadingManualAppointments]);
+      }, [allLocations, manualAppointments, month, isLoadingLocations, isLoadingManualAppointments, start, end]);
 
 
       return {
