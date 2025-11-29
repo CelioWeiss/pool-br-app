@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getAuth();
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      setIsLoggingIn(false);
+      // No need to call setIsLoggingIn(false) here, as the component will re-render on user state change.
       return { ok: true, redirect: '/dashboard' };
     } catch (err: any) {
       console.error("Login failed:", err);
