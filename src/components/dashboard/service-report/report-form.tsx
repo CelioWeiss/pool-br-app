@@ -95,7 +95,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
         // For photos, we just show them if they exist.
         setPreviews([...(existingReport.photoUrls || []), null, null, null, null].slice(0, 4));
     }
-  }, [existingReport, parameters]);
+  }, [existingReport]);
 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
@@ -261,8 +261,8 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                       <CardContent className="grid grid-cols-2 gap-2">
                           {servicesPerformedItems.map(item => (
                               <div key={item.id} className="flex items-center space-x-2">
-                                  <Checkbox id={`service-${item.id}`} checked={reportData?.servicesPerformed?.includes(item.label)} disabled={isFormDisabled} />
-                                  <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
+                                  <Checkbox id={`view-service-${item.id}`} checked={reportData?.servicesPerformed?.includes(item.label)} disabled={isFormDisabled} />
+                                  <Label htmlFor={`view-service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                               </div>
                           ))}
                       </CardContent>
@@ -274,8 +274,8 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                       <CardContent className="grid grid-cols-2 gap-2">
                           {missingProductsItems.map(item => (
                               <div key={item.id} className="flex items-center space-x-2">
-                                  <Checkbox id={`product-${item.id}`} checked={reportData?.missingProducts?.includes(item.label)} disabled={isFormDisabled} />
-                                  <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
+                                  <Checkbox id={`view-product-${item.id}`} checked={reportData?.missingProducts?.includes(item.label)} disabled={isFormDisabled} />
+                                  <Label htmlFor={`view-product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                               </div>
                           ))}
                       </CardContent>
@@ -417,5 +417,3 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
     </form>
   );
 }
-
-    
