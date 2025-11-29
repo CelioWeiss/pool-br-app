@@ -10,7 +10,6 @@ import {
   startOfMonth,
   endOfMonth,
   eachDayOfInterval,
-  getDay,
   set,
   format
 } from 'date-fns';
@@ -76,14 +75,12 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
             const serviceDaysAsNumbers = location.serviceDays.map(d => dayOfWeekMap[d]);
       
             daysInMonth.forEach(day => {
-              // getDay() from date-fns returns 0 for Sunday, 1 for Monday etc. which matches our map.
-              const currentDayOfWeek = day.getDay(); // Correct way to get day of week
+              const currentDayOfWeek = day.getDay();
 
               if (serviceDaysAsNumbers.includes(currentDayOfWeek)) {
                 const scheduledDateTime = set(day, { hours: 9, minutes: 0, seconds: 0, milliseconds: 0 }); 
                 const key = `${location.id}-${format(day, 'yyyy-MM-dd')}`;
       
-                // Only add if no manual appointment exists for this location and day
                 if (!appointmentsMap.has(key)) {
                   appointmentsMap.set(key, {
                     id: `auto-${location.id}-${format(day, 'yyyy-MM-dd')}`,
