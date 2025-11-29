@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { DependencyList, createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react';
@@ -153,28 +154,6 @@ export const useFirebaseApp = (): FirebaseApp => {
   const { firebaseApp } = useFirebase();
   return firebaseApp;
 };
-
-type MemoFirebase <T> = T & {__memo?: boolean};
-
-export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T {
-  const memoized = useMemo(factory, deps);
-  
-  // Use a symbol for a more robust "private" property.
-  const memoSymbol = Symbol.for('__firebase_memo__');
-
-  // We are using a factory that returns a value that might be null.
-  // Only attempt to mark non-null objects.
-  if (typeof memoized === 'object' && memoized !== null) {
-      Object.defineProperty(memoized, '__memo', {
-      value: true,
-      writable: false,
-      enumerable: false, // Don't show this in `for...in` loops or `JSON.stringify`
-      configurable: false, // It cannot be deleted.
-    });
-  }
-  
-  return memoized;
-}
 
 /**
  * Hook specifically for accessing the authenticated user's state.

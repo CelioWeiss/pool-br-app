@@ -8,12 +8,13 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import Image from 'next/image';
-import { useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useFirestore, useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { useMemo } from 'react';
 
 const ReportDetailCard = ({ title, icon, children }: { title: string, icon: React.ReactNode, children: React.ReactNode }) => (
     <Card>
@@ -99,7 +100,7 @@ const AppointmentAccordionContent = ({ appointment }: { appointment: Appointment
     const firestore = useFirestore();
     const { franchiseId, serviceReportId } = appointment;
 
-    const reportDocRef = useMemoFirebase(() =>
+    const reportDocRef = useMemo(() =>
         firestore && franchiseId && serviceReportId ? doc(firestore, 'franchises', franchiseId, 'serviceReports', serviceReportId) : null,
     [firestore, franchiseId, serviceReportId]);
 

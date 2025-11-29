@@ -16,7 +16,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -33,15 +33,15 @@ export default function SchedulePage() {
   const franchiseId = userInfo?.franchiseId;
 
   // --- Data Fetching ---
-  const techniciansCollection = useMemoFirebase(() =>
+  const techniciansQuery = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
   , [firestore, franchiseId]);
-  const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
+  const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansQuery);
 
-  const clientsCollection = useMemoFirebase(() =>
+  const clientsQuery = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
   , [firestore, franchiseId]);
-  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
+  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
   
   const { 
     allAppointments, 

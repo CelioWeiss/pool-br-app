@@ -5,7 +5,7 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { UserInfo, UserRole } from '@/lib/types';
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useDoc } from '@/firebase';
 import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
@@ -27,7 +27,7 @@ function useProvideAuth() {
   const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } = useUser();
   const firestore = useFirestore();
 
-  const userDocRef = useMemoFirebase(() => 
+  const userDocRef = useMemo(() => 
     firestore && firebaseUser ? doc(firestore, 'users', firebaseUser.uid) : null,
     [firestore, firebaseUser]
   );
@@ -94,14 +94,14 @@ function useProvideAuth() {
       }
       return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
     }
-  }, []);
+  }, [router]);
 
   const logout = useCallback(() => {
     const auth = getAuth();
     signOut(auth).then(() => {
         router.push('/');
     });
-  }, []);
+  }, [router]);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
     if (!userInfo) return false;

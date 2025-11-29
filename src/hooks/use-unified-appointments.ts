@@ -3,7 +3,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Appointment, ServiceLocation, DayOfWeek } from '@/lib/types';
 import { 
@@ -32,17 +32,17 @@ export function useUnifiedAppointments(franchiseId: string | null | undefined, m
     const firestore = useFirestore();
 
     // Fetch all locations for the franchise directly
-    const allLocationsQuery = useMemoFirebase(() => {
+    const allLocationsQuery = useMemo(() => {
         if (!firestore || !franchiseId) return null;
         return query(collection(firestore, `franchises/${franchiseId}/locations`));
     }, [firestore, franchiseId]);
     const { data: allLocations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(allLocationsQuery);
 
     // Fetch manual appointments for the current month interval
-    const start = startOfMonth(month);
-    const end = endOfMonth(month);
+    const start = useMemo(() => startOfMonth(month), [month]);
+    const end = useMemo(() => endOfMonth(month), [month]);
     
-    const manualAppointmentsQuery = useMemoFirebase(() => {
+    const manualAppointmentsQuery = useMemo(() => {
         if (!firestore || !franchiseId) return null;
         return query(
             collection(firestore, 'franchises', franchiseId, 'appointments'),
