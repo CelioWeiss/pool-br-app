@@ -79,7 +79,7 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
             
             <div className="md:col-span-1 space-y-4">
                  <ReportSection title="Fotos do Atendimento" icon={ImageIcon} hasData={!!report.photoUrls?.length}>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
                         {report.photoUrls.map((url, index) => (
                             <a key={index} href={url} target="_blank" rel="noopener noreferrer">
                                 <Image 
