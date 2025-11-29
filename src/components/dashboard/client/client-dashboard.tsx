@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DollarSign, Calendar, User, Wrench, History, Droplets, Copy, MapPin } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
-import { format } from 'date-fns';
+import { format, getDay, addDays, isFuture } from 'date-fns';
 import type { Client, Technician, Appointment, Franchise, UserInfo, ServiceLocation } from '@/lib/types';
 import { useMemo } from 'react';
 import { useFirestore, useDoc, useCollection } from '@/firebase';
@@ -59,6 +59,17 @@ const PixCard = ({ pixKey }: { pixKey: string }) => {
   )
 }
 
+const dayOfWeekMap: { [key: string]: number } = {
+  domingo: 0,
+  segunda: 1,
+  terca: 2,
+  quarta: 3,
+  quinta: 4,
+  sexta: 5,
+  sabado: 6,
+};
+
+
 export function ClientDashboard() {
   const { user, userInfo } = useAuth();
   const firestore = useFirestore();
@@ -105,12 +116,37 @@ export function ClientDashboard() {
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
 
+  const nextCleaningDate = useMemo(() => {
+    if (upcomingAppointment) {
+      return format(new Date(upcomingAppointment.scheduledDateTime), 'dd/MM/yyyy');
+    }
+    
+    if (primaryLocation && primaryLocation.serviceDays.length > 0) {
+      const today = new Date();
+      const todayDayOfWeek = getDay(today); // Sunday is 0
+
+      const serviceDaysAsNumbers = primaryLocation.serviceDays.map(day => dayOfWeekMap[day]).sort();
+
+      for (let i = 0; i < 7; i++) {
+        const nextDate = addDays(today, i);
+        if (serviceDaysAsNumbers.includes(getDay(nextDate))) {
+          if (isFuture(nextDate) || i === 0) { // If today is a service day, or it's in the future
+            return format(nextDate, 'dd/MM/yyyy');
+          }
+        }
+      }
+    }
+
+    return 'N/A';
+  }, [upcomingAppointment, primaryLocation]);
+
+
   const completedAppointments = useMemo(() => {
     if (!clientAppointments) return [];
     return clientAppointments.filter(a => a.status === 'completed');
   }, [clientAppointments]);
   
-  const assignedTechnician: Technician | undefined = useMemo(() => {
+  const assignedTechnician = useMemo(() => {
     if (!primaryLocation?.technicianId || !technicians) return undefined;
     return technicians.find(t => t.id === primaryLocation.technicianId);
   }, [primaryLocation, technicians]);
@@ -152,7 +188,7 @@ export function ClientDashboard() {
             />
              <InfoCard 
                 title="Próxima Limpeza" 
-                value={upcomingAppointment ? format(new Date(upcomingAppointment.scheduledDateTime), 'dd/MM/yyyy') : 'N/A'}
+                value={nextCleaningDate}
                 icon={Droplets} 
             />
              <InfoCard 
