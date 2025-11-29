@@ -37,8 +37,8 @@ export default function RelatorioPage() {
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
 
   const locationDocRef = useMemo(() =>
-    (firestore && franchiseId && locationId) ? doc(firestore, `franchises/${franchiseId}/locations`, locationId) : null
-  , [firestore, franchiseId, locationId]);
+    (firestore && franchiseId && clientId && locationId) ? doc(firestore, `franchises/${franchiseId}/clients/${clientId}/locations`, locationId) : null
+  , [firestore, franchiseId, clientId, locationId]);
 
   const { data: location, isLoading: isLoadingLocation } = useDoc<ServiceLocation>(locationDocRef);
 

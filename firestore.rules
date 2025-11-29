@@ -9,13 +9,11 @@ service cloud.firestore {
     // =============================
     function isMaster() {
       // This check assumes a 'users' collection where roles are stored.
-      // For production, prefer custom claims for improved performance and security.
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return request.auth != null && userDoc.data.role == 'master';
     }
 
     function isFranchiseOwner(franchiseId) {
-      // Robust check: ensures document exists before trying to access its data.
       let franchiseDoc = get(/databases/$(database)/documents/franchises/$(franchiseId));
       let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
       return request.auth != null &&
@@ -96,7 +94,7 @@ service cloud.firestore {
         allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
         
         match /locations/{locationId} {
-            allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId);
+            allow read, write, create, list: if isMaster() || isFranchiseOwner(franchiseId) || (isUserInFranchise(franchiseId) && getUserRole(request.auth.uid) == 'client');
         }
       }
       
@@ -126,3 +124,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
