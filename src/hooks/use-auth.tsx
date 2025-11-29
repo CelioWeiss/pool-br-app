@@ -23,7 +23,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+function useProvideAuth() {
   const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } = useUser();
   const firestore = useFirestore();
 
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
     }
-  }, []);
+  }, [router]);
 
   const logout = useCallback(() => {
     const auth = getAuth();
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return rolesToCheck.includes(userInfo.role);
   }, [userInfo]);
   
-  const value = useMemo(() => ({
+  return useMemo(() => ({
     user: firebaseUser,
     userInfo: userInfo || null,
     isUserLoading: isFirebaseUserLoading || isUserInfoLoading,
@@ -106,9 +106,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasRole,
     authError,
   }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isLoggingIn, login, logout, hasRole, authError]);
+}
 
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const auth = useProvideAuth();
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={auth}>
       {children}
     </AuthContext.Provider>
   );
