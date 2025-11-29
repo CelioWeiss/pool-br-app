@@ -52,56 +52,54 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
     ].filter(p => p.value !== undefined && p.value !== null);
 
     return (
-        <div className="grid lg:grid-cols-2 gap-8">
-            <div className="space-y-6">
-                <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={parameters.length > 0}>
-                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                        {parameters.map(p => (
-                            <ParameterDisplay key={p.label} {...p} />
-                        ))}
-                    </div>
-                </ReportSection>
+        <div className="space-y-8">
+            <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={parameters.length > 0}>
+                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {parameters.map(p => (
+                        <ParameterDisplay key={p.label} {...p} />
+                    ))}
+                </div>
+            </ReportSection>
 
-                <Separator />
-                
-                <ReportSection title="Serviços Realizados" icon={ListChecks} hasData={!!report.servicesPerformed?.length}>
-                     <ul className="space-y-1 text-sm list-disc list-inside columns-2">
-                        {report.servicesPerformed.map(s => <li key={s}>{s}</li>)}
-                    </ul>
-                </ReportSection>
-
-                <Separator />
-                
-                 <ReportSection title="Produtos Faltantes" icon={Package} hasData={!!report.missingProducts?.length}>
-                     <ul className="space-y-1 text-sm list-disc list-inside columns-2">
-                        {report.missingProducts.map(p => <li key={p}>{p}</li>)}
-                    </ul>
-                </ReportSection>
-
-                <Separator />
-
-                <ReportSection title="Observações do Técnico" icon={FileText} hasData={!!report.observations}>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap p-4 border rounded-lg bg-muted/50">{report.observations}</p>
-                </ReportSection>
-            </div>
+            <Separator />
             
-            <div className="space-y-4">
-                 <ReportSection title="Fotos do Atendimento" icon={ImageIcon} hasData={!!report.photoUrls?.length}>
-                    <div className="grid grid-cols-1 gap-4">
-                        {report.photoUrls.map((url, index) => (
-                            <a key={index} href={url} target="_blank" rel="noopener noreferrer">
-                                <Image 
-                                    src={url} 
-                                    alt={`Foto do serviço ${index + 1}`} 
-                                    width={600} 
-                                    height={800} 
-                                    className="rounded-lg object-cover w-full h-auto hover:opacity-80 transition-opacity shadow-md" 
-                                />
-                            </a>
-                        ))}
-                    </div>
-                </ReportSection>
-            </div>
+            <ReportSection title="Serviços Realizados" icon={ListChecks} hasData={!!report.servicesPerformed?.length}>
+                 <ul className="space-y-1 text-sm list-disc list-inside columns-2">
+                    {report.servicesPerformed.map(s => <li key={s}>{s}</li>)}
+                </ul>
+            </ReportSection>
+            
+            {!!report.missingProducts?.length && <Separator />}
+            
+            <ReportSection title="Produtos Faltantes" icon={Package} hasData={!!report.missingProducts?.length}>
+                 <ul className="space-y-1 text-sm list-disc list-inside columns-2">
+                    {report.missingProducts.map(p => <li key={p}>{p}</li>)}
+                </ul>
+            </ReportSection>
+
+            {!!report.observations && <Separator />}
+
+            <ReportSection title="Observações do Técnico" icon={FileText} hasData={!!report.observations}>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap p-4 border rounded-lg bg-muted/50">{report.observations}</p>
+            </ReportSection>
+            
+            {!!report.photoUrls?.length && <Separator />}
+
+            <ReportSection title="Fotos do Atendimento" icon={ImageIcon} hasData={!!report.photoUrls?.length}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {report.photoUrls.map((url, index) => (
+                        <a key={index} href={url} target="_blank" rel="noopener noreferrer">
+                            <Image 
+                                src={url} 
+                                alt={`Foto do serviço ${index + 1}`} 
+                                width={800} 
+                                height={600} 
+                                className="rounded-lg object-cover w-full h-auto hover:opacity-80 transition-opacity shadow-md" 
+                            />
+                        </a>
+                    ))}
+                </div>
+            </ReportSection>
         </div>
     );
 };
