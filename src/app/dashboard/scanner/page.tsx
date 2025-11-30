@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -10,9 +10,11 @@ import { CameraOff, ScanLine, RefreshCw } from 'lucide-react';
 import jsQR from 'jsqr';
 import { useToast } from '@/hooks/use-toast';
 import { Spinner } from '@/components/ui/spinner';
+import { useRouter } from 'next/navigation';
 
 export default function ScannerPage() {
-    const { hasRole } = useAuth();
+    const { hasRole, userInfo } = useAuth();
+    const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
@@ -20,40 +22,49 @@ export default function ScannerPage() {
     const [isScanning, setIsScanning] = useState(true);
     const { toast } = useToast();
 
-    useEffect(() => {
-        const getCameraPermission = async () => {
-            try {
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera not supported on this browser.');
-                }
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                setHasCameraPermission(true);
-
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.play(); // Ensure video plays
-                }
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                setHasCameraPermission(false);
-                toast({
-                    variant: 'destructive',
-                    title: 'Acesso à Câmera Negado',
-                    description: 'Por favor, habilite a permissão de câmera nas configurações do seu navegador.',
-                });
+    const getCameraPermission = useCallback(async () => {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('A câmera não é suportada neste navegador.');
             }
-        };
 
+            // Tenta primeiro a câmera traseira (ideal para QR codes)
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                .catch(async (err) => {
+                    console.warn("Falha ao acessar a câmera traseira, tentando a frontal...", err);
+                    // Se falhar, tenta qualquer câmera de vídeo disponível (geralmente a frontal)
+                    return await navigator.mediaDevices.getUserMedia({ video: true });
+                });
+            
+            setHasCameraPermission(true);
+
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+                videoRef.current.play().catch(e => console.error("Video play failed:", e));
+            }
+        } catch (error) {
+            console.error('Erro ao acessar a câmera:', error);
+            setHasCameraPermission(false);
+            toast({
+                variant: 'destructive',
+                title: 'Acesso à Câmera Negado',
+                description: 'Por favor, habilite a permissão de câmera nas configurações do seu navegador e atualize a página.',
+            });
+        }
+    }, [toast]);
+
+
+    useEffect(() => {
         getCameraPermission();
 
-        // Cleanup: stop video stream when component unmounts
+        // Cleanup: parar a stream de vídeo quando o componente desmonta
         return () => {
             if (videoRef.current && videoRef.current.srcObject) {
                 const stream = videoRef.current.srcObject as MediaStream;
                 stream.getTracks().forEach(track => track.stop());
             }
         };
-    }, [toast]);
+    }, [getCameraPermission]);
 
     useEffect(() => {
         let animationFrameId: number;
@@ -78,17 +89,22 @@ export default function ScannerPage() {
                         inversionAttempts: "dontInvert",
                     });
 
-                    if (code) {
+                    if (code && code.data) {
                         setScannedData(code.data);
                         setIsScanning(false);
-                        // Optional: vibrate on successful scan
+                        
+                        // Após escanear, redireciona para a página de relatório
+                        router.push(`/relatorio/${code.data}`);
+
                         if (navigator.vibrate) {
                             navigator.vibrate(200);
                         }
                     }
                 }
             }
-            animationFrameId = requestAnimationFrame(tick);
+            if (isScanning) {
+              animationFrameId = requestAnimationFrame(tick);
+            }
         };
         
         if (isScanning && hasCameraPermission) {
@@ -98,7 +114,7 @@ export default function ScannerPage() {
         return () => {
             cancelAnimationFrame(animationFrameId);
         };
-    }, [isScanning, hasCameraPermission]);
+    }, [isScanning, hasCameraPermission, router]);
     
     if (!hasRole('technician')) {
         return <p>Acesso negado.</p>;
@@ -107,20 +123,24 @@ export default function ScannerPage() {
     const handleRescan = () => {
         setScannedData(null);
         setIsScanning(true);
+        // Garante que o vídeo volte a tocar
+        if (videoRef.current) {
+            videoRef.current.play().catch(e => console.error("Video play failed on rescan:", e));
+        }
     };
 
     return (
         <div className="space-y-8">
              <div>
                 <h1 className="text-3xl font-bold tracking-tight">Leitor de QR Code</h1>
-                <p className="text-muted-foreground">Aponte a câmera para um QR Code para escaneá-lo.</p>
+                <p className="text-muted-foreground">Aponte a câmera para um QR Code para iniciar o atendimento.</p>
             </div>
 
             <Card className="max-w-xl mx-auto">
                 <CardHeader>
                     <CardTitle>Scanner</CardTitle>
                     <CardDescription>
-                        {scannedData ? 'QR Code escaneado com sucesso!' : 'Aguardando leitura do QR Code...'}
+                        {scannedData ? 'QR Code lido! Redirecionando...' : 'Aguardando leitura do QR Code...'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -157,9 +177,9 @@ export default function ScannerPage() {
                     {scannedData && (
                         <div className="mt-6 space-y-4">
                             <Alert>
-                                <AlertTitle>Dado Escaneado:</AlertTitle>
+                                <AlertTitle>Redirecionando para Atendimento:</AlertTitle>
                                 <AlertDescription className="break-all font-mono text-base">
-                                    {scannedData}
+                                    ID: {scannedData}
                                 </AlertDescription>
                             </Alert>
                              <Button onClick={handleRescan} className="w-full">
