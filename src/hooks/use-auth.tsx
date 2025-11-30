@@ -6,12 +6,13 @@ import React, { createContext, useContext, useState, ReactNode, useMemo, useCall
 import { useRouter } from 'next/navigation';
 import type { Client, UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc, useCollection } from '@/firebase';
-import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser, Auth } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 
 interface AuthContextType {
   user: FirebaseUser | null;
+  auth: Auth;
   userInfo: UserInfo | null;
   isUserLoading: boolean;
   isLoggingIn: boolean;
@@ -26,6 +27,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function useProvideAuth() {
   const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } = useUser();
   const firestore = useFirestore();
+  const auth = getAuth();
 
   const userDocRef = useMemo(() => 
     firestore && firebaseUser ? doc(firestore, 'users', firebaseUser.uid) : null,
@@ -115,7 +117,6 @@ function useProvideAuth() {
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
     setIsLoggingIn(true);
     setAuthError(null);
-    const auth = getAuth();
     try {
       await signInWithEmailAndPassword(auth, email, pass);
       // No need to call setIsLoggingIn(false) here, as the component will re-render on user state change.
@@ -129,14 +130,13 @@ function useProvideAuth() {
       }
       return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
     }
-  }, [router]);
+  }, [router, auth]);
 
   const logout = useCallback(() => {
-    const auth = getAuth();
     signOut(auth).then(() => {
         router.push('/');
     });
-  }, [router]);
+  }, [router, auth]);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
     if (!userInfo) return false;
@@ -146,6 +146,7 @@ function useProvideAuth() {
   
   return useMemo(() => ({
     user: firebaseUser,
+    auth,
     userInfo: userInfo || null,
     isUserLoading: isFirebaseUserLoading || isUserInfoLoading || isClientLoading,
     isLoggingIn,
@@ -153,7 +154,7 @@ function useProvideAuth() {
     logout,
     hasRole,
     authError,
-  }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isClientLoading, isLoggingIn, login, logout, hasRole, authError]);
+  }), [firebaseUser, auth, userInfo, isFirebaseUserLoading, isUserInfoLoading, isClientLoading, isLoggingIn, login, logout, hasRole, authError]);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -172,3 +173,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    

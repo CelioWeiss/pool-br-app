@@ -15,16 +15,15 @@ import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function ClientsPage() {
-  const { userInfo } = useAuth();
+  const { userInfo, auth } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
-  const auth = getAuth(); // Use getAuth() to get the auth instance
 
   const franchiseId = userInfo?.franchiseId;
 
