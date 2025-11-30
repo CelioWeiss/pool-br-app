@@ -1,6 +1,3 @@
-
-'use client';
-
 import { LoginForm } from '@/components/auth/login-form';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
