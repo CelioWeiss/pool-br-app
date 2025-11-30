@@ -13,7 +13,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useRouter } from 'next/navigation';
 
 export default function ScannerPage() {
-    const { hasRole, userInfo } = useAuth();
+    const { hasRole } = useAuth();
     const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -21,26 +21,41 @@ export default function ScannerPage() {
     const [scannedData, setScannedData] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(true);
     const { toast } = useToast();
+    const streamRef = useRef<MediaStream | null>(null);
 
     const getCameraPermission = useCallback(async () => {
+        // Se já tiver uma stream, pare-a antes de pedir uma nova
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 throw new Error('A câmera não é suportada neste navegador.');
             }
 
-            // Tenta primeiro a câmera traseira (ideal para QR codes)
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-                .catch(async (err) => {
-                    console.warn("Falha ao acessar a câmera traseira, tentando a frontal...", err);
-                    // Se falhar, tenta qualquer câmera de vídeo disponível (geralmente a frontal)
-                    return await navigator.mediaDevices.getUserMedia({ video: true });
-                });
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: { ideal: "environment" } } 
+            }).catch(async (err) => {
+                console.warn("Falha ao acessar a câmera traseira, tentando a frontal...", err);
+                return await navigator.mediaDevices.getUserMedia({ video: true });
+            });
             
+            streamRef.current = stream; // Armazena a stream na ref
             setHasCameraPermission(true);
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(e => console.error("Video play failed:", e));
+                // Iniciar o vídeo manualmente é mais confiável em dispositivos móveis
+                videoRef.current.play().catch(e => {
+                    console.error("Video play failed:", e);
+                    toast({
+                        variant: 'destructive',
+                        title: 'Erro ao iniciar câmera',
+                        description: 'Não foi possível iniciar a visualização da câmera.',
+                    });
+                });
             }
         } catch (error) {
             console.error('Erro ao acessar a câmera:', error);
@@ -53,63 +68,65 @@ export default function ScannerPage() {
         }
     }, [toast]);
 
-
+    // Solicita permissão da câmera na montagem do componente
     useEffect(() => {
         getCameraPermission();
 
         // Cleanup: parar a stream de vídeo quando o componente desmonta
         return () => {
-            if (videoRef.current && videoRef.current.srcObject) {
-                const stream = videoRef.current.srcObject as MediaStream;
-                stream.getTracks().forEach(track => track.stop());
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
             }
         };
     }, [getCameraPermission]);
 
+    // Lógica para escanear o frame do vídeo
     useEffect(() => {
         let animationFrameId: number;
 
         const tick = () => {
-            if (!isScanning || !videoRef.current || !canvasRef.current || !hasCameraPermission) {
+            if (!isScanning || !videoRef.current?.HAVE_ENOUGH_DATA || !canvasRef.current || !hasCameraPermission) {
+                if (isScanning) {
+                    animationFrameId = requestAnimationFrame(tick);
+                }
                 return;
             }
+            
+            const canvas = canvasRef.current;
+            const video = videoRef.current;
+            const context = canvas.getContext('2d');
 
-            if (videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
-                const canvas = canvasRef.current;
-                const video = videoRef.current;
-                const context = canvas.getContext('2d');
-
-                if (context) {
-                    canvas.height = video.videoHeight;
-                    canvas.width = video.videoWidth;
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            if (context) {
+                canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                try {
                     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                    
                     const code = jsQR(imageData.data, imageData.width, imageData.height, {
                         inversionAttempts: "dontInvert",
                     });
 
-                    if (code && code.data) {
+                    if (code?.data) {
                         setScannedData(code.data);
                         setIsScanning(false);
-                        
-                        // Após escanear, redireciona para a página de relatório
-                        router.push(`/relatorio/${code.data}`);
-
                         if (navigator.vibrate) {
                             navigator.vibrate(200);
                         }
+                        // Após escanear, redireciona para a página de relatório
+                        router.push(`/relatorio/${code.data}`);
                     }
+                } catch (e) {
+                    console.error("Erro no processamento do jsQR", e);
                 }
             }
+            
             if (isScanning) {
-              animationFrameId = requestAnimationFrame(tick);
+                animationFrameId = requestAnimationFrame(tick);
             }
         };
         
-        if (isScanning && hasCameraPermission) {
-            animationFrameId = requestAnimationFrame(tick);
-        }
+        animationFrameId = requestAnimationFrame(tick);
 
         return () => {
             cancelAnimationFrame(animationFrameId);
@@ -124,9 +141,7 @@ export default function ScannerPage() {
         setScannedData(null);
         setIsScanning(true);
         // Garante que o vídeo volte a tocar
-        if (videoRef.current) {
-            videoRef.current.play().catch(e => console.error("Video play failed on rescan:", e));
-        }
+        getCameraPermission(); // Re-solicita para garantir que a stream está ativa
     };
 
     return (
@@ -163,7 +178,8 @@ export default function ScannerPage() {
                         )}
                         {hasCameraPermission && (
                             <>
-                                <video ref={videoRef} className="h-full w-full object-cover" autoPlay playsInline muted />
+                                {/* Removido o autoPlay, o play é chamado manualmente no useEffect */}
+                                <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
                                 <canvas ref={canvasRef} className="hidden" />
                                 {isScanning && (
                                     <div className="absolute inset-0 flex items-center justify-center">
@@ -195,3 +211,4 @@ export default function ScannerPage() {
     );
 }
 
+    
