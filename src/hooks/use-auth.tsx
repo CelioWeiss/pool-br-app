@@ -4,10 +4,10 @@
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import type { UserInfo, UserRole } from '@/lib/types';
+import type { Client, UserInfo, UserRole } from '@/lib/types';
 import { useUser, useFirestore, useDoc } from '@/firebase';
 import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 
 interface AuthContextType {
@@ -31,13 +31,51 @@ function useProvideAuth() {
     firestore && firebaseUser ? doc(firestore, 'users', firebaseUser.uid) : null,
     [firestore, firebaseUser]
   );
-  const { data: userInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
+  const { data: baseUserInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
+
+  const [clientProfile, setClientProfile] = useState<Client | null>(null);
+  const [isClientProfileLoading, setIsClientProfileLoading] = useState(false);
   
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const router = useRouter();
 
   const isCreatingUserRef = useRef(false);
+  
+  // Effect to fetch client-specific profile if user has 'client' role
+  useEffect(() => {
+    if (baseUserInfo?.role === 'client' && firestore && baseUserInfo.franchiseId) {
+      setIsClientProfileLoading(true);
+      const clientQuery = query(
+        collection(firestore, `franchises/${baseUserInfo.franchiseId}/clients`), 
+        where('userId', '==', baseUserInfo.id)
+      );
+      getDocs(clientQuery).then(snapshot => {
+        if (!snapshot.empty) {
+          setClientProfile(snapshot.docs[0].data() as Client);
+        }
+        setIsClientProfileLoading(false);
+      }).catch(() => {
+        setIsClientProfileLoading(false);
+      });
+    } else {
+      setClientProfile(null);
+    }
+  }, [baseUserInfo, firestore]);
+  
+  const userInfo = useMemo(() => {
+      if (!baseUserInfo) return null;
+      if (baseUserInfo.role === 'client' && clientProfile) {
+        return {
+          ...baseUserInfo,
+          firstName: clientProfile.contactName || baseUserInfo.firstName,
+          lastName: '', // Client profile does not have separate last name
+          avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
+        };
+      }
+      return baseUserInfo;
+  }, [baseUserInfo, clientProfile]);
+
 
   useEffect(() => {
     if (
@@ -112,13 +150,13 @@ function useProvideAuth() {
   return useMemo(() => ({
     user: firebaseUser,
     userInfo: userInfo || null,
-    isUserLoading: isFirebaseUserLoading || isUserInfoLoading,
+    isUserLoading: isFirebaseUserLoading || isUserInfoLoading || isClientProfileLoading,
     isLoggingIn,
     login,
     logout,
     hasRole,
     authError,
-  }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isLoggingIn, login, logout, hasRole, authError]);
+  }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isClientProfileLoading, isLoggingIn, login, logout, hasRole, authError]);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
