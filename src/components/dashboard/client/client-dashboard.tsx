@@ -168,11 +168,20 @@ export function ClientDashboard() {
     return <p>Carregando dados do cliente...</p>;
   }
 
+  const clientName = clientData?.name || userInfo.firstName;
+  const clientInitials = (clientName || '').split(' ').map(n => n[0]).join('').substring(0, 2);
+
   return (
     <div className="space-y-8">
-        <div>
-            <h1 className="text-3xl font-bold tracking-tight">Olá, {clientData?.name || userInfo.firstName}!</h1>
-            <p className="text-muted-foreground">Bem-vindo ao seu portal do cliente.</p>
+        <div className="flex items-center gap-4">
+           <Avatar className="h-16 w-16 border">
+              <AvatarImage src={userInfo.avatarUrl} alt={clientName} />
+              <AvatarFallback className="text-xl">{clientInitials}</AvatarFallback>
+            </Avatar>
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight">Olá, {clientName}!</h1>
+                <p className="text-muted-foreground">Bem-vindo ao seu portal do cliente.</p>
+            </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
