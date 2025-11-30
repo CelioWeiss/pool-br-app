@@ -5,9 +5,9 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Client, UserInfo, UserRole } from '@/lib/types';
-import { useUser, useFirestore, useDoc } from '@/firebase';
+import { useUser, useFirestore, useDoc, useCollection } from '@/firebase';
 import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 
 
 interface AuthContextType {
@@ -33,46 +33,43 @@ function useProvideAuth() {
   );
   const { data: baseUserInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
 
-  const [clientProfile, setClientProfile] = useState<Client | null>(null);
-  const [isClientProfileLoading, setIsClientProfileLoading] = useState(false);
-  
+  // This query finds the client document associated with the logged-in user.
+  const clientQuery = useMemo(() => {
+    if (firestore && baseUserInfo?.role === 'client' && baseUserInfo.franchiseId && baseUserInfo.id) {
+      return query(
+        collection(firestore, 'franchises', baseUserInfo.franchiseId, 'clients'),
+        where('userId', '==', baseUserInfo.id),
+        limit(1)
+      );
+    }
+    return null;
+  }, [firestore, baseUserInfo]);
+
+  const { data: clientDocs, isLoading: isClientLoading } = useCollection<Client>(clientQuery);
+  const clientProfile = useMemo(() => clientDocs?.[0] ?? null, [clientDocs]);
+
+
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const router = useRouter();
 
   const isCreatingUserRef = useRef(false);
   
-  // Effect to fetch client-specific profile if user has 'client' role
-  useEffect(() => {
-    if (baseUserInfo?.role === 'client' && firestore && baseUserInfo.franchiseId) {
-      setIsClientProfileLoading(true);
-      const clientQuery = query(
-        collection(firestore, `franchises/${baseUserInfo.franchiseId}/clients`), 
-        where('userId', '==', baseUserInfo.id)
-      );
-      getDocs(clientQuery).then(snapshot => {
-        if (!snapshot.empty) {
-          setClientProfile(snapshot.docs[0].data() as Client);
-        }
-        setIsClientProfileLoading(false);
-      }).catch(() => {
-        setIsClientProfileLoading(false);
-      });
-    } else {
-      setClientProfile(null);
-    }
-  }, [baseUserInfo, firestore]);
-  
   const userInfo = useMemo(() => {
       if (!baseUserInfo) return null;
+      // If the user is a client and we have found their specific client profile,
+      // we merge the data to get the correct avatar and display name.
       if (baseUserInfo.role === 'client' && clientProfile) {
         return {
           ...baseUserInfo,
+          // Prefer the contact name from the client record, fall back to user's first name
           firstName: clientProfile.contactName || baseUserInfo.firstName,
-          lastName: '', // Client profile does not have separate last name
+          lastName: '', // Client profile does not have a separate last name
+          // Prefer the avatar from the client record, fall back to user's avatar
           avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
         };
       }
+      // For all other roles, or if client profile isn't loaded yet, return the base user info.
       return baseUserInfo;
   }, [baseUserInfo, clientProfile]);
 
@@ -150,13 +147,13 @@ function useProvideAuth() {
   return useMemo(() => ({
     user: firebaseUser,
     userInfo: userInfo || null,
-    isUserLoading: isFirebaseUserLoading || isUserInfoLoading || isClientProfileLoading,
+    isUserLoading: isFirebaseUserLoading || isUserInfoLoading || isClientLoading,
     isLoggingIn,
     login,
     logout,
     hasRole,
     authError,
-  }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isClientProfileLoading, isLoggingIn, login, logout, hasRole, authError]);
+  }), [firebaseUser, userInfo, isFirebaseUserLoading, isUserInfoLoading, isClientLoading, isLoggingIn, login, logout, hasRole, authError]);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
