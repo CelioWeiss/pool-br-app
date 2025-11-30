@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { DollarSign, Calendar, User, Wrench, History, Droplets, Copy, MapPin } from 'lucide-react';
 import { AppointmentHistory } from '@/components/dashboard/client/appointment-history';
-import { format, getDay, addDays, isFuture } from 'date-fns';
+import { format, getDay, addDays, isFuture, isToday } from 'date-fns';
 import type { Client, Technician, Appointment, Franchise, UserInfo, ServiceLocation } from '@/lib/types';
 import { useMemo } from 'react';
 import { useFirestore, useDoc, useCollection } from '@/firebase';
@@ -106,13 +106,18 @@ export function ClientDashboard() {
   const appointmentsQuery = useMemo(() => 
     firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/appointments`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
-  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
+  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(clientAppointmentsQuery);
 
   
   const upcomingAppointment = useMemo(() => {
     if (!clientAppointments) return null;
     return clientAppointments
-      .filter(a => new Date(a.scheduledDateTime) >= new Date() && (a.status === 'scheduled' || a.status === 'in_progress'))
+      .filter(a => {
+        const apptDate = new Date(a.scheduledDateTime);
+        // It's a future appointment if the date is after today.
+        // It is NOT a future appointment if it's today and status is 'completed'.
+        return isFuture(apptDate) && (a.status === 'scheduled' || a.status === 'in_progress');
+      })
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
 
@@ -122,17 +127,13 @@ export function ClientDashboard() {
     }
     
     if (primaryLocation && primaryLocation.serviceDays.length > 0) {
-      const today = new Date();
-      const todayDayOfWeek = getDay(today); // Sunday is 0
-
       const serviceDaysAsNumbers = primaryLocation.serviceDays.map(day => dayOfWeekMap[day]).sort();
-
-      for (let i = 0; i < 7; i++) {
-        const nextDate = addDays(today, i);
+      
+      // Look for the next service day starting from TOMORROW.
+      for (let i = 1; i <= 7; i++) {
+        const nextDate = addDays(new Date(), i);
         if (serviceDaysAsNumbers.includes(getDay(nextDate))) {
-          if (isFuture(nextDate) || i === 0) { // If today is a service day, or it's in the future
-            return format(nextDate, 'dd/MM/yyyy');
-          }
+          return format(nextDate, 'dd/MM/yyyy');
         }
       }
     }
