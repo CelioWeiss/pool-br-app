@@ -82,11 +82,13 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
   useEffect(() => {
     if(existingReport) {
         // Populate form with existing report data
-        const paramKeys = Object.keys(parameters);
+        const paramKeys = waterParameters.map(p => p.key);
         const existingParams: Record<string, number> = {};
         for(const key of paramKeys) {
             if(existingReport.hasOwnProperty(key)) {
-                existingParams[key] = (existingReport as any)[key];
+                existingParams[key] = (existingReport as any)[key] ?? waterParameters.find(p => p.key === key)?.defaultValue ?? 0;
+            } else {
+                 existingParams[key] = waterParameters.find(p => p.key === key)?.defaultValue ?? 0;
             }
         }
         setParameters(existingParams);

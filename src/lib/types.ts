@@ -101,14 +101,14 @@ export interface ServiceReport {
   technicianId: string;
   clientId: string;
   locationId: string; // Added to specify which location
-  chlorine: number;
-  alkalinity: number;
-  ph: number;
-  cya: number;
-  calciumHardness: number;
-  orp: number;
-  tds: number;
-  temperature: number;
+  chlorine?: number;
+  alkalinity?: number;
+  ph?: number;
+  cya?: number;
+  calciumHardness?: number;
+  orp?: number;
+  tds?: number;
+  temperature?: number;
   servicesPerformed: string[];
   missingProducts: string[];
   observations: string;
@@ -158,5 +158,3 @@ export interface Payment {
     month: number; // e.g., 1 for January
     year: number;
 }
-
-    

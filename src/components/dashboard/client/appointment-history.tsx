@@ -3,7 +3,7 @@
 
 import type { Appointment, Technician, ServiceReport } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
-import { Check, Clock, X, Microscope, Wrench, Image as ImageIcon, Droplets, ListChecks, Package, FileText, Thermometer, Wind, TestTube } from 'lucide-react';
+import { Check, Clock, X, Microscope, Wrench, Image as ImageIcon, Droplets, ListChecks, Package, FileText, Thermometer, Wind, TestTube, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -48,12 +48,16 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
         { label: "Alcalinidade", value: report.alkalinity, unit: "ppm", icon: Wind },
         { label: "Ác. Cianúrico", value: report.cya, unit: "ppm", icon: Microscope },
         { label: "Dureza Cálcica", value: report.calciumHardness, unit: "ppm", icon: Wrench },
+        { label: "ORP", value: report.orp, unit: "mV", icon: Zap },
+        { label: "TDS", value: report.tds, unit: "ppm", icon: Microscope },
         { label: "Temperatura", value: report.temperature, unit: "°C", icon: Thermometer },
-    ].filter(p => p.value !== undefined && p.value !== null);
+    ];
+
+    const hasAnyParameter = parameters.some(p => p.value !== undefined && p.value !== null);
 
     return (
         <div className="space-y-8">
-            <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={parameters.length > 0}>
+            <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={hasAnyParameter}>
                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {parameters.map(p => (
                         <ParameterDisplay key={p.label} {...p} />
