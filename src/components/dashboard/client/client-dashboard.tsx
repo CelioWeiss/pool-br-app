@@ -106,7 +106,7 @@ export function ClientDashboard() {
   const appointmentsQuery = useMemo(() => 
     firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/appointments`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
-  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(clientAppointmentsQuery);
+  const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
   
   const upcomingAppointment = useMemo(() => {
@@ -114,9 +114,8 @@ export function ClientDashboard() {
     return clientAppointments
       .filter(a => {
         const apptDate = new Date(a.scheduledDateTime);
-        // It's a future appointment if the date is after today.
-        // It is NOT a future appointment if it's today and status is 'completed'.
-        return isFuture(apptDate) && (a.status === 'scheduled' || a.status === 'in_progress');
+        // It's an upcoming appointment if it's in the future, OR if it's today but not yet completed.
+        return isFuture(apptDate) || (isToday(apptDate) && a.status !== 'completed');
       })
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
   }, [clientAppointments]);
