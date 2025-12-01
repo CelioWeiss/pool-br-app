@@ -30,7 +30,7 @@ function useProvideAuth() {
 
   const userDocRef = useMemo(() => 
     firestore && firebaseUser ? doc(firestore, 'users', firebaseUser.uid) : null,
-    [firestore, firebaseUser]
+    [firestore, firebaseUser?.uid]
   );
   const { data: baseUserInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
 
@@ -43,7 +43,7 @@ function useProvideAuth() {
       );
     }
     return null;
-  }, [firestore, baseUserInfo]);
+  }, [firestore, baseUserInfo?.id, baseUserInfo?.role, baseUserInfo?.franchiseId]);
 
   const { data: clientDocs, isLoading: isClientLoading } = useCollection<Client>(clientQuery);
   
@@ -56,64 +56,61 @@ function useProvideAuth() {
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
     
-    if (baseUserInfo.role === 'client') {
-      const clientProfile = clientDocs?.[0] ?? null;
-      if (clientProfile) {
-        return {
-          ...baseUserInfo,
-          firstName: clientProfile.contactName || baseUserInfo.firstName,
-          lastName: '',
-          avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
-        };
-      }
-    }
-    return baseUserInfo;
+    if (baseUserInfo.role !== 'client') return baseUserInfo;
+
+    const clientProfile = clientDocs?.[0];
+    if (!clientProfile) return baseUserInfo;
+
+    // Combine user and client info
+    return {
+      ...baseUserInfo,
+      firstName: clientProfile.contactName || baseUserInfo.firstName,
+      lastName: '', // Assuming lastName is not relevant for client display
+      avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
+    };
   }, [baseUserInfo, clientDocs]);
 
 
   useEffect(() => {
     if (!firestore || !firebaseUser) return;
-    // Do not run if a creation process is already underway for this session
     if (isCreatingUserRef.current) return;
   
     const checkAndCreateUser = async () => {
-      // Set the flag to true to prevent re-execution for the same user instance
       isCreatingUserRef.current = true;
-  
       try {
         const userRef = doc(firestore, "users", firebaseUser.uid);
         const docSnap = await getDoc(userRef);
   
         if (!docSnap.exists()) {
-          console.log("User document does not exist, creating one...");
-          const email = firebaseUser.email || "";
-          const nameParts =
-            firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
-          const isMaster = email === "master@poolbr.com";
-  
-          const newUserInfo: UserInfo = {
-            id: firebaseUser.uid,
-            firstName: nameParts[0],
-            lastName: nameParts.slice(1).join(" "),
-            email: email,
-            role: isMaster ? "master" : "owner",
-            franchiseId: null,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-          };
-  
+           const email = firebaseUser.email || "";
+            const nameParts =
+              firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+
+            const isMaster = email === "master@poolbr.com";
+
+            const newUserInfo: UserInfo = {
+              id: firebaseUser.uid,
+              firstName: nameParts[0],
+              lastName: nameParts.slice(1).join(" "),
+              email: email,
+              role: isMaster ? "master" : "owner",
+              franchiseId: null,
+              isActive: true,
+              createdAt: new Date().toISOString(),
+            };
+
           await setDoc(userRef, newUserInfo);
-          console.log("User document created.");
         }
       } catch (error) {
         console.error("Error in checkAndCreateUser:", error);
+      } finally {
+        // This ref should not be reset to false here, to prevent re-running.
+        // It's meant to be a one-time check per login session.
       }
-      // The ref is NOT reset to false here. It should only be reset on a new login attempt
-      // or when the component unmounts, ensuring this logic runs only once per user session.
     };
   
     checkAndCreateUser();
-  }, [firestore, firebaseUser]); // This effect ONLY depends on firestore and firebaseUser.
+  }, [firestore, firebaseUser]);
 
 
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
@@ -145,7 +142,7 @@ function useProvideAuth() {
     if (!userInfo) return false;
     const rolesToCheck = Array.isArray(roles) ? roles : [roles];
     return rolesToCheck.includes(userInfo.role);
-  }, [userInfo]);
+  }, [userInfo?.role]);
   
   return useMemo(() => ({
     user: firebaseUser,
