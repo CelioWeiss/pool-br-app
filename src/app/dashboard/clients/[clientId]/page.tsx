@@ -67,15 +67,18 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
   const { pendingAppointments, completedAppointments } = React.useMemo(() => {
-    const pending: Appointment[] = [];
-    const completed: Appointment[] = [];
-    (clientAppointments || []).forEach(appt => {
-      if (appt.status === 'scheduled' || appt.status === 'in_progress') {
-        pending.push(appt);
-      } else {
-        completed.push(appt);
-      }
-    });
+    const allAppointments = clientAppointments || [];
+    
+    const pending = allAppointments
+      .filter(appt => appt.status === 'scheduled' || appt.status === 'in_progress')
+      .sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())
+      .slice(0, 5);
+
+    const completed = allAppointments
+      .filter(appt => appt.status === 'completed' || appt.status === 'cancelled')
+      .sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime())
+      .slice(0, 5);
+      
     return { pendingAppointments: pending, completedAppointments: completed };
   }, [clientAppointments]);
 
@@ -160,30 +163,29 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
             <Card>
               <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-5 w-5"/>
-                      Atendimentos Pendentes
-                  </CardTitle>
-                   <CardDescription>
-                    {pendingAppointments.length > 0 ? `Encontrado(s) ${pendingAppointments.length} atendimento(s) pendente(s).` : 'Nenhum atendimento pendente.'}
-                  </CardDescription>
-              </CardHeader>
-              <CardContent>
-                  <AppointmentHistory appointments={pendingAppointments} technicians={technicians || []} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
                       <History className="h-5 w-5"/>
                       Histórico de Atendimentos
                   </CardTitle>
                   <CardDescription>
-                    {completedAppointments.length > 0 ? `Encontrado(s) ${completedAppointments.length} atendimento(s) no histórico.` : 'Nenhum atendimento no histórico.'}
+                    {completedAppointments.length > 0 ? `Exibindo os últimos ${completedAppointments.length} atendimento(s) concluído(s).` : 'Nenhum atendimento no histórico.'}
                   </CardDescription>
               </CardHeader>
               <CardContent>
                   <AppointmentHistory appointments={completedAppointments} technicians={technicians || []} />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5"/>
+                      Próximos Atendimentos
+                  </CardTitle>
+                   <CardDescription>
+                    {pendingAppointments.length > 0 ? `Exibindo os próximos ${pendingAppointments.length} atendimento(s) pendente(s).` : 'Nenhum atendimento pendente.'}
+                  </CardDescription>
+              </CardHeader>
+              <CardContent>
+                  <AppointmentHistory appointments={pendingAppointments} technicians={technicians || []} />
               </CardContent>
             </Card>
         </div>
@@ -191,5 +193,3 @@ export default function ClientProfilePage({ params }: { params: Promise<{ client
     </div>
   );
 }
-
-    
