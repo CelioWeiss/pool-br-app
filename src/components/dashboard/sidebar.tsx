@@ -48,7 +48,7 @@ export function AppSidebar() {
 
   const filteredMenu = React.useMemo(() => {
     return menuItems.filter(item => hasRole(item.roles))
-  }, [menuItems, hasRole])
+  }, [hasRole, menuItems]);
 
   return (
     <Sidebar>
