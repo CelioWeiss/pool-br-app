@@ -76,46 +76,46 @@ function useProvideAuth() {
   }, [baseUserInfo, clientProfile]);
 
 
-  useEffect(() => {
-    if (!firestore || !firebaseUser || isUserInfoLoading || userInfo) {
+ useEffect(() => {
+    if (!firestore || !firebaseUser || userInfo) {
       return;
     }
 
     const checkAndCreateUser = async () => {
-        if (isCreatingUserRef.current) return;
-        isCreatingUserRef.current = true;
-        
-        try {
-            const userRef = doc(firestore, "users", firebaseUser.uid);
-            const docSnap = await getDoc(userRef);
+      if (isCreatingUserRef.current) return;
+      isCreatingUserRef.current = true;
+      try {
+        const userRef = doc(firestore, "users", firebaseUser.uid);
+        const docSnap = await getDoc(userRef);
 
-            if (!docSnap.exists()) {
-                const email = firebaseUser.email || "";
-                const nameParts = firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
-                const isMaster = email === "master@poolbr.com";
+        if (!docSnap.exists()) {
+          console.log(`Creating user profile for ${firebaseUser.uid}`);
+          const email = firebaseUser.email || "";
+          const nameParts = firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+          const isMaster = email === "master@poolbr.com";
 
-                const newUserInfo: UserInfo = {
-                    id: firebaseUser.uid,
-                    firstName: nameParts[0],
-                    lastName: nameParts.slice(1).join(" "),
-                    email: email,
-                    role: isMaster ? "master" : "owner",
-                    franchiseId: null,
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                };
-                await setDoc(userRef, newUserInfo);
-            }
-        } catch (error) {
-            console.error("Error in checkAndCreateUser: ", error);
-        } finally {
-            isCreatingUserRef.current = false;
+          const newUserInfo: UserInfo = {
+            id: firebaseUser.uid,
+            firstName: nameParts[0],
+            lastName: nameParts.slice(1).join(" "),
+            email: email,
+            role: isMaster ? "master" : "owner",
+            franchiseId: null,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          };
+          await setDoc(userRef, newUserInfo);
         }
+      } catch (error) {
+        console.error("Error in checkAndCreateUser: ", error);
+      } finally {
+        isCreatingUserRef.current = false;
+      }
     };
     
     checkAndCreateUser();
 
-  }, [firestore, firebaseUser, isUserInfoLoading, userInfo]);
+  }, [firestore, firebaseUser, userInfo]);
 
 
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
@@ -123,7 +123,6 @@ function useProvideAuth() {
     setAuthError(null);
     try {
       await signInWithEmailAndPassword(auth, email, pass);
-      // No need to call setIsLoggingIn(false) here, as the component will re-render on user state change.
       return { ok: true, redirect: '/dashboard' };
     } catch (err: any) {
       console.error("Login failed:", err);

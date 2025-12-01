@@ -44,8 +44,9 @@ export function AppSidebar() {
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
 
   const filteredMenu = React.useMemo(() => {
-    return menuItems.filter(item => hasRole(item.roles))
-  }, [hasRole]);
+    if (!userInfo) return [];
+    return menuItems.filter(item => hasRole(item.roles));
+  }, [userInfo, hasRole]);
 
   if (!userInfo) return null;
 
