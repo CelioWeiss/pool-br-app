@@ -77,42 +77,46 @@ function useProvideAuth() {
 
 
   useEffect(() => {
-    if (
-      !firestore ||
-      !firebaseUser ||
-      userInfo ||
-      isUserInfoLoading ||
-      isCreatingUserRef.current
-    ) {
+    if (!firestore || !firebaseUser || isUserInfoLoading || userInfo) {
       return;
     }
 
-    isCreatingUserRef.current = true;
+    const checkAndCreateUser = async () => {
+        if (isCreatingUserRef.current) return;
+        isCreatingUserRef.current = true;
+        
+        try {
+            const userRef = doc(firestore, "users", firebaseUser.uid);
+            const docSnap = await getDoc(userRef);
 
-    const userRef = doc(firestore, "users", firebaseUser.uid);
+            if (!docSnap.exists()) {
+                const email = firebaseUser.email || "";
+                const nameParts = firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+                const isMaster = email === "master@poolbr.com";
 
-    getDoc(userRef).then(docSnap => {
-      if (!docSnap.exists()) {
-        const email = firebaseUser.email || "";
-        const nameParts =
-          firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
-        const isMaster = email === "master@poolbr.com";
+                const newUserInfo: UserInfo = {
+                    id: firebaseUser.uid,
+                    firstName: nameParts[0],
+                    lastName: nameParts.slice(1).join(" "),
+                    email: email,
+                    role: isMaster ? "master" : "owner",
+                    franchiseId: null,
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                };
+                await setDoc(userRef, newUserInfo);
+            }
+        } catch (error) {
+            console.error("Error in checkAndCreateUser: ", error);
+        } finally {
+            isCreatingUserRef.current = false;
+        }
+    };
+    
+    checkAndCreateUser();
 
-        const newUserInfo: UserInfo = {
-          id: firebaseUser.uid,
-          firstName: nameParts[0],
-          lastName: nameParts.slice(1).join(" "),
-          email: email,
-          role: isMaster ? "master" : "owner",
-          franchiseId: null,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-        };
+  }, [firestore, firebaseUser, isUserInfoLoading, userInfo]);
 
-        setDoc(userRef, newUserInfo);
-      }
-    });
-  }, [firestore, firebaseUser, userInfo, isUserInfoLoading]);
 
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
     setIsLoggingIn(true);
