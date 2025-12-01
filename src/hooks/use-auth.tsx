@@ -48,9 +48,7 @@ function useProvideAuth() {
   }, [firestore, baseUserInfo]);
 
   const { data: clientDocs, isLoading: isClientLoading } = useCollection<Client>(clientQuery);
-  const clientProfile = useMemo(() => clientDocs?.[0] ?? null, [clientDocs]);
-
-
+  
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
   const router = useRouter();
@@ -58,6 +56,7 @@ function useProvideAuth() {
   const isCreatingUserRef = useRef(false);
   
   const userInfo = useMemo(() => {
+    const clientProfile = clientDocs?.[0] ?? null;
       if (!baseUserInfo) return null;
       // If the user is a client and we have found their specific client profile,
       // we merge the data to get the correct avatar and display name.
@@ -73,24 +72,25 @@ function useProvideAuth() {
       }
       // For all other roles, or if client profile isn't loaded yet, return the base user info.
       return baseUserInfo;
-  }, [baseUserInfo, clientProfile]);
+  }, [baseUserInfo, clientDocs]);
 
 
  useEffect(() => {
-    if (!firestore || !firebaseUser || userInfo || isCreatingUserRef.current) {
-      return;
-    }
+    if (!firestore || !firebaseUser) return;
+    if (isCreatingUserRef.current) return;
 
     const checkAndCreateUser = async () => {
       isCreatingUserRef.current = true;
+
       try {
         const userRef = doc(firestore, "users", firebaseUser.uid);
         const docSnap = await getDoc(userRef);
 
         if (!docSnap.exists()) {
-          console.log(`Creating user profile for ${firebaseUser.uid}`);
           const email = firebaseUser.email || "";
-          const nameParts = firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+          const nameParts =
+            firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+
           const isMaster = email === "master@poolbr.com";
 
           const newUserInfo: UserInfo = {
@@ -103,18 +103,16 @@ function useProvideAuth() {
             isActive: true,
             createdAt: new Date().toISOString(),
           };
+
           await setDoc(userRef, newUserInfo);
         }
       } catch (error) {
-        console.error("Error in checkAndCreateUser: ", error);
-      } finally {
-        isCreatingUserRef.current = false;
+        console.error("Error in checkAndCreateUser:", error);
       }
     };
-    
-    checkAndCreateUser();
 
-  }, [firestore, firebaseUser, userInfo]);
+    checkAndCreateUser();
+  }, [firestore, firebaseUser]);
 
 
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
