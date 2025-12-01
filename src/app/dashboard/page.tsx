@@ -45,7 +45,7 @@ const StatCard = ({
 );
 
 export default function DashboardPage() {
-  const { userInfo, hasRole } = useAuth();
+  const { userInfo } = useAuth();
   const firestore = useFirestore();
 
   const franchiseId = userInfo?.franchiseId;
@@ -215,11 +215,11 @@ export default function DashboardPage() {
 
   if (!userInfo) return null;
 
-  if (hasRole('client')) {
+  if (userInfo.role === 'client') {
     return <ClientDashboard />;
   }
 
-  if (hasRole('technician')) {
+  if (userInfo.role === 'technician') {
     return <TechnicianDashboard />;
   }
 
@@ -235,7 +235,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {hasRole('master') && (
+        {userInfo.role === 'master' && (
           <StatCard
             title="Total de Franquias"
             value={stats.franchises}
@@ -243,7 +243,7 @@ export default function DashboardPage() {
             isLoading={isLoading}
           />
         )}
-        {hasRole(['master', 'owner']) && (
+        {(userInfo.role === 'master' || userInfo.role === 'owner') && (
           <StatCard
             title="Clientes Ativos"
             value={stats.clients}
@@ -251,7 +251,7 @@ export default function DashboardPage() {
             isLoading={isLoading}
           />
         )}
-        {hasRole(['master', 'owner']) && (
+        {(userInfo.role === 'master' || userInfo.role === 'owner') && (
           <StatCard
             title="Total de Técnicos"
             value={stats.technicians}
@@ -259,7 +259,7 @@ export default function DashboardPage() {
             isLoading={isLoading}
           />
         )}
-        {hasRole(['owner']) && (
+        {userInfo.role === 'owner' && (
           <StatCard
             title="Serviços Agendados Hoje"
             value={stats.appointmentsToday}
@@ -269,7 +269,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-       {hasRole('owner') && (
+       {userInfo.role === 'owner' && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             <div className="lg:col-span-3">
                 <MonthlyRevenueChart data={revenueData} isLoading={isLoading} />
@@ -286,7 +286,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
-        {hasRole('owner') && userInfo.franchiseId && <PendingClients franchiseId={userInfo.franchiseId} />}
+        {userInfo.role === 'owner' && userInfo.franchiseId && <PendingClients franchiseId={userInfo.franchiseId} />}
       </div>
     </div>
   );
