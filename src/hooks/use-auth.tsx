@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect, useRef } from 'react';
@@ -109,9 +108,6 @@ function useProvideAuth() {
         }
       } catch (error) {
         console.error("Error in checkAndCreateUser:", error);
-      } finally {
-        // We set this to false only after the logic has run, but don't add it as a dependency.
-        // The main guard is the check if the user document already exists.
       }
     };
 
