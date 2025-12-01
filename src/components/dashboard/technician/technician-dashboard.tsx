@@ -2,13 +2,15 @@
 "use client";
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Appointment, Technician } from '@/lib/types';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { Calendar, CalendarCheck, CalendarClock, CalendarDays } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Calendar, CalendarCheck, CalendarClock, CalendarDays, QrCode } from 'lucide-react';
 import { isToday, isWithinInterval, startOfWeek, endOfWeek } from 'date-fns';
 
 const StatCard = ({ title, value, icon: Icon, isLoading }: { title: string, value: string | number, icon: React.ElementType, isLoading?: boolean }) => (
@@ -86,13 +88,21 @@ export function TechnicianDashboard() {
 
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">
-                    Bem-vindo, {userInfo?.firstName}!
-                </h1>
-                <p className="text-muted-foreground">
-                    Aqui está um resumo dos seus atendimentos.
-                </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        Bem-vindo, {userInfo?.firstName}!
+                    </h1>
+                    <p className="text-muted-foreground">
+                        Aqui está um resumo dos seus atendimentos.
+                    </p>
+                </div>
+                <Button asChild size="lg">
+                    <Link href="/dashboard/scanner">
+                        <QrCode className="mr-2 h-5 w-5" />
+                        Escanear QR Code
+                    </Link>
+                </Button>
             </div>
 
             {isLoading ? (
