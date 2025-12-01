@@ -130,13 +130,13 @@ function useProvideAuth() {
       }
       return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
     }
-  }, [router, auth]);
+  }, [auth]);
 
   const logout = useCallback(() => {
     signOut(auth).then(() => {
         router.push('/');
     });
-  }, [router, auth]);
+  }, [auth, router]);
 
   const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
     if (!userInfo) return false;
@@ -173,5 +173,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    
