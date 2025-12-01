@@ -24,6 +24,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { gerarAgendaDoMesNoFirestore } from '@/lib/schedule-generator';
+import { RescheduleModal } from '@/components/dashboard/schedule/reschedule-modal';
 
 
 export default function SchedulePage() {
@@ -33,6 +34,8 @@ export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
   const franchiseId = userInfo?.franchiseId;
+
+  const [appointmentToReschedule, setAppointmentToReschedule] = useState<Appointment | null>(null);
 
   // --- Data Fetching ---
   const techniciansQuery = useMemo(() =>
@@ -135,6 +138,7 @@ export default function SchedulePage() {
   }
 
   return (
+    <>
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
         <div>
@@ -226,11 +230,19 @@ export default function SchedulePage() {
                 clients={clients || []}
                 technicians={technicians || []}
                 locations={allLocations || []}
+                onReschedule={setAppointmentToReschedule}
               />
             )}
           </CardContent>
         </Card>
       </div>
     </div>
+     {appointmentToReschedule && (
+        <RescheduleModal
+          appointment={appointmentToReschedule}
+          onClose={() => setAppointmentToReschedule(null)}
+        />
+      )}
+    </>
   );
 }

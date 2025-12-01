@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import type { Appointment, Client, Technician, ServiceLocation } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, Check, X, Calendar, PlayCircle, History, FileText } from 'lucide-react';
+import { Clock, Check, X, Calendar, PlayCircle, History, FileText, CalendarClock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -14,7 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
-const AppointmentItem = ({ appointment, client, technician, location }: { appointment: Appointment, client?: Client, technician?: Technician, location?: ServiceLocation }) => {
+const AppointmentItem = ({ appointment, client, technician, location, onReschedule }: { appointment: Appointment, client?: Client, technician?: Technician, location?: ServiceLocation, onReschedule: (appointment: Appointment) => void }) => {
   const router = useRouter();
   const firestore = useFirestore();
   const { userInfo } = useAuth();
@@ -69,13 +69,19 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
         </div>
       </div>
        {(appointment.status === 'scheduled' || appointment.status === 'in_progress') && (
-        <Button onClick={handleStartAppointment} size="sm" disabled={isUpdating}>
-            {isUpdating ? (
-                <><Spinner size="small" className="mr-2" /> Atualizando...</>
-            ) : (
-                <><PlayCircle className="mr-2 h-4 w-4" /> {appointment.status === 'in_progress' ? 'Continuar' : 'Iniciar'}</>
-            )}
-        </Button>
+         <div className="flex items-center gap-2">
+            <Button onClick={() => onReschedule(appointment)} size="sm" variant="outline">
+              <CalendarClock className="mr-2 h-4 w-4" />
+              Reagendar
+            </Button>
+            <Button onClick={handleStartAppointment} size="sm" disabled={isUpdating}>
+                {isUpdating ? (
+                    <><Spinner size="small" className="mr-2" /> Atualizando...</>
+                ) : (
+                    <><PlayCircle className="mr-2 h-4 w-4" /> {appointment.status === 'in_progress' ? 'Continuar' : 'Iniciar'}</>
+                )}
+            </Button>
+         </div>
        )}
        {appointment.status === 'completed' && appointment.serviceReportId && (
           <Button asChild variant="outline" size="sm">
@@ -89,7 +95,7 @@ const AppointmentItem = ({ appointment, client, technician, location }: { appoin
   );
 };
 
-const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, techniciansMap, locationsMap }: { title: string, appointments: Appointment[], icon: React.ElementType, clientsMap: Map<string, Client>, techniciansMap: Map<string, Technician>, locationsMap: Map<string, ServiceLocation> }) => {
+const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, techniciansMap, locationsMap, onReschedule }: { title: string, appointments: Appointment[], icon: React.ElementType, clientsMap: Map<string, Client>, techniciansMap: Map<string, Technician>, locationsMap: Map<string, ServiceLocation>, onReschedule: (appointment: Appointment) => void }) => {
   if (appointments.length === 0) {
     return null;
   }
@@ -111,6 +117,7 @@ const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, technici
                     client={clientsMap.get(appt.clientId)}
                     technician={techniciansMap.get(appt.technicianId)}
                     location={locationsMap.get(appt.locationId)}
+                    onReschedule={onReschedule}
                 />
               ))}
             </div>
@@ -119,7 +126,7 @@ const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, technici
   )
 }
 
-export function DailySchedule({ pendingAppointments, completedAppointments, clients, technicians, locations }: { pendingAppointments: Appointment[], completedAppointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[] }) {
+export function DailySchedule({ pendingAppointments, completedAppointments, clients, technicians, locations, onReschedule }: { pendingAppointments: Appointment[], completedAppointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[], onReschedule: (appointment: Appointment) => void }) {
   const clientsMap = useMemo(() => new Map(clients?.map(c => [c.id, c])), [clients]);
   const techniciansMap = useMemo(() => new Map(technicians?.map(t => [t.id, t])), [technicians]);
   const locationsMap = useMemo(() => new Map(locations?.map(l => [l.id, l])), [locations]);
@@ -146,6 +153,7 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
         clientsMap={clientsMap}
         techniciansMap={techniciansMap}
         locationsMap={locationsMap}
+        onReschedule={onReschedule}
       />
       <AppointmentList 
         title="Concluídos no Dia"
@@ -154,6 +162,7 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
         clientsMap={clientsMap}
         techniciansMap={techniciansMap}
         locationsMap={locationsMap}
+        onReschedule={onReschedule}
       />
     </Accordion>
   );
