@@ -1,8 +1,7 @@
 
-
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -44,7 +43,7 @@ export function AppSidebar() {
   const { userInfo, logout, hasRole } = useAuth();
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
 
-  const filteredMenu = React.useMemo(() => {
+  const filteredMenu = useMemo(() => {
     if (!userInfo) return [];
     return menuItems.filter(item => hasRole(item.roles));
   }, [userInfo, hasRole]);

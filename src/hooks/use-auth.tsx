@@ -34,7 +34,6 @@ function useProvideAuth() {
   );
   const { data: baseUserInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
 
-  // This query finds the client document associated with the logged-in user.
   const clientQuery = useMemo(() => {
     if (firestore && baseUserInfo?.role === 'client' && baseUserInfo.franchiseId && baseUserInfo.id) {
       return query(
@@ -57,58 +56,53 @@ function useProvideAuth() {
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
     
-    // If the user is a client and we have found their specific client profile,
-    // we merge the data to get the correct avatar and display name.
     if (baseUserInfo.role === 'client') {
       const clientProfile = clientDocs?.[0] ?? null;
       if (clientProfile) {
         return {
           ...baseUserInfo,
           firstName: clientProfile.contactName || baseUserInfo.firstName,
-          lastName: '', // Client profile does not have a separate last name
+          lastName: '',
           avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
         };
       }
     }
-    // For all other roles, or if client profile isn't loaded yet, return the base user info.
     return baseUserInfo;
   }, [baseUserInfo, clientDocs]);
 
 
- useEffect(() => {
-    if (!firestore || !firebaseUser) return;
-    if (isCreatingUserRef.current) return;
-
+  useEffect(() => {
+    if (!firestore || !firebaseUser || isCreatingUserRef.current) return;
+    
     const checkAndCreateUser = async () => {
-      isCreatingUserRef.current = true;
+        isCreatingUserRef.current = true;
+        try {
+            const userRef = doc(firestore, "users", firebaseUser.uid);
+            const docSnap = await getDoc(userRef);
 
-      try {
-        const userRef = doc(firestore, "users", firebaseUser.uid);
-        const docSnap = await getDoc(userRef);
+            if (!docSnap.exists()) {
+                const email = firebaseUser.email || "";
+                const nameParts =
+                    firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
 
-        if (!docSnap.exists()) {
-          const email = firebaseUser.email || "";
-          const nameParts =
-            firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+                const isMaster = email === "master@poolbr.com";
 
-          const isMaster = email === "master@poolbr.com";
+                const newUserInfo: UserInfo = {
+                    id: firebaseUser.uid,
+                    firstName: nameParts[0],
+                    lastName: nameParts.slice(1).join(" "),
+                    email: email,
+                    role: isMaster ? "master" : "owner",
+                    franchiseId: null,
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                };
 
-          const newUserInfo: UserInfo = {
-            id: firebaseUser.uid,
-            firstName: nameParts[0],
-            lastName: nameParts.slice(1).join(" "),
-            email: email,
-            role: isMaster ? "master" : "owner",
-            franchiseId: null,
-            isActive: true,
-            createdAt: new Date().toISOString(),
-          };
-
-          await setDoc(userRef, newUserInfo);
+                await setDoc(userRef, newUserInfo);
+            }
+        } catch (error) {
+            console.error("Error in checkAndCreateUser:", error);
         }
-      } catch (error) {
-        console.error("Error in checkAndCreateUser:", error);
-      }
     };
 
     checkAndCreateUser();
@@ -119,7 +113,7 @@ function useProvideAuth() {
     setIsLoggingIn(true);
     setAuthError(null);
     try {
-      isCreatingUserRef.current = false; // Reset flag on new login attempt
+      isCreatingUserRef.current = false;
       await signInWithEmailAndPassword(auth, email, pass);
       return { ok: true, redirect: '/dashboard' };
     } catch (err: any) {

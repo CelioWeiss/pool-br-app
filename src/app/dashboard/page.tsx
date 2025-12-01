@@ -211,7 +211,7 @@ export default function DashboardPage() {
     }
   
     fetchStats();
-  }, [firestore, userInfo, franchiseId]);
+  }, [firestore, userInfo]);
 
   if (!userInfo) return null;
 
