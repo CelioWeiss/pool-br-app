@@ -77,12 +77,11 @@ function useProvideAuth() {
 
 
  useEffect(() => {
-    if (!firestore || !firebaseUser || userInfo) {
+    if (!firestore || !firebaseUser || userInfo || isCreatingUserRef.current) {
       return;
     }
 
     const checkAndCreateUser = async () => {
-      if (isCreatingUserRef.current) return;
       isCreatingUserRef.current = true;
       try {
         const userRef = doc(firestore, "users", firebaseUser.uid);
