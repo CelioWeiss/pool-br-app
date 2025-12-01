@@ -56,22 +56,23 @@ function useProvideAuth() {
   const isCreatingUserRef = useRef(false);
   
   const userInfo = useMemo(() => {
-    const clientProfile = clientDocs?.[0] ?? null;
-      if (!baseUserInfo) return null;
-      // If the user is a client and we have found their specific client profile,
-      // we merge the data to get the correct avatar and display name.
-      if (baseUserInfo.role === 'client' && clientProfile) {
+    if (!baseUserInfo) return null;
+    
+    // If the user is a client and we have found their specific client profile,
+    // we merge the data to get the correct avatar and display name.
+    if (baseUserInfo.role === 'client') {
+      const clientProfile = clientDocs?.[0] ?? null;
+      if (clientProfile) {
         return {
           ...baseUserInfo,
-          // Prefer the contact name from the client record, fall back to user's first name
           firstName: clientProfile.contactName || baseUserInfo.firstName,
           lastName: '', // Client profile does not have a separate last name
-          // Prefer the avatar from the client record, fall back to user's avatar
           avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
         };
       }
-      // For all other roles, or if client profile isn't loaded yet, return the base user info.
-      return baseUserInfo;
+    }
+    // For all other roles, or if client profile isn't loaded yet, return the base user info.
+    return baseUserInfo;
   }, [baseUserInfo, clientDocs]);
 
 
@@ -108,6 +109,9 @@ function useProvideAuth() {
         }
       } catch (error) {
         console.error("Error in checkAndCreateUser:", error);
+      } finally {
+        // We set this to false only after the logic has run, but don't add it as a dependency.
+        // The main guard is the check if the user document already exists.
       }
     };
 
