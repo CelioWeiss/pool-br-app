@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle, SheetTrigger as SheetTriggerPrimitive } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -194,7 +194,7 @@ const Sidebar = React.forwardRef<
 
     if (isMobile) {
       return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+        <Sheet open={openMobile} onOpenChange={setOpenMobile}>
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
@@ -267,7 +267,7 @@ const SidebarTrigger = React.forwardRef<
   const { toggleSidebar } = useSidebar()
 
   return (
-    <SheetTrigger
+    <SheetTriggerPrimitive
       ref={ref}
       asChild
       data-sidebar="trigger"
@@ -278,7 +278,7 @@ const SidebarTrigger = React.forwardRef<
         <PanelLeft />
         <span className="sr-only">Toggle Sidebar</span>
       </Button>
-    </SheetTrigger>
+    </SheetTriggerPrimitive>
   )
 })
 SidebarTrigger.displayName = "SidebarTrigger"
