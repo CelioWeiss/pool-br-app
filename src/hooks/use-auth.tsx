@@ -119,6 +119,7 @@ function useProvideAuth() {
     setIsLoggingIn(true);
     setAuthError(null);
     try {
+      isCreatingUserRef.current = false; // Reset flag on new login attempt
       await signInWithEmailAndPassword(auth, email, pass);
       return { ok: true, redirect: '/dashboard' };
     } catch (err: any) {
