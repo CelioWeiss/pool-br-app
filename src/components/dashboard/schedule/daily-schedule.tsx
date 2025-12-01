@@ -140,7 +140,7 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
     )
   }
 
-  const sortedPending = [...pendingAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
+  const sortedPending = [...pendingAppointments].sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
   const sortedCompleted = [...completedAppointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
 
 
