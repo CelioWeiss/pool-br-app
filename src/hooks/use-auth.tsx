@@ -151,7 +151,7 @@ function useProvideAuth() {
   return useMemo(() => ({
     user: firebaseUser,
     auth,
-    userInfo: userInfo || null,
+    userInfo,
     isUserLoading: isFirebaseUserLoading || isUserInfoLoading || isClientLoading,
     isLoggingIn,
     login,

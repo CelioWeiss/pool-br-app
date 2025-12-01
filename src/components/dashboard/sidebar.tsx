@@ -40,13 +40,8 @@ const menuItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { userInfo, logout } = useAuth();
+  const { userInfo, logout, hasRole } = useAuth();
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
-
-  const hasRole = React.useCallback((roles: string[]) => {
-    if (!userInfo?.role) return false;
-    return roles.includes(userInfo.role);
-  }, [userInfo?.role]);
 
   const filteredMenu = React.useMemo(() => {
     return menuItems.filter(item => hasRole(item.roles))
