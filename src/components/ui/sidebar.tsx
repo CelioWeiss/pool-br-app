@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent, SheetTitle, SheetTrigger as SheetTriggerPrimitive } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTrigger as SheetTriggerPrimitive, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -30,8 +30,6 @@ type SidebarContext = {
   state: "expanded" | "collapsed"
   open: boolean
   setOpen: (open: boolean) => void
-  openMobile: boolean
-  setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
 }
@@ -90,11 +88,13 @@ const SidebarProvider = React.forwardRef<
     )
 
     // Helper to toggle the sidebar.
-    const toggleSidebar = React. useCallback(() => {
-      return isMobile
-        ? setOpenMobile((open) => !open)
-        : setOpen((open) => !open)
-    }, [isMobile, setOpen, setOpenMobile])
+    const toggleSidebar = React.useCallback(() => {
+        if (isMobile) {
+            setOpenMobile((prev) => !prev)
+        } else {
+            setOpen((prev) => !prev)
+        }
+    }, [isMobile, setOpen])
 
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
@@ -122,33 +122,36 @@ const SidebarProvider = React.forwardRef<
         open,
         setOpen,
         isMobile,
-        openMobile,
-        setOpenMobile,
         toggleSidebar,
       }),
-      [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+      [state, open, setOpen, isMobile, toggleSidebar]
     )
+    
+    const sheetOpen = isMobile ? openMobile : false;
+    const onSheetOpenChange = isMobile ? setOpenMobile : () => {};
 
     return (
       <SidebarContext.Provider value={contextValue}>
         <TooltipProvider delayDuration={0}>
-          <div
-            style={
-              {
-                "--sidebar-width": SIDEBAR_WIDTH,
-                "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
-                ...style,
-              } as React.CSSProperties
-            }
-            className={cn(
-              "group/sidebar-wrapper flex min-h-screen w-full has-[[data-variant=inset]]:bg-sidebar",
-              className
-            )}
-            ref={ref}
-            {...props}
-          >
-            {children}
-          </div>
+          <Sheet open={sheetOpen} onOpenChange={onSheetOpenChange}>
+            <div
+                style={
+                {
+                    "--sidebar-width": SIDEBAR_WIDTH,
+                    "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+                    ...style,
+                } as React.CSSProperties
+                }
+                className={cn(
+                "group/sidebar-wrapper flex min-h-screen w-full has-[[data-variant=inset]]:bg-sidebar",
+                className
+                )}
+                ref={ref}
+                {...props}
+            >
+                {children}
+            </div>
+          </Sheet>
         </TooltipProvider>
       </SidebarContext.Provider>
     )
@@ -175,7 +178,7 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const { isMobile, state } = useSidebar()
 
     if (collapsible === "none") {
       return (
@@ -194,8 +197,7 @@ const Sidebar = React.forwardRef<
 
     if (isMobile) {
       return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-          <SheetContent
+        <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
             className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
@@ -209,7 +211,6 @@ const Sidebar = React.forwardRef<
             <SheetTitle className="sr-only">Menu de Navegação</SheetTitle>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
-        </Sheet>
       )
     }
 
