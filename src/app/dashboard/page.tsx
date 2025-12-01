@@ -12,7 +12,7 @@ import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
 import { MonthlyRevenueChart } from '@/components/dashboard/charts/monthly-revenue-chart';
 import { ClientStatsChart, type ClientStatsData } from '@/components/dashboard/charts/client-stats-chart';
-import type { Payment } from '@/lib/types';
+import type { Payment, Franchise } from '@/lib/types';
 import { subMonths, startOfMonth, endOfMonth, format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
@@ -89,44 +89,51 @@ export default function DashboardPage() {
   // --- General and Chart Stats Fetching ---
   useEffect(() => {
     async function fetchStats() {
-      if (!userInfo || !firestore || !franchiseId) return;
+      if (!userInfo || !firestore) return;
       setIsLoading(true);
-
-      const counts = {
-        franchises: 0,
-        clients: 0,
-        technicians: 0,
-      };
-
+  
+      let totalFranchises = 0;
+      let totalClients = 0;
+      let totalTechnicians = 0;
+  
       try {
         if (hasRole('master')) {
-          const franchisesSnap = await getCountFromServer(
-            collection(firestore, 'franchises')
-          );
-          counts.franchises = franchisesSnap.data().count;
-        }
-
-        if (hasRole(['master', 'owner'])) {
-          const activeClientsQuery = query(
-            collection(firestore, 'franchises', franchiseId, 'clients'),
-            where('isActive', '==', true)
-          );
-          const activeClientsSnap = await getCountFromServer(activeClientsQuery);
-          counts.clients = activeClientsSnap.data().count;
-
-          const techniciansQuery = query(
-            collection(
-              firestore,
-              'franchises',
-              franchiseId,
-              'technicians'
+          // Master user: aggregate data from all franchises
+          const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
+          totalFranchises = franchisesSnap.size;
+  
+          for (const franchiseDoc of franchisesSnap.docs) {
+            const currentFranchiseId = franchiseDoc.id;
+            
+            const clientsSnap = await getCountFromServer(
+              query(
+                collection(firestore, `franchises/${currentFranchiseId}/clients`),
+                where('isActive', '==', true)
+              )
+            );
+            totalClients += clientsSnap.data().count;
+            
+            const techniciansSnap = await getCountFromServer(
+              collection(firestore, `franchises/${currentFranchiseId}/technicians`)
+            );
+            totalTechnicians += techniciansSnap.data().count;
+          }
+        } else if (hasRole('owner') && franchiseId) {
+          // Owner user: get data for their own franchise
+          const activeClientsSnap = await getCountFromServer(
+            query(
+              collection(firestore, 'franchises', franchiseId, 'clients'),
+              where('isActive', '==', true)
             )
           );
-          const techniciansSnap = await getCountFromServer(techniciansQuery);
-          counts.technicians = techniciansSnap.data().count;
-        }
-
-        if (hasRole(['owner'])) {
+          totalClients = activeClientsSnap.data().count;
+  
+          const techniciansSnap = await getCountFromServer(
+            collection(firestore, 'franchises', franchiseId, 'technicians')
+          );
+          totalTechnicians = techniciansSnap.data().count;
+  
+          // Fetch financial and client stats data only for owners
           const now = new Date();
           const monthLabels: string[] = [];
           const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
@@ -183,15 +190,15 @@ export default function DashboardPage() {
           setClientStatsData(monthLabels.map(month => ({
             month,
             newClients: newClientsByMonth[month] || 0,
-            inactiveClients: 0, // This is an approximation
+            inactiveClients: 0,
           })));
         }
-        
+  
         setStats(prev => ({
           ...prev,
-          franchises: counts.franchises,
-          clients: counts.clients,
-          technicians: counts.technicians,
+          franchises: totalFranchises,
+          clients: totalClients,
+          technicians: totalTechnicians,
         }));
       } catch (error) {
         console.error('Error fetching stats:', error);
@@ -199,7 +206,7 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     }
-
+  
     fetchStats();
   }, [firestore, userInfo, hasRole, franchiseId]);
 
@@ -281,5 +288,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
