@@ -46,6 +46,10 @@ export function AppSidebar() {
 
   if (!userInfo) return null;
 
+  const filteredMenu = React.useMemo(() => {
+    return menuItems.filter(item => hasRole(item.roles))
+  }, [menuItems, hasRole])
+
   return (
     <Sidebar>
        <SidebarHeader className="border-b border-sidebar-border">
@@ -69,7 +73,7 @@ export function AppSidebar() {
 
       <SidebarContent className="flex-1 p-2">
         <SidebarMenu>
-          {menuItems.filter(item => hasRole(item.roles)).map(item => (
+          {filteredMenu.map(item => (
              <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   asChild
