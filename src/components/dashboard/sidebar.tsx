@@ -40,15 +40,19 @@ const menuItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
-  const { userInfo, hasRole, logout } = useAuth();
+  const { userInfo, logout } = useAuth();
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
 
-
-  if (!userInfo) return null;
+  const hasRole = React.useCallback((roles: string[]) => {
+    if (!userInfo?.role) return false;
+    return roles.includes(userInfo.role);
+  }, [userInfo?.role]);
 
   const filteredMenu = React.useMemo(() => {
     return menuItems.filter(item => hasRole(item.roles))
-  }, [hasRole, menuItems]);
+  }, [hasRole]);
+
+  if (!userInfo) return null;
 
   return (
     <Sidebar>
