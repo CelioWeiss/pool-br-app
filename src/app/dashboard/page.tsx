@@ -97,7 +97,10 @@ export default function DashboardPage() {
       let totalTechnicians = 0;
   
       try {
-        if (hasRole('master')) {
+        const isMaster = userInfo.role === 'master';
+        const isOwner = userInfo.role === 'owner';
+
+        if (isMaster) {
           // Master user: aggregate data from all franchises
           const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
           totalFranchises = franchisesSnap.size;
@@ -118,7 +121,7 @@ export default function DashboardPage() {
             );
             totalTechnicians += techniciansSnap.data().count;
           }
-        } else if (hasRole('owner') && franchiseId) {
+        } else if (isOwner && franchiseId) {
           // Owner user: get data for their own franchise
           const activeClientsSnap = await getCountFromServer(
             query(
@@ -208,7 +211,7 @@ export default function DashboardPage() {
     }
   
     fetchStats();
-  }, [firestore, userInfo, hasRole, franchiseId]);
+  }, [firestore, userInfo, franchiseId]);
 
   if (!userInfo) return null;
 
