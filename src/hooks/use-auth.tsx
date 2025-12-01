@@ -71,51 +71,49 @@ function useProvideAuth() {
   }, [baseUserInfo, clientDocs]);
 
 
-useEffect(() => {
-    // This effect handles creating a user profile in Firestore if it doesn't exist.
-    // It runs only when the firebaseUser object changes (i.e., on login).
+  useEffect(() => {
     if (!firestore || !firebaseUser) return;
+    // Do not run if a creation process is already underway for this session
     if (isCreatingUserRef.current) return;
-
+  
     const checkAndCreateUser = async () => {
-        // Prevent this from running multiple times for the same user session.
-        isCreatingUserRef.current = true;
-
-        try {
-            const userRef = doc(firestore, "users", firebaseUser.uid);
-            const docSnap = await getDoc(userRef);
-
-            if (!docSnap.exists()) {
-                console.log("User document does not exist, creating one...");
-                const email = firebaseUser.email || "";
-                const nameParts =
-                    firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
-                const isMaster = email === "master@poolbr.com";
-
-                const newUserInfo: UserInfo = {
-                    id: firebaseUser.uid,
-                    firstName: nameParts[0],
-                    lastName: nameParts.slice(1).join(" "),
-                    email: email,
-                    role: isMaster ? "master" : "owner",
-                    franchiseId: null,
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                };
-
-                await setDoc(userRef, newUserInfo);
-                 console.log("User document created.");
-            }
-        } catch (error) {
-            console.error("Error in checkAndCreateUser:", error);
-        } 
-        // We don't reset `isCreatingUserRef.current` to false here to ensure
-        // this entire block only ever runs once per component lifecycle / user session.
-        // It will be naturally reset on re-mount (e.g., page refresh or logout/login).
+      // Set the flag to true to prevent re-execution for the same user instance
+      isCreatingUserRef.current = true;
+  
+      try {
+        const userRef = doc(firestore, "users", firebaseUser.uid);
+        const docSnap = await getDoc(userRef);
+  
+        if (!docSnap.exists()) {
+          console.log("User document does not exist, creating one...");
+          const email = firebaseUser.email || "";
+          const nameParts =
+            firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+          const isMaster = email === "master@poolbr.com";
+  
+          const newUserInfo: UserInfo = {
+            id: firebaseUser.uid,
+            firstName: nameParts[0],
+            lastName: nameParts.slice(1).join(" "),
+            email: email,
+            role: isMaster ? "master" : "owner",
+            franchiseId: null,
+            isActive: true,
+            createdAt: new Date().toISOString(),
+          };
+  
+          await setDoc(userRef, newUserInfo);
+          console.log("User document created.");
+        }
+      } catch (error) {
+        console.error("Error in checkAndCreateUser:", error);
+      }
+      // The ref is NOT reset to false here. It should only be reset on a new login attempt
+      // or when the component unmounts, ensuring this logic runs only once per user session.
     };
-
+  
     checkAndCreateUser();
-}, [firestore, firebaseUser]);
+  }, [firestore, firebaseUser]); // This effect ONLY depends on firestore and firebaseUser.
 
 
   const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
