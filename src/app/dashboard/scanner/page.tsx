@@ -169,11 +169,12 @@ export default function ScannerPage() {
                         {hasCameraPermission === false && (
                              <div className="flex h-full w-full flex-col items-center justify-center text-center p-4">
                                 <CameraOff className="h-16 w-16 text-destructive" />
-                                <p className="mt-4 font-semibold">Acesso à câmera negado</p>
-                                <p className="text-sm text-muted-foreground">
-                                    É necessário permitir o acesso à câmera para escanear QR Codes.
-                                    Por favor, habilite a permissão nas configurações do seu navegador e atualize a página.
-                                </p>
+                                <Alert variant="destructive" className="mt-4">
+                                    <AlertTitle>Acesso à Câmera Necessário</AlertTitle>
+                                    <AlertDescription>
+                                        Para escanear QR Codes, você precisa permitir o acesso à câmera. Por favor, ative a permissão nas configurações do seu navegador e atualize a página.
+                                    </AlertDescription>
+                                </Alert>
                             </div>
                         )}
                         {hasCameraPermission && (
