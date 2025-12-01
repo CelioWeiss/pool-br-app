@@ -178,7 +178,6 @@ export default function ScannerPage() {
                         )}
                         {hasCameraPermission && (
                             <>
-                                {/* Removido o autoPlay, o play é chamado manualmente no useEffect */}
                                 <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
                                 <canvas ref={canvasRef} className="hidden" />
                                 {isScanning && (
@@ -210,5 +209,3 @@ export default function ScannerPage() {
         </div>
     );
 }
-
-    
