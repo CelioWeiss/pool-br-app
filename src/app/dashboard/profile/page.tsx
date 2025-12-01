@@ -26,9 +26,11 @@ export default function ProfilePage() {
 
   // Franchise Data
   const franchiseId = userInfo?.franchiseId;
+  const isOwner = hasRole('owner');
+
   const franchiseDocRef = useMemo(() =>
-    firestore && franchiseId ? doc(firestore, 'franchises', franchiseId) : null
-  , [firestore, franchiseId]);
+    firestore && franchiseId && isOwner ? doc(firestore, 'franchises', franchiseId) : null
+  , [firestore, franchiseId, isOwner]);
   const { data: franchise, isLoading: isLoadingFranchise } = useDoc<Franchise>(franchiseDocRef);
   
   // User Data
@@ -94,7 +96,7 @@ export default function ProfilePage() {
     try {
         const batch = writeBatch(firestore);
 
-        // Update Franchise Doc if it exists
+        // Update Franchise Doc if it exists (only for owners)
         if (franchiseDocRef) {
           batch.update(franchiseDocRef, {
               pixKey: pixKey,
@@ -196,7 +198,7 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
 
-        {hasRole('owner') && franchise && (
+        {isOwner && franchise && (
             <Card>
               <CardHeader>
                 <CardTitle>Perfil da Franquia</CardTitle>
@@ -265,5 +267,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
