@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { TechnicianMap } from '@/components/dashboard/map/technician-map';
 import type { Client, Technician, Appointment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, query } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { useMemo } from 'react';
 
