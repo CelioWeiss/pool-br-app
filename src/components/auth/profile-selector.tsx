@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { users as userList } from '@/lib/data';
-import type { User } from '@/lib/types';
+import type { UserInfo } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 export function ProfileSelector() {
   const { anonymousLoginAs, isLoggingIn } = useAuth();
 
-  const handleLogin = async (user: User) => {
+  const handleLogin = async (user: UserInfo) => {
     await anonymousLoginAs(user);
   };
 

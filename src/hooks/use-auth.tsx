@@ -20,6 +20,7 @@ import {
   User as FirebaseUser,
   Auth,
   createUserWithEmailAndPassword,
+  signInAnonymously,
 } from "firebase/auth";
 import {
   doc,
@@ -40,6 +41,7 @@ interface AuthContextType {
     email: string,
     pass: string
   ) => Promise<{ ok: boolean; error?: string; redirect?: string }>;
+  anonymousLoginAs: (user: UserInfo) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   authError: AuthError | null;
@@ -143,6 +145,36 @@ function useProvideAuth() {
     },
     [auth]
   );
+  
+  const anonymousLoginAs = useCallback(async (userToLoginAs: UserInfo) => {
+    setIsLoggingIn(true);
+    setAuthError(null);
+    try {
+        // Sign in anonymously to get a temporary Firebase user
+        const { user } = await signInAnonymously(auth);
+
+        // Here, instead of creating a real doc, we simulate having the doc
+        // by directly controlling the state and redirecting.
+        // In a real scenario, you might link the anonymous UID to a profile.
+        
+        // This is a mock-up of what the user info would look like
+        const simulatedUserInfo: UserInfo = {
+            ...userToLoginAs,
+            id: user.uid // Use the anonymous user's UID
+        };
+
+        // For this demo, we'll assume the onAuthStateChanged listener and
+        // the useDoc hook will eventually pick up a "real" user document.
+        // The key is to redirect after a successful login.
+        router.push("/dashboard");
+
+    } catch (err: any) {
+        console.error("Anonymous login failed:", err);
+        setAuthError(err);
+    } finally {
+        setIsLoggingIn(false);
+    }
+  }, [auth, router]);
 
   const logout = useCallback(() => {
     signOut(auth).then(() => {
@@ -169,6 +201,7 @@ function useProvideAuth() {
       isClientLoading,
     isLoggingIn,
     login,
+    anonymousLoginAs,
     logout,
     hasRole,
     authError,

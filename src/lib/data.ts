@@ -11,6 +11,7 @@ export const users: UserInfo[] = [
     franchiseId: null,
     isActive: true,
     createdAt: new Date().toISOString(),
+    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxwcm9mZXNzaW9uYWwlMjBtYW58ZW58MHx8fHwxNzYzOTcwOTAwfDA&ixlib=rb-4.1.0&q=80&w=1080",
   }
 ];
 
