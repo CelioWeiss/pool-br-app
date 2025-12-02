@@ -23,13 +23,10 @@ import {
 } from "firebase/auth";
 import {
   doc,
-  getDoc,
-  setDoc,
   collection,
   query,
   where,
   limit,
-  writeBatch,
 } from "firebase/firestore";
 
 interface AuthContextType {
@@ -104,7 +101,7 @@ function useProvideAuth() {
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
 
-    if (baseUserInfo.role !== "client") return baseUserInfo;
+    if (baseUserInfo.role !== "client" || !clientDocs) return baseUserInfo;
 
     const clientProfile = clientDocs?.[0];
     if (!clientProfile) return baseUserInfo;
@@ -126,9 +123,7 @@ function useProvideAuth() {
       setAuthError(null);
 
       try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, pass);
-        const loggedInUser = userCredential.user;
-        
+        await signInWithEmailAndPassword(auth, email, pass);
         setIsLoggingIn(false);
         return { ok: true, redirect: "/dashboard" };
 

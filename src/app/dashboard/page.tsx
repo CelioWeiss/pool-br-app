@@ -7,7 +7,7 @@ import { Building2, Users, Wrench, Calendar } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, getCountFromServer, getDocs } from 'firebase/firestore';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
 import { MonthlyRevenueChart } from '@/components/dashboard/charts/monthly-revenue-chart';
@@ -70,8 +70,8 @@ export default function DashboardPage() {
 
   // Memoize queries
   const franchisesQuery = useMemo(() => firestore ? collection(firestore, 'franchises') : null, [firestore]);
-  const franchiseClientsQuery = useMemo(() => firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null, [firestore, franchiseId]);
-  const franchiseTechniciansQuery = useMemo(() => firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null, [firestore, franchiseId]);
+  const franchiseClientsQuery = useMemo(() => firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null, [firestore, franchiseId]);
+  const franchiseTechniciansQuery = useMemo(() => firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'technicians')) : null, [firestore, franchiseId]);
   const franchisePaymentsQuery = useMemo(() => {
     if (!firestore || !franchiseId) return null;
     const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
@@ -95,7 +95,7 @@ export default function DashboardPage() {
 
   // --- General and Chart Stats Fetching ---
   useEffect(() => {
-    async function fetchStats() {
+    const fetchStats = async () => {
       if (!userInfo || !firestore) return;
       setIsLoading(true);
   
@@ -106,7 +106,6 @@ export default function DashboardPage() {
         if (isMaster && franchisesQuery) {
           const franchisesSnap = await getDocs(franchisesQuery);
           setStats(prev => ({ ...prev, franchises: franchisesSnap.size }));
-          // Master stats can be expanded here
         }
 
         if (isOwner && franchiseId) {
@@ -119,7 +118,7 @@ export default function DashboardPage() {
             const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
 
             allClientsSnap.forEach(doc => {
-              const client = doc.data() as UserInfo; // Assuming Client has similar props
+              const client = doc.data() as UserInfo;
               if (client.isActive) active++;
               else inactive++;
 
@@ -139,7 +138,7 @@ export default function DashboardPage() {
             setClientStatsData(monthLabels.map(month => ({
               month,
               newClients: newClientsByMonth[month] || 0,
-              inactiveClients: 0, // This could be calculated if needed
+              inactiveClients: 0,
             })));
           }
 
@@ -210,29 +209,27 @@ export default function DashboardPage() {
             isLoading={isLoading}
           />
         )}
-        {(userInfo.role === 'master' || userInfo.role === 'owner') && (
-          <StatCard
-            title="Clientes Ativos"
-            value={stats.clients}
-            icon={Users}
-            isLoading={isLoading}
-          />
-        )}
-        {(userInfo.role === 'master' || userInfo.role === 'owner') && (
-          <StatCard
-            title="Total de Técnicos"
-            value={stats.technicians}
-            icon={Wrench}
-            isLoading={isLoading}
-          />
-        )}
-        {userInfo.role === 'owner' && (
-          <StatCard
-            title="Serviços Agendados Hoje"
-            value={stats.appointmentsToday}
-            icon={Calendar}
-            isLoading={isLoadingAppointments}
-          />
+        {(userInfo.role === 'owner') && (
+          <>
+            <StatCard
+              title="Clientes Ativos"
+              value={stats.clients}
+              icon={Users}
+              isLoading={isLoading}
+            />
+            <StatCard
+              title="Total de Técnicos"
+              value={stats.technicians}
+              icon={Wrench}
+              isLoading={isLoading}
+            />
+            <StatCard
+              title="Serviços Agendados Hoje"
+              value={stats.appointmentsToday}
+              icon={Calendar}
+              isLoading={isLoadingAppointments}
+            />
+          </>
         )}
       </div>
 
