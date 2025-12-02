@@ -127,9 +127,6 @@ function useProvideAuth() {
       try {
         const userCredential = await signInWithEmailAndPassword(auth, email, pass);
         const loggedInUser = userCredential.user;
-
-        // The onAuthStateChanged listener will handle the user state update.
-        // We just redirect.
         
         setIsLoggingIn(false);
         return { ok: true, redirect: "/dashboard" };
@@ -153,7 +150,7 @@ function useProvideAuth() {
         };
       }
     },
-    [auth, firestore]
+    [auth, firestore, router]
   );
 
   const logout = useCallback(() => {
