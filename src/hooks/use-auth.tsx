@@ -9,7 +9,6 @@ import React, {
   useMemo,
   useCallback,
   useEffect,
-  useRef,
 } from "react";
 import { useRouter } from "next/navigation";
 import type { Client, UserInfo, UserRole } from "@/lib/types";
@@ -59,7 +58,6 @@ function useProvideAuth() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
 
-  // ✅ userDocRef ESTÁVEL
   const userDocRef = useMemo(() => {
     if (!firestore || !firebaseUser?.uid) return null;
     return doc(firestore, "users", firebaseUser.uid);
@@ -70,7 +68,6 @@ function useProvideAuth() {
     isLoading: isUserInfoLoading,
   } = useDoc<UserInfo>(userDocRef);
 
-  // ✅ clientQuery TOTALMENTE ESTÁVEL
   const clientQuery = useMemo(() => {
     if (
       firestore &&
@@ -102,7 +99,6 @@ function useProvideAuth() {
     isLoading: isClientLoading,
   } = useCollection<Client>(clientQuery);
 
-  // ✅ userInfo BLINDADO CONTRA LOOP
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
 
@@ -119,7 +115,6 @@ function useProvideAuth() {
     };
   }, [baseUserInfo, clientDocs]);
 
-  // ✅ LOGIN SEGURO E TRANSACIONAL
   const login = useCallback(
     async (
       email: string,
@@ -132,12 +127,12 @@ function useProvideAuth() {
         const userCredential = await signInWithEmailAndPassword(auth, email, pass);
         const loggedInUser = userCredential.user;
 
-        // Perform user profile check/creation after successful login
         if (firestore && loggedInUser) {
             const userRef = doc(firestore, "users", loggedInUser.uid);
             const docSnap = await getDoc(userRef);
 
             if (!docSnap.exists()) {
+                console.log("User profile does not exist, creating...");
                 const userEmail = loggedInUser.email || "";
                 const nameParts =
                     loggedInUser.displayName?.split(" ") || [
@@ -185,14 +180,12 @@ function useProvideAuth() {
     [auth, firestore]
   );
 
-  // ✅ LOGOUT SEGURO
   const logout = useCallback(() => {
     signOut(auth).then(() => {
       router.push("/");
     });
   }, [auth, router]);
 
-  // ✅ hasRole PERFEITO E ESTÁVEL
   const hasRole = useCallback(
     (roles: UserRole | UserRole[]): boolean => {
       if (!userInfo?.role) return false;
