@@ -36,6 +36,7 @@ interface AuthContextType {
   user: FirebaseUser | null;
   auth: Auth;
   userInfo: UserInfo | null;
+
   isUserLoading: boolean;
   isLoggingIn: boolean;
   login: (
@@ -150,7 +151,7 @@ function useProvideAuth() {
         };
       }
     },
-    [auth, firestore, router]
+    [auth]
   );
 
   const logout = useCallback(() => {
