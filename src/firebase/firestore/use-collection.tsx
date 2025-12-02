@@ -26,26 +26,13 @@ export interface UseCollectionResult<T> {
   error: FirestoreError | Error | null; // Error object, or null.
 }
 
-/* Internal implementation of Query:
-  https://github.com/firebase/firebase-js-sdk/blob/c5f08a9bc5da0d2b0207802c972d53724ccef055/packages/firestore/src/lite-api/reference.ts#L143
-*/
-export interface InternalQuery extends Query<DocumentData> {
-  _query: {
-    path: {
-      canonicalString(): string;
-      toString(): string;
-    }
-  }
-}
-
 /**
  * React hook to subscribe to a Firestore collection or query in real-time.
  * Handles nullable references/queries.
- * 
  *
  * IMPORTANT! The caller of this hook MUST MEMOIZE the inputted targetRefOrQuery
  * using `useMemo` to prevent infinite render loops.
- *  
+ *
  * @template T Optional type for document data. Defaults to any.
  * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} targetRefOrQuery -
  * The Firestore CollectionReference or Query. Waits if null/undefined.
@@ -64,25 +51,9 @@ export function useCollection<T = any>(
   // The path string is a stable primitive value that can be used in the dependency array.
   const queryPath = useMemo(() => {
     if (!targetRefOrQuery) return null;
-    
-    // For CollectionReference, .path is public and stable.
-    if (targetRefOrQuery.type === 'collection') {
-        return (targetRefOrQuery as CollectionReference).path;
-    }
-    
-    // For Query, we need a stable representation. The internal _query object is not guaranteed API,
-    // but it's the most common way to get a stable path. We'll add fallbacks.
-    try {
-        const internalQuery = targetRefOrQuery as unknown as InternalQuery;
-        if (internalQuery._query?.path?.canonicalString) {
-            return internalQuery._query.path.canonicalString();
-        }
-    } catch {
-       // If internal access fails, fall back to stringifying the query object.
-       // This is less ideal as it might change more often, but better than nothing.
-       // NOTE: This fallback path is a potential source of loops if query objects are not memoized by the caller.
-    }
-    return JSON.stringify(targetRefOrQuery); // Fallback string representation
+    if ('path' in targetRefOrQuery) return targetRefOrQuery.path;
+    // Fallback for complex queries - less stable, relies on caller memoization
+    return JSON.stringify(targetRefOrQuery);
   }, [targetRefOrQuery]);
 
 
@@ -128,6 +99,6 @@ export function useCollection<T = any>(
 
     return () => unsubscribe();
   }, [queryPath]); // Re-run only when the actual query path changes
-  
+
   return { data, isLoading, error };
 }
