@@ -31,7 +31,7 @@ function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
 
 
 export function TechnicianMap({ apiKey, technicians, appointments, locations }: { apiKey: string, technicians: Technician[], appointments: Appointment[], locations: ServiceLocation[] }) {
-  const mapCenter = { lat: -23.55052, lng: -46.633308 }; // São Paulo center
+  const mapCenter = useMemo(() => ({ lat: -23.55052, lng: -46.633308 }), []); // São Paulo center
 
   const technicianAppointments = (techId: string) => 
     appointments

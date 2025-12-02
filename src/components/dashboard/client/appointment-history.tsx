@@ -173,7 +173,7 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
                   <span className="font-bold">{format(new Date(appt.scheduledDateTime), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
                   <span className="text-sm text-muted-foreground">Técnico: {technician?.firstName || 'N/A'}</span>
                 </div>
-                <Badge variant={currentStatus.variant} className={currentStatus.className}>
+                <Badge variant={currentStatus.variant} className={cn(currentStatus.className, 'whitespace-nowrap')}>
                   <currentStatus.icon className="mr-1 h-3 w-3" />
                   {currentStatus.label}
                 </Badge>
