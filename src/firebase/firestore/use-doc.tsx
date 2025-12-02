@@ -48,6 +48,8 @@ export function useDoc<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
+  const docPath = docRef?.path;
+
   useEffect(() => {
     if (!docRef) {
       setData(null);
@@ -89,7 +91,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [docRef]); // Re-run if the docRef changes.
+  }, [docPath]); // Re-run if the docRef path changes.
 
   return { data, isLoading, error };
 }
