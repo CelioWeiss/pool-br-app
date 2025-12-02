@@ -61,7 +61,7 @@ function useProvideAuth() {
 
   const isCreatingUserRef = useRef(false);
 
-  // ✅ userDocRef ESTÁVEL
+  // ✅ userDocRef STABLE
   const userDocRef = useMemo(() => {
     if (!firestore || !firebaseUser?.uid) return null;
     return doc(firestore, "users", firebaseUser.uid);
@@ -72,7 +72,7 @@ function useProvideAuth() {
     isLoading: isUserInfoLoading,
   } = useDoc<UserInfo>(userDocRef);
 
-  // ✅ clientQuery TOTALMENTE ESTÁVEL
+  // ✅ clientQuery FULLY STABLE
   const clientQuery = useMemo(() => {
     if (
       firestore &&
@@ -104,7 +104,7 @@ function useProvideAuth() {
     isLoading: isClientLoading,
   } = useCollection<Client>(clientQuery);
 
-  // ✅ userInfo BLINDADO CONTRA LOOP
+  // ✅ userInfo SHIELDED AGAINST LOOPS
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
 
@@ -121,7 +121,8 @@ function useProvideAuth() {
     };
   }, [baseUserInfo?.id, baseUserInfo?.role, clientDocs?.[0]?.id]);
 
-  // ✅ LOGIN SEGURO
+
+  // ✅ LOGIN SECURE
   const login = useCallback(
     async (
       email: string,
@@ -188,7 +189,7 @@ function useProvideAuth() {
     [auth, firestore]
   );
 
-  // ✅ LOGOUT SEGURO
+  // ✅ LOGOUT SECURE
   const logout = useCallback(() => {
     signOut(auth).then(() => {
       isCreatingUserRef.current = false;
@@ -196,7 +197,7 @@ function useProvideAuth() {
     });
   }, [auth, router]);
 
-  // ✅ hasRole PERFEITO E ESTÁVEL
+  // ✅ hasRole PERFECT AND STABLE
   const hasRole = useCallback(
     (roles: UserRole | UserRole[]): boolean => {
       if (!userInfo?.role) return false;
