@@ -1,13 +1,35 @@
-
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import type { Client, UserInfo, UserRole } from '@/lib/types';
-import { useUser, useFirestore, useDoc, useCollection } from '@/firebase';
-import { getAuth, signOut, signInWithEmailAndPassword, AuthError, onIdTokenChanged, User as FirebaseUser, Auth } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
-
+import React, {
+  createContext,
+  useContext,
+  useState,
+  ReactNode,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
+import { useRouter } from "next/navigation";
+import type { Client, UserInfo, UserRole } from "@/lib/types";
+import { useUser, useFirestore, useDoc, useCollection } from "@/firebase";
+import {
+  getAuth,
+  signOut,
+  signInWithEmailAndPassword,
+  AuthError,
+  User as FirebaseUser,
+  Auth,
+} from "firebase/auth";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  query,
+  where,
+  limit,
+} from "firebase/firestore";
 
 interface AuthContextType {
   user: FirebaseUser | null;
@@ -15,7 +37,10 @@ interface AuthContextType {
   userInfo: UserInfo | null;
   isUserLoading: boolean;
   isLoggingIn: boolean;
-  login: (email: string, pass: string) => Promise<{ ok: boolean, error?: string, redirect?: string }>;
+  login: (
+    email: string,
+    pass: string
+  ) => Promise<{ ok: boolean; error?: string; redirect?: string }>;
   logout: () => void;
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   authError: AuthError | null;
@@ -24,137 +49,201 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function useProvideAuth() {
-  const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } = useUser();
+  const { user: firebaseUser, isUserLoading: isFirebaseUserLoading } =
+    useUser();
   const firestore = useFirestore();
   const auth = getAuth();
+  const router = useRouter();
 
-  const userDocRef = useMemo(() => 
-    firestore && firebaseUser ? doc(firestore, 'users', firebaseUser.uid) : null,
-    [firestore, firebaseUser?.uid]
-  );
-  const { data: baseUserInfo, isLoading: isUserInfoLoading } = useDoc<UserInfo>(userDocRef);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [authError, setAuthError] = useState<AuthError | null>(null);
 
+  const isCreatingUserRef = useRef(false);
+
+  // ✅ userDocRef ESTÁVEL
+  const userDocRef = useMemo(() => {
+    if (!firestore || !firebaseUser?.uid) return null;
+    return doc(firestore, "users", firebaseUser.uid);
+  }, [firestore, firebaseUser?.uid]);
+
+  const {
+    data: baseUserInfo,
+    isLoading: isUserInfoLoading,
+  } = useDoc<UserInfo>(userDocRef);
+
+  // ✅ clientQuery TOTALMENTE ESTÁVEL
   const clientQuery = useMemo(() => {
-    if (firestore && baseUserInfo?.role === 'client' && baseUserInfo.franchiseId && baseUserInfo.id) {
+    if (
+      firestore &&
+      baseUserInfo?.role === "client" &&
+      baseUserInfo.franchiseId &&
+      baseUserInfo.id
+    ) {
       return query(
-        collection(firestore, 'franchises', baseUserInfo.franchiseId, 'clients'),
-        where('userId', '==', baseUserInfo.id),
+        collection(
+          firestore,
+          "franchises",
+          baseUserInfo.franchiseId,
+          "clients"
+        ),
+        where("userId", "==", baseUserInfo.id),
         limit(1)
       );
     }
     return null;
-  }, [firestore, baseUserInfo?.id, baseUserInfo?.role, baseUserInfo?.franchiseId]);
+  }, [
+    firestore,
+    baseUserInfo?.id,
+    baseUserInfo?.role,
+    baseUserInfo?.franchiseId,
+  ]);
 
-  const { data: clientDocs, isLoading: isClientLoading } = useCollection<Client>(clientQuery);
-  
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [authError, setAuthError] = useState<AuthError | null>(null);
-  const router = useRouter();
+  const {
+    data: clientDocs,
+    isLoading: isClientLoading,
+  } = useCollection<Client>(clientQuery);
 
-  const isCreatingUserRef = useRef(false);
-  
+  // ✅ userInfo BLINDADO CONTRA LOOP
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
-    
-    if (baseUserInfo.role !== 'client') return baseUserInfo;
+
+    if (baseUserInfo.role !== "client") return baseUserInfo;
 
     const clientProfile = clientDocs?.[0];
     if (!clientProfile) return baseUserInfo;
 
-    // Combine user and client info
     return {
       ...baseUserInfo,
       firstName: clientProfile.contactName || baseUserInfo.firstName,
-      lastName: '', // Assuming lastName is not relevant for client display
+      lastName: "",
       avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
     };
-  }, [baseUserInfo, clientDocs]);
+  }, [baseUserInfo?.id, baseUserInfo?.role, clientDocs?.[0]?.id]);
 
-
+  // ✅ CRIAÇÃO DE USUÁRIO SEM LOOP INFINITO
   useEffect(() => {
-    if (!firestore || !firebaseUser) return;
+    if (!firestore || !firebaseUser?.uid) return;
     if (isCreatingUserRef.current) return;
-  
+
+    isCreatingUserRef.current = true;
+
     const checkAndCreateUser = async () => {
-      isCreatingUserRef.current = true;
       try {
         const userRef = doc(firestore, "users", firebaseUser.uid);
-        const docSnap = await getDoc(userRef);
-  
-        if (!docSnap.exists()) {
-           const email = firebaseUser.email || "";
-            const nameParts =
-              firebaseUser.displayName?.split(" ") || [email.split("@")[0], ""];
+        const snap = await getDoc(userRef);
 
-            const isMaster = email === "master@poolbr.com";
+        if (snap.exists()) return;
 
-            const newUserInfo: UserInfo = {
-              id: firebaseUser.uid,
-              firstName: nameParts[0],
-              lastName: nameParts.slice(1).join(" "),
-              email: email,
-              role: isMaster ? "master" : "owner",
-              franchiseId: null,
-              isActive: true,
-              createdAt: new Date().toISOString(),
-            };
+        const email = firebaseUser.email || "";
+        const nameParts =
+          firebaseUser.displayName?.split(" ") || [
+            email.split("@")[0],
+            "",
+          ];
+        const isMaster = email === "master@poolbr.com";
 
-          await setDoc(userRef, newUserInfo);
-        }
+        const newUserInfo: UserInfo = {
+          id: firebaseUser.uid,
+          firstName: nameParts[0],
+          lastName: nameParts.slice(1).join(" "),
+          email,
+          role: isMaster ? "master" : "owner",
+          franchiseId: null,
+          isActive: true,
+          createdAt: new Date().toISOString(),
+        };
+
+        await setDoc(userRef, newUserInfo);
       } catch (error) {
-        console.error("Error in checkAndCreateUser:", error);
-      } finally {
-        // This ref should not be reset to false here, to prevent re-running.
-        // It's meant to be a one-time check per login session.
+        console.error("Erro ao criar usuário:", error);
       }
     };
-  
+
     checkAndCreateUser();
-  }, [firestore, firebaseUser]);
+  }, [firebaseUser?.uid, firestore]);
 
+  // ✅ LOGIN SEGURO
+  const login = useCallback(
+    async (
+      email: string,
+      pass: string
+    ): Promise<{ ok: boolean; error?: string; redirect?: string }> => {
+      setIsLoggingIn(true);
+      setAuthError(null);
 
-  const login = useCallback(async (email: string, pass: string): Promise<{ ok: boolean, error?: string, redirect?: string }> => {
-    setIsLoggingIn(true);
-    setAuthError(null);
-    try {
-      isCreatingUserRef.current = false; // Reset the ref on a new login attempt
-      await signInWithEmailAndPassword(auth, email, pass);
-      return { ok: true, redirect: '/dashboard' };
-    } catch (err: any) {
-      console.error("Login failed:", err);
-      setAuthError(err);
-      setIsLoggingIn(false);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        return { ok: false, error: 'E-mail ou senha inválidos.' };
+      try {
+        isCreatingUserRef.current = false;
+        await signInWithEmailAndPassword(auth, email, pass);
+        return { ok: true, redirect: "/dashboard" };
+      } catch (err: any) {
+        console.error("Login failed:", err);
+        setAuthError(err);
+        setIsLoggingIn(false);
+
+        if (
+          err.code === "auth/user-not-found" ||
+          err.code === "auth/wrong-password" ||
+          err.code === "auth/invalid-credential"
+        ) {
+          return { ok: false, error: "E-mail ou senha inválidos." };
+        }
+
+        return {
+          ok: false,
+          error: err.message || "Ocorreu um erro desconhecido.",
+        };
       }
-      return { ok: false, error: err.message || 'Ocorreu um erro desconhecido.' };
-    }
-  }, [auth]);
+    },
+    [auth]
+  );
 
+  // ✅ LOGOUT SEGURO
   const logout = useCallback(() => {
     signOut(auth).then(() => {
-        isCreatingUserRef.current = false;
-        router.push('/');
+      isCreatingUserRef.current = false;
+      router.push("/");
     });
   }, [auth, router]);
 
-  const hasRole = useCallback((roles: UserRole | UserRole[]): boolean => {
-    if (!userInfo) return false;
-    const rolesToCheck = Array.isArray(roles) ? roles : [roles];
-    return rolesToCheck.includes(userInfo.role);
-  }, [userInfo?.role]);
-  
-  return useMemo(() => ({
-    user: firebaseUser,
-    auth,
-    userInfo,
-    isUserLoading: isFirebaseUserLoading || isUserInfoLoading || isClientLoading,
-    isLoggingIn,
-    login,
-    logout,
-    hasRole,
-    authError,
-  }), [firebaseUser, auth, userInfo, isFirebaseUserLoading, isUserInfoLoading, isClientLoading, isLoggingIn, login, logout, hasRole, authError]);
+  // ✅ hasRole PERFEITO E ESTÁVEL
+  const hasRole = useCallback(
+    (roles: UserRole | UserRole[]): boolean => {
+      if (!userInfo?.role) return false;
+      const rolesToCheck = Array.isArray(roles) ? roles : [roles];
+      return rolesToCheck.includes(userInfo.role);
+    },
+    [userInfo?.role]
+  );
+
+  return useMemo(
+    () => ({
+      user: firebaseUser,
+      auth,
+      userInfo,
+      isUserLoading:
+        isFirebaseUserLoading ||
+        isUserInfoLoading ||
+        isClientLoading,
+      isLoggingIn,
+      login,
+      logout,
+      hasRole,
+      authError,
+    }),
+    [
+      firebaseUser,
+      auth,
+      userInfo,
+      isFirebaseUserLoading,
+      isUserInfoLoading,
+      isClientLoading,
+      isLoggingIn,
+      login,
+      logout,
+      hasRole,
+      authError,
+    ]
+  );
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -169,7 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }
