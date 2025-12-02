@@ -89,7 +89,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [docPath, docRef]); // Re-run only when the actual document path changes.
+  }, [docPath]); // Re-run only when the actual document path changes.
 
   return { data, isLoading, error };
 }

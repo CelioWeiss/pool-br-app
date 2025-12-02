@@ -124,7 +124,7 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [queryPath, targetRefOrQuery]); // Re-run only when the actual query path changes
+  }, [queryPath]); // Re-run only when the actual query path changes
   
   return { data, isLoading, error };
 }
