@@ -147,7 +147,10 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
     return <p className="text-muted-foreground text-center py-8">Nenhum histórico de atendimento encontrado.</p>;
   }
   
-  const sortedAppointments = [...appointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
+  const sortedAppointments = useMemo(() => 
+    [...appointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime()), 
+    [appointments]
+  );
 
   const statusInfo = {
     scheduled: { icon: Clock, label: "Agendado", variant: "secondary" as const, className: "" },

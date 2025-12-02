@@ -164,35 +164,20 @@ function useProvideAuth() {
     [userInfo?.role]
   );
 
-  return useMemo(
-    () => ({
-      user: firebaseUser,
-      auth,
-      userInfo,
-      isUserLoading:
-        isFirebaseUserLoading ||
-        isUserInfoLoading ||
-        isClientLoading,
-      isLoggingIn,
-      login,
-      logout,
-      hasRole,
-      authError,
-    }),
-    [
-      firebaseUser,
-      auth,
-      userInfo,
-      isFirebaseUserLoading,
-      isUserInfoLoading,
+  return {
+    user: firebaseUser,
+    auth,
+    userInfo,
+    isUserLoading:
+      isFirebaseUserLoading ||
+      isUserInfoLoading ||
       isClientLoading,
-      isLoggingIn,
-      login,
-      logout,
-      hasRole,
-      authError,
-    ]
-  );
+    isLoggingIn,
+    login,
+    logout,
+    hasRole,
+    authError,
+  };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
