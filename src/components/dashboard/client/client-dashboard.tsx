@@ -77,7 +77,6 @@ export function ClientDashboard() {
   
   const franchiseId = userInfo?.franchiseId;
 
-  // Find the client document using the user's ID
   const clientQuery = useMemo(() => 
     firestore && franchiseId && user ? query(collection(firestore, `franchises/${franchiseId}/clients`), where('userId', '==', user.uid), limit(1)) : null, 
   [firestore, franchiseId, user]);
@@ -86,7 +85,6 @@ export function ClientDashboard() {
   const clientData = useMemo(() => clientQueryResult?.[0], [clientQueryResult]);
   const clientId = clientData?.id;
 
-  // Find the service locations for this client
   const locationsQuery = useMemo(() =>
     firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/locations`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
@@ -114,7 +112,6 @@ export function ClientDashboard() {
     return clientAppointments
       .filter(a => {
         const apptDate = new Date(a.scheduledDateTime);
-        // It's an upcoming appointment if it's in the future, OR if it's today but not yet completed.
         return isFuture(apptDate) || (isToday(apptDate) && a.status !== 'completed');
       })
       .sort((a,b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())[0];
@@ -128,7 +125,6 @@ export function ClientDashboard() {
     if (primaryLocation && primaryLocation.serviceDays.length > 0) {
       const serviceDaysAsNumbers = primaryLocation.serviceDays.map(day => dayOfWeekMap[day]).sort();
       
-      // Look for the next service day starting from TOMORROW.
       for (let i = 1; i <= 7; i++) {
         const nextDate = addDays(new Date(), i);
         if (serviceDaysAsNumbers.includes(getDay(nextDate))) {
@@ -151,7 +147,6 @@ export function ClientDashboard() {
     return technicians.find(t => t.id === primaryLocation.technicianId);
   }, [primaryLocation, technicians]);
 
-  // Get User profile for the assigned technician to get the avatar
   const techUserDocRef = useMemo(() =>
     firestore && assignedTechnician?.userId ? doc(firestore, 'users', assignedTechnician.userId) : null
   , [firestore, assignedTechnician]);

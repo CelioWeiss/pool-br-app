@@ -143,14 +143,19 @@ const AppointmentAccordionContent = ({ appointment }: { appointment: Appointment
 
 export function AppointmentHistory({ appointments, technicians }: { appointments: Appointment[], technicians: Technician[] }) {
 
-  if (!appointments || appointments.length === 0) {
-    return <p className="text-muted-foreground text-center py-8">Nenhum histórico de atendimento encontrado.</p>;
-  }
-  
+  const techniciansMap = useMemo(() => 
+    new Map(technicians.map(t => [t.id, t])),
+    [technicians]
+  );
+
   const sortedAppointments = useMemo(() => 
     [...appointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime()), 
     [appointments]
   );
+  
+  if (!appointments || appointments.length === 0) {
+    return <p className="text-muted-foreground text-center py-8">Nenhum histórico de atendimento encontrado.</p>;
+  }
 
   const statusInfo = {
     scheduled: { icon: Clock, label: "Agendado", variant: "secondary" as const, className: "" },
@@ -162,7 +167,7 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
   return (
     <Accordion type="single" collapsible className="w-full space-y-2">
       {sortedAppointments.map((appt) => {
-        const technician = technicians.find(t => t.id === appt.technicianId);
+        const technician = techniciansMap.get(appt.technicianId);
         const currentStatus = statusInfo[appt.status] || statusInfo.scheduled;
         
         return (

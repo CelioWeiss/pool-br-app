@@ -11,8 +11,6 @@ import {
   endOfMonth
 } from 'date-fns';
 
-// This hook now only fetches existing appointments and locations.
-// The generation of recurring appointments is handled separately by a service function.
 export function useUnifiedAppointments(franchiseId: string | null | undefined, month: Date) {
     const firestore = useFirestore();
 

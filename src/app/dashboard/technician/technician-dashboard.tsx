@@ -32,7 +32,6 @@ export function TechnicianDashboard() {
     const firestore = useFirestore();
     const franchiseId = userInfo?.franchiseId;
 
-    // First, find the technician document that corresponds to the logged-in user
     const techniciansQuery = useMemo(() =>
         firestore && franchiseId && userInfo?.id
             ? query(collection(firestore, 'franchises', franchiseId, 'technicians'), where('userId', '==', userInfo.id))
@@ -42,7 +41,6 @@ export function TechnicianDashboard() {
     const { data: technicianDocs, isLoading: isLoadingTechnician } = useCollection<Technician>(techniciansQuery);
     const technicianId = useMemo(() => technicianDocs?.[0]?.id, [technicianDocs]);
 
-    // Then, fetch appointments for that technician
     const appointmentsQuery = useMemo(() =>
         firestore && franchiseId && technicianId
             ? query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('technicianId', '==', technicianId))
@@ -62,7 +60,7 @@ export function TechnicianDashboard() {
         }
 
         const now = new Date();
-        const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
+        const weekStart = startOfWeek(now, { weekStartsOn: 1 });
         const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
         const appointmentsThisWeek = appointments.filter(appt => 
@@ -129,10 +127,6 @@ export function TechnicianDashboard() {
                 </div>
             )}
             
-            {/* We can add a list of today's appointments here in the future */}
-
         </div>
     );
 }
-
-    
