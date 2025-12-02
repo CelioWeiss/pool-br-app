@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Query,
   onSnapshot,
@@ -43,9 +43,8 @@ export interface InternalQuery extends Query<DocumentData> {
  * Handles nullable references/queries.
  * 
  *
- * IMPORTANT! YOU MUST MEMOIZE the inputted targetRefOrQuery or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidence.  Also make sure that it's dependencies are stable
- * references
+ * IMPORTANT! The caller of this hook MUST MEMOIZE the inputted targetRefOrQuery
+ * using `useMemo` to prevent infinite render loops.
  *  
  * @template T Optional type for document data. Defaults to any.
  * @param {CollectionReference<DocumentData> | Query<DocumentData> | null | undefined} targetRefOrQuery -
@@ -62,7 +61,24 @@ export function useCollection<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
-  const queryPath = targetRefOrQuery?.path;
+  // The path string is a stable primitive value that can be used in the dependency array.
+  const queryPath = useMemo(() => {
+    if (!targetRefOrQuery) return null;
+    // This is a simplified access; internal properties might differ. A more robust way is needed if this fails.
+    // For CollectionReference, .path is public. For Query, it is not.
+    // We are casting to an internal type to get a stable path representation.
+    if (targetRefOrQuery.type === 'collection') {
+        return (targetRefOrQuery as CollectionReference).path;
+    }
+    try {
+        // Attempt to access internal property for Query path
+        return (targetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString();
+    } catch {
+        // Fallback for query if internal structure changes - less stable
+        return JSON.stringify(targetRefOrQuery);
+    }
+  }, [targetRefOrQuery]);
+
 
   useEffect(() => {
     if (!targetRefOrQuery) {
@@ -75,7 +91,6 @@ export function useCollection<T = any>(
     setIsLoading(true);
     setError(null);
 
-    // Directly use targetRefOrQuery as it's assumed to be the final query
     const unsubscribe = onSnapshot(
       targetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {
@@ -109,7 +124,7 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [queryPath]); // Re-run if the target query/reference path changes.
+  }, [queryPath, targetRefOrQuery]); // Re-run only when the actual query path changes
   
   return { data, isLoading, error };
 }

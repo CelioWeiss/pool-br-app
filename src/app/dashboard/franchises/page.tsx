@@ -21,16 +21,16 @@ import { Spinner } from '@/components/ui/spinner';
 import type { NewFranchiseFormData } from '@/components/dashboard/franchises/new-franchise-form';
 
 export default function FranchisesPage() {
-  const { hasRole, auth } = useAuth();
+  const { hasRole } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
-  
+  const auth = getAuth();
 
-  const franchisesCollection = useMemo(() => 
+  const franchisesQuery = useMemo(() => 
     firestore ? collection(firestore, 'franchises') : null
   , [firestore]);
 
-  const { data: franchiseList, isLoading } = useCollection<Franchise>(franchisesCollection);
+  const { data: franchiseList, isLoading } = useCollection<Franchise>(franchisesQuery);
 
   const [isNewFranchiseDialogOpen, setIsNewFranchiseDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);

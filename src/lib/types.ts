@@ -12,6 +12,7 @@ export interface UserInfo {
   isActive: boolean;
   createdAt: string; // ISO string
   avatarUrl?: string;
+  phone?: string;
 }
 
 export interface Franchise {
@@ -78,6 +79,7 @@ export interface Technician {
   createdAt: string; // ISO string
   locationLatitude?: number;
   locationLongitude?: number;
+  avatarUrl?: string;
 }
 
 export type AppointmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled';

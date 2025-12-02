@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PlusCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, doc, writeBatch } from 'firebase/firestore';
 import type { Technician, UserInfo } from '@/lib/types';
@@ -26,11 +25,11 @@ export default function TechniciansPage() {
 
   const franchiseId = userInfo?.franchiseId;
 
-  const techniciansCollection = useMemo(() =>
+  const techniciansQuery = useMemo(() =>
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null
   , [firestore, franchiseId]);
 
-  const { data: franchiseTechnicians, isLoading } = useCollection<Technician>(techniciansCollection);
+  const { data: franchiseTechnicians, isLoading } = useCollection<Technician>(techniciansQuery);
 
   const [isNewTechnicianDialogOpen, setIsNewTechnicianDialogOpen] = useState(false);
   const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
@@ -38,12 +37,6 @@ export default function TechniciansPage() {
   
   if (!hasRole('owner') || !franchiseId) {
     return <p>Acesso negado.</p>;
-  }
-
-  const getAvatarUrl = (id: string) => {
-    // This logic can be improved to map specific avatars to technicians
-    const placeholder = PlaceHolderImages.find(p => p.id.startsWith('avatar'));
-    return placeholder?.imageUrl;
   }
   
   const handleDialogChange = (open: boolean) => {
@@ -209,7 +202,7 @@ export default function TechniciansPage() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={getAvatarUrl(technician.id)} alt={technician.firstName} />
+                          <AvatarImage src={technician.avatarUrl} alt={technician.firstName} />
                           <AvatarFallback>{technician.firstName.charAt(0)}</AvatarFallback>
                         </Avatar>
                         {technician.firstName} {technician.lastName}
@@ -234,5 +227,3 @@ export default function TechniciansPage() {
     </div>
   );
 }
-
-    

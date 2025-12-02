@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -20,7 +20,6 @@ import {
   BookOpen,
   QrCode,
   DollarSign,
-  User as UserIcon
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -95,7 +94,7 @@ export function AppSidebar() {
           </Avatar>
           <div className="flex flex-col text-sm truncate">
             <span className="font-semibold text-sidebar-foreground">{userInfo.firstName} {userInfo.lastName}</span>
-            <span className="text-xs text-sidebar-foreground/70">{userInfo.role}</span>
+            <span className="text-xs text-sidebar-foreground/70 capitalize">{userInfo.role}</span>
           </div>
           <Button variant="ghost" size="icon" className="ml-auto text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" onClick={logout}>
             <LogOut size={18}/>

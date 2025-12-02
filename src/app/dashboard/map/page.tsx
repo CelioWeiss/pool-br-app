@@ -3,7 +3,7 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { TechnicianMap } from '@/components/dashboard/map/technician-map';
-import type { Client, Technician, Appointment } from '@/lib/types';
+import type { Client, Technician, Appointment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
@@ -22,10 +22,10 @@ export default function MapPage() {
   , [firestore, franchiseId]);
   const { data: technicians, isLoading: isLoadingTechnicians } = useCollection<Technician>(techniciansCollection);
 
-  const clientsCollection = useMemo(() =>
-    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
+  const locationsCollection = useMemo(() =>
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'locations') : null
   , [firestore, franchiseId]);
-  const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsCollection);
+  const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsCollection);
   
   const appointmentsCollection = useMemo(() => {
     if (!firestore || !franchiseId) return null;
@@ -34,7 +34,7 @@ export default function MapPage() {
   const { data: appointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsCollection);
 
 
-  const isLoading = isLoadingTechnicians || isLoadingClients || isLoadingAppointments;
+  const isLoading = isLoadingTechnicians || isLoadingLocations || isLoadingAppointments;
 
   if (!apiKey) {
     return (
@@ -74,12 +74,10 @@ export default function MapPage() {
             apiKey={apiKey} 
             technicians={technicians || []} 
             appointments={appointments || []} 
-            clients={clients || []} 
+            locations={locations || []} 
           />
         )}
       </div>
     </div>
   );
 }
-
-    

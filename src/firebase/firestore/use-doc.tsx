@@ -1,7 +1,7 @@
 
 'use client';
     
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   DocumentReference,
   onSnapshot,
@@ -29,10 +29,8 @@ export interface UseDocResult<T> {
  * React hook to subscribe to a single Firestore document in real-time.
  * Handles nullable references.
  * 
- * IMPORTANT! YOU MUST MEMOIZE the inputted docRef or BAD THINGS WILL HAPPEN
- * use useMemo to memoize it per React guidence.  Also make sure that it's dependencies are stable
- * references
- *
+ * IMPORTANT! The caller of this hook MUST MEMOIZE the inputted docRef
+ * using `useMemo` to prevent infinite render loops.
  *
  * @template T Optional type for document data. Defaults to any.
  * @param {DocumentReference<DocumentData> | null | undefined} docRef -
@@ -48,7 +46,8 @@ export function useDoc<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
-  const docPath = docRef?.path;
+  // The docRef.path is a string, which is a stable primitive value.
+  const docPath = useMemo(() => docRef?.path, [docRef]);
 
   useEffect(() => {
     if (!docRef) {
@@ -60,7 +59,6 @@ export function useDoc<T = any>(
 
     setIsLoading(true);
     setError(null);
-    // Optional: setData(null); // Clear previous data instantly
 
     const unsubscribe = onSnapshot(
       docRef,
@@ -91,7 +89,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [docPath]); // Re-run if the docRef path changes.
+  }, [docPath, docRef]); // Re-run only when the actual document path changes.
 
   return { data, isLoading, error };
 }

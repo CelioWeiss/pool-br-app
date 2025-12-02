@@ -8,7 +8,6 @@ import React, {
   ReactNode,
   useMemo,
   useCallback,
-  useEffect,
 } from "react";
 import { useRouter } from "next/navigation";
 import type { Client, UserInfo, UserRole } from "@/lib/types";
@@ -20,6 +19,7 @@ import {
   AuthError,
   User as FirebaseUser,
   Auth,
+  createUserWithEmailAndPassword,
 } from "firebase/auth";
 import {
   doc,
@@ -29,6 +29,7 @@ import {
   query,
   where,
   limit,
+  writeBatch,
 } from "firebase/firestore";
 
 interface AuthContextType {
@@ -127,33 +128,8 @@ function useProvideAuth() {
         const userCredential = await signInWithEmailAndPassword(auth, email, pass);
         const loggedInUser = userCredential.user;
 
-        if (firestore && loggedInUser) {
-            const userRef = doc(firestore, "users", loggedInUser.uid);
-            const docSnap = await getDoc(userRef);
-
-            if (!docSnap.exists()) {
-                console.log("User profile does not exist, creating...");
-                const userEmail = loggedInUser.email || "";
-                const nameParts =
-                    loggedInUser.displayName?.split(" ") || [
-                        userEmail.split("@")[0],
-                        "",
-                    ];
-                const isMaster = userEmail === "master@poolbr.com";
-
-                const newUserInfo: UserInfo = {
-                    id: loggedInUser.uid,
-                    firstName: nameParts[0],
-                    lastName: nameParts.slice(1).join(" "),
-                    email: userEmail,
-                    role: isMaster ? "master" : "owner",
-                    franchiseId: null,
-                    isActive: true,
-                    createdAt: new Date().toISOString(),
-                };
-                await setDoc(userRef, newUserInfo);
-            }
-        }
+        // The onAuthStateChanged listener will handle the user state update.
+        // We just redirect.
         
         setIsLoggingIn(false);
         return { ok: true, redirect: "/dashboard" };

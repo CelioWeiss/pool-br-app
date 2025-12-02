@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { Wrench } from 'lucide-react';
-import type { Technician, Appointment, Client } from '@/lib/types';
+import type { Technician, Appointment, Client, ServiceLocation } from '@/lib/types';
 
 
 function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
@@ -30,16 +30,20 @@ function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
 }
 
 
-export function TechnicianMap({ apiKey, technicians, appointments, clients }: { apiKey: string, technicians: Technician[], appointments: Appointment[], clients: Client[] }) {
+export function TechnicianMap({ apiKey, technicians, appointments, locations }: { apiKey: string, technicians: Technician[], appointments: Appointment[], locations: ServiceLocation[] }) {
   const mapCenter = { lat: -23.55052, lng: -46.633308 }; // São Paulo center
 
   const technicianAppointments = (techId: string) => 
     appointments
       .filter(a => a.technicianId === techId && (a.status === 'scheduled' || a.status === 'in_progress'))
       .map(a => {
-        const client = clients.find(c => c.id === a.clientId);
-        if (!client || !client.locationLatitude || !client.locationLongitude) return null;
-        return { lat: client.locationLatitude, lng: client.locationLongitude };
+        const location = locations.find(l => l.id === a.locationId);
+        // This is a placeholder for geocoding the address.
+        // In a real app, you would use a geocoding service to get lat/lng from location.address.
+        // For now, we'll use a random offset from the technician's location.
+        const tech = technicians.find(t => t.id === techId);
+        if (!tech?.locationLatitude || !tech?.locationLongitude) return null;
+        return { lat: tech.locationLatitude + (Math.random() - 0.5) * 0.1, lng: tech.locationLongitude + (Math.random() - 0.5) * 0.1 };
       })
       .filter(Boolean) as { lat: number, lng: number }[];
 
