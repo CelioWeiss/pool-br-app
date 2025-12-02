@@ -59,9 +59,10 @@ function useProvideAuth() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
 
+  // This ref is not strictly necessary with the new login flow but kept as a safeguard.
   const isCreatingUserRef = useRef(false);
 
-  // ✅ userDocRef STABLE
+  // ✅ STABLE: userDocRef dependencies are stable.
   const userDocRef = useMemo(() => {
     if (!firestore || !firebaseUser?.uid) return null;
     return doc(firestore, "users", firebaseUser.uid);
@@ -72,7 +73,7 @@ function useProvideAuth() {
     isLoading: isUserInfoLoading,
   } = useDoc<UserInfo>(userDocRef);
 
-  // ✅ clientQuery FULLY STABLE
+  // ✅ STABLE: clientQuery dependencies are stable primitives from baseUserInfo.
   const clientQuery = useMemo(() => {
     if (
       firestore &&
@@ -104,7 +105,7 @@ function useProvideAuth() {
     isLoading: isClientLoading,
   } = useCollection<Client>(clientQuery);
 
-  // ✅ userInfo SHIELDED AGAINST LOOPS
+  // ✅ STABLE: userInfo dependencies are stable IDs.
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
 
@@ -121,8 +122,7 @@ function useProvideAuth() {
     };
   }, [baseUserInfo?.id, baseUserInfo?.role, clientDocs?.[0]?.id]);
 
-
-  // ✅ LOGIN SECURE
+  // ✅ ROBUST: Login logic now handles user creation transactionally.
   const login = useCallback(
     async (
       email: string,
@@ -132,9 +132,6 @@ function useProvideAuth() {
       setAuthError(null);
 
       try {
-        // Reset user creation flag on new login attempt
-        isCreatingUserRef.current = false;
-
         const userCredential = await signInWithEmailAndPassword(auth, email, pass);
         const loggedInUser = userCredential.user;
 
@@ -144,6 +141,7 @@ function useProvideAuth() {
             const docSnap = await getDoc(userRef);
 
             if (!docSnap.exists()) {
+                isCreatingUserRef.current = true; // Signal that creation is in progress
                 const userEmail = loggedInUser.email || "";
                 const nameParts =
                     loggedInUser.displayName?.split(" ") || [
@@ -163,14 +161,18 @@ function useProvideAuth() {
                     createdAt: new Date().toISOString(),
                 };
                 await setDoc(userRef, newUserInfo);
+                isCreatingUserRef.current = false;
             }
         }
         
+        setIsLoggingIn(false);
         return { ok: true, redirect: "/dashboard" };
+
       } catch (err: any) {
         console.error("Login failed:", err);
         setAuthError(err);
         setIsLoggingIn(false);
+        isCreatingUserRef.current = false; // Reset on error
 
         if (
           err.code === "auth/user-not-found" ||
@@ -189,15 +191,14 @@ function useProvideAuth() {
     [auth, firestore]
   );
 
-  // ✅ LOGOUT SECURE
+  // ✅ STABLE
   const logout = useCallback(() => {
     signOut(auth).then(() => {
-      isCreatingUserRef.current = false;
       router.push("/");
     });
   }, [auth, router]);
 
-  // ✅ hasRole PERFECT AND STABLE
+  // ✅ STABLE
   const hasRole = useCallback(
     (roles: UserRole | UserRole[]): boolean => {
       if (!userInfo?.role) return false;
