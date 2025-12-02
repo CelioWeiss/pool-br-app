@@ -29,8 +29,15 @@ export default function FranchisesPage() {
   const franchisesQuery = useMemo(() => 
     firestore ? collection(firestore, 'franchises') : null
   , [firestore]);
+  
+  const usersQuery = useMemo(() =>
+    firestore ? collection(firestore, 'users') : null
+  , [firestore]);
 
-  const { data: franchiseList, isLoading } = useCollection<Franchise>(franchisesQuery);
+  const { data: franchiseList, isLoading: isLoadingFranchises } = useCollection<Franchise>(franchisesQuery);
+  const { data: userList, isLoading: isLoadingUsers } = useCollection<UserInfo>(usersQuery);
+
+  const usersMap = useMemo(() => new Map(userList?.map(u => [u.id, u])), [userList]);
 
   const [isNewFranchiseDialogOpen, setIsNewFranchiseDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -129,6 +136,8 @@ export default function FranchisesPage() {
       setFranchiseToDelete(null);
     }
   };
+  
+  const isLoading = isLoadingFranchises || isLoadingUsers;
 
   return (
     <>
@@ -177,17 +186,20 @@ export default function FranchisesPage() {
                   <TableRow>
                     <TableHead>Nome da Franquia</TableHead>
                     <TableHead>Endereço</TableHead>
-                    <TableHead>Proprietário (ID)</TableHead>
+                    <TableHead>Proprietário</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {franchiseList && franchiseList.length > 0 ? franchiseList.map((franchise) => (
+                  {franchiseList && franchiseList.length > 0 ? franchiseList.map((franchise) => {
+                    const owner = usersMap.get(franchise.ownerId);
+                    const ownerName = owner ? `${owner.firstName} ${owner.lastName}` : 'Não encontrado';
+                    return (
                     <TableRow key={franchise.id}>
                       <TableCell className="font-medium">{franchise.name}</TableCell>
                       <TableCell>{franchise.address}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{franchise.ownerId}</Badge>
+                        <Badge variant="outline">{ownerName}</Badge>
                       </TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="ghost" size="sm" disabled>Editar</Button>
@@ -197,7 +209,7 @@ export default function FranchisesPage() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  )) : (
+                  )}) : (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center">Nenhuma franquia encontrada.</TableCell>
                     </TableRow>
