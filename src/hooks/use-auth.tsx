@@ -59,10 +59,9 @@ function useProvideAuth() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
 
-  // This ref is not strictly necessary with the new login flow but kept as a safeguard.
   const isCreatingUserRef = useRef(false);
 
-  // ✅ STABLE: userDocRef dependencies are stable.
+  // ✅ userDocRef ESTÁVEL
   const userDocRef = useMemo(() => {
     if (!firestore || !firebaseUser?.uid) return null;
     return doc(firestore, "users", firebaseUser.uid);
@@ -73,7 +72,7 @@ function useProvideAuth() {
     isLoading: isUserInfoLoading,
   } = useDoc<UserInfo>(userDocRef);
 
-  // ✅ STABLE: clientQuery dependencies are stable primitives from baseUserInfo.
+  // ✅ clientQuery TOTALMENTE ESTÁVEL
   const clientQuery = useMemo(() => {
     if (
       firestore &&
@@ -105,7 +104,7 @@ function useProvideAuth() {
     isLoading: isClientLoading,
   } = useCollection<Client>(clientQuery);
 
-  // ✅ STABLE: userInfo dependencies are stable IDs.
+  // ✅ userInfo BLINDADO CONTRA LOOP
   const userInfo = useMemo(() => {
     if (!baseUserInfo) return null;
 
@@ -122,7 +121,7 @@ function useProvideAuth() {
     };
   }, [baseUserInfo?.id, baseUserInfo?.role, clientDocs?.[0]?.id]);
 
-  // ✅ ROBUST: Login logic now handles user creation transactionally.
+  // ✅ LOGIN SEGURO E TRANSACIONAL
   const login = useCallback(
     async (
       email: string,
@@ -191,14 +190,15 @@ function useProvideAuth() {
     [auth, firestore]
   );
 
-  // ✅ STABLE
+  // ✅ LOGOUT SEGURO
   const logout = useCallback(() => {
     signOut(auth).then(() => {
+      isCreatingUserRef.current = false;
       router.push("/");
     });
   }, [auth, router]);
 
-  // ✅ STABLE
+  // ✅ hasRole PERFEITO E ESTÁVEL
   const hasRole = useCallback(
     (roles: UserRole | UserRole[]): boolean => {
       if (!userInfo?.role) return false;
@@ -216,7 +216,8 @@ function useProvideAuth() {
       isUserLoading:
         isFirebaseUserLoading ||
         isUserInfoLoading ||
-        isClientLoading,
+        isClientLoading ||
+        isCreatingUserRef.current, // Include creation ref in loading state
       isLoggingIn,
       login,
       logout,
