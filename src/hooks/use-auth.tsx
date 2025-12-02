@@ -59,8 +59,6 @@ function useProvideAuth() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
 
-  const isCreatingUserRef = useRef(false);
-
   // ✅ userDocRef ESTÁVEL
   const userDocRef = useMemo(() => {
     if (!firestore || !firebaseUser?.uid) return null;
@@ -140,7 +138,6 @@ function useProvideAuth() {
             const docSnap = await getDoc(userRef);
 
             if (!docSnap.exists()) {
-                isCreatingUserRef.current = true; // Signal that creation is in progress
                 const userEmail = loggedInUser.email || "";
                 const nameParts =
                     loggedInUser.displayName?.split(" ") || [
@@ -160,7 +157,6 @@ function useProvideAuth() {
                     createdAt: new Date().toISOString(),
                 };
                 await setDoc(userRef, newUserInfo);
-                isCreatingUserRef.current = false;
             }
         }
         
@@ -171,7 +167,6 @@ function useProvideAuth() {
         console.error("Login failed:", err);
         setAuthError(err);
         setIsLoggingIn(false);
-        isCreatingUserRef.current = false; // Reset on error
 
         if (
           err.code === "auth/user-not-found" ||
@@ -193,7 +188,6 @@ function useProvideAuth() {
   // ✅ LOGOUT SEGURO
   const logout = useCallback(() => {
     signOut(auth).then(() => {
-      isCreatingUserRef.current = false;
       router.push("/");
     });
   }, [auth, router]);
@@ -216,8 +210,7 @@ function useProvideAuth() {
       isUserLoading:
         isFirebaseUserLoading ||
         isUserInfoLoading ||
-        isClientLoading ||
-        isCreatingUserRef.current, // Include creation ref in loading state
+        isClientLoading,
       isLoggingIn,
       login,
       logout,
