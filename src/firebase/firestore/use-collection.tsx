@@ -64,19 +64,25 @@ export function useCollection<T = any>(
   // The path string is a stable primitive value that can be used in the dependency array.
   const queryPath = useMemo(() => {
     if (!targetRefOrQuery) return null;
-    // This is a simplified access; internal properties might differ. A more robust way is needed if this fails.
-    // For CollectionReference, .path is public. For Query, it is not.
-    // We are casting to an internal type to get a stable path representation.
+    
+    // For CollectionReference, .path is public and stable.
     if (targetRefOrQuery.type === 'collection') {
         return (targetRefOrQuery as CollectionReference).path;
     }
+    
+    // For Query, we need a stable representation. The internal _query object is not guaranteed API,
+    // but it's the most common way to get a stable path. We'll add fallbacks.
     try {
-        // Attempt to access internal property for Query path
-        return (targetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString();
+        const internalQuery = targetRefOrQuery as unknown as InternalQuery;
+        if (internalQuery._query?.path?.canonicalString) {
+            return internalQuery._query.path.canonicalString();
+        }
     } catch {
-        // Fallback for query if internal structure changes - less stable
-        return JSON.stringify(targetRefOrQuery);
+       // If internal access fails, fall back to stringifying the query object.
+       // This is less ideal as it might change more often, but better than nothing.
+       // NOTE: This fallback path is a potential source of loops if query objects are not memoized by the caller.
     }
+    return JSON.stringify(targetRefOrQuery); // Fallback string representation
   }, [targetRefOrQuery]);
 
 
@@ -104,11 +110,7 @@ export function useCollection<T = any>(
       },
       (error: FirestoreError) => {
         // This logic extracts the path from either a ref or a query
-        const path: string | null = targetRefOrQuery
-          ? (targetRefOrQuery.type === 'collection'
-            ? (targetRefOrQuery as CollectionReference).path
-            : (targetRefOrQuery as unknown as InternalQuery)._query?.path?.canonicalString())
-          : 'unknown_path';
+        const path: string | null = queryPath;
 
         const contextualError = new FirestorePermissionError({
           operation: 'list',
