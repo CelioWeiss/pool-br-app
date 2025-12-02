@@ -36,6 +36,7 @@ export default function SchedulePage() {
   const franchiseId = userInfo?.franchiseId;
 
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<Appointment | null>(null);
+  const [hasGeneratedSchedule, setHasGeneratedSchedule] = useState(false);
 
   // --- Data Fetching ---
   const techniciansQuery = useMemo(() =>
@@ -70,15 +71,28 @@ export default function SchedulePage() {
 
 
   useEffect(() => {
-    if (!firestore || !franchiseId || !allLocations || !allLocations.length) return;
-  
-    gerarAgendaDoMesNoFirestore({
-      firestore,
-      franchiseId,
-      locations: allLocations,
-      month: currentDate
-    });
-  }, [firestore, franchiseId, allLocations, currentDate]);
+    if (!firestore || !franchiseId || !allLocations || hasGeneratedSchedule || isLoadingLocations) return;
+
+    if (allLocations.length > 0) {
+        gerarAgendaDoMesNoFirestore({
+          firestore,
+          franchiseId,
+          locations: allLocations,
+          month: currentDate
+        }).then(() => {
+            setHasGeneratedSchedule(true);
+        });
+    } else {
+        // If there are no locations, we can consider the "generation" done for this month
+        setHasGeneratedSchedule(true);
+    }
+  }, [firestore, franchiseId, allLocations, currentDate, hasGeneratedSchedule, isLoadingLocations]);
+
+
+  useEffect(() => {
+    // Reset generation flag when month changes
+    setHasGeneratedSchedule(false);
+  },[currentDate]);
 
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('all');
   
