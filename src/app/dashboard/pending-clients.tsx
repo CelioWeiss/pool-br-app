@@ -17,18 +17,18 @@ export function PendingClients({ franchiseId }: { franchiseId: string }) {
     const firestore = useFirestore();
 
     const appointmentsQuery = useMemo(() => 
-        firestore ? query(
+        firestore && franchiseId ? query(
             collection(firestore, 'franchises', franchiseId, 'appointments'),
             where('status', 'in', ['scheduled', 'in_progress'])
         ) : null,
     [firestore, franchiseId]);
 
     const clientsCollection = useMemo(() => 
-        firestore ? collection(firestore, 'franchises', franchiseId, 'clients') : null,
+        firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null,
     [firestore, franchiseId]);
     
     const techniciansCollection = useMemo(() =>
-        firestore ? collection(firestore, 'franchises', franchiseId, 'technicians') : null,
+        firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'technicians') : null,
     [firestore, franchiseId]);
 
     const { data: pendingAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
@@ -119,5 +119,3 @@ export function PendingClients({ franchiseId }: { franchiseId: string }) {
         </Card>
     );
 }
-
-    
