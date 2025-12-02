@@ -86,12 +86,7 @@ function useProvideAuth() {
       );
     }
     return null;
-  }, [
-    firestore,
-    baseUserInfo?.id,
-    baseUserInfo?.role,
-    baseUserInfo?.franchiseId,
-  ]);
+  }, [firestore, baseUserInfo]);
 
   const {
     data: clientDocs,
