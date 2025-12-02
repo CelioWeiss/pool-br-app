@@ -43,7 +43,6 @@ export function AppSidebar() {
   const { userInfo, logout, hasRole } = useAuth();
   const logo = PlaceHolderImages.find(p => p.id === 'logo-white');
 
-  // No longer needs useMemo as hasRole is now stable from useAuth
   const filteredMenu = menuItems.filter(item => hasRole(item.roles));
 
   if (!userInfo) return null;
