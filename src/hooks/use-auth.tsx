@@ -119,7 +119,7 @@ function useProvideAuth() {
       lastName: "",
       avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
     };
-  }, [baseUserInfo?.id, baseUserInfo?.role, clientDocs?.[0]?.id]);
+  }, [baseUserInfo, clientDocs]);
 
   // ✅ LOGIN SEGURO E TRANSACIONAL
   const login = useCallback(

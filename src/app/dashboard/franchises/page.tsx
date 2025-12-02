@@ -21,7 +21,7 @@ import { Spinner } from '@/components/ui/spinner';
 import type { NewFranchiseFormData } from '@/components/dashboard/franchises/new-franchise-form';
 
 export default function FranchisesPage() {
-  const { hasRole } = useAuth();
+  const { hasRole, auth } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
   
@@ -41,7 +41,6 @@ export default function FranchisesPage() {
   }
 
   const handleSaveFranchise = async (data: NewFranchiseFormData) => {
-    const auth = getAuth();
     if (!firestore || !auth) return;
     
     setIsSaving(true);
@@ -56,7 +55,7 @@ export default function FranchisesPage() {
 
       // 3. Define Franchise document reference and data
       const franchiseRef = doc(collection(firestore, 'franchises'));
-      const newFranchise: Omit<Franchise, 'logoUrl' | 'pixKey'> = {
+      const newFranchise: Omit<Franchise, 'logoUrl' | 'pixKey' | 'details' | 'configuration'> = {
         id: franchiseRef.id,
         name: data.franchiseName,
         address: `${data.city}, ${data.state}`,

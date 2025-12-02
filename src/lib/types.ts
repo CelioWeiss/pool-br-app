@@ -24,6 +24,8 @@ export interface Franchise {
   createdAt: string; // ISO string
   logoUrl?: string;
   pixKey?: string;
+  details?: string;
+  configuration?: string;
 }
 
 export type NewFranchiseData = Omit<Franchise, 'id'>
