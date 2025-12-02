@@ -120,48 +120,6 @@ function useProvideAuth() {
     };
   }, [baseUserInfo?.id, baseUserInfo?.role, clientDocs?.[0]?.id]);
 
-  // ✅ CRIAÇÃO DE USUÁRIO SEM LOOP INFINITO
-  useEffect(() => {
-    if (!firestore || !firebaseUser?.uid) return;
-    if (isCreatingUserRef.current) return;
-
-    isCreatingUserRef.current = true;
-
-    const checkAndCreateUser = async () => {
-      try {
-        const userRef = doc(firestore, "users", firebaseUser.uid);
-        const snap = await getDoc(userRef);
-
-        if (snap.exists()) return;
-
-        const email = firebaseUser.email || "";
-        const nameParts =
-          firebaseUser.displayName?.split(" ") || [
-            email.split("@")[0],
-            "",
-          ];
-        const isMaster = email === "master@poolbr.com";
-
-        const newUserInfo: UserInfo = {
-          id: firebaseUser.uid,
-          firstName: nameParts[0],
-          lastName: nameParts.slice(1).join(" "),
-          email,
-          role: isMaster ? "master" : "owner",
-          franchiseId: null,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-        };
-
-        await setDoc(userRef, newUserInfo);
-      } catch (error) {
-        console.error("Erro ao criar usuário:", error);
-      }
-    };
-
-    checkAndCreateUser();
-  }, [firebaseUser?.uid, firestore]);
-
   // ✅ LOGIN SEGURO
   const login = useCallback(
     async (
@@ -172,8 +130,40 @@ function useProvideAuth() {
       setAuthError(null);
 
       try {
+        // Reset user creation flag on new login attempt
         isCreatingUserRef.current = false;
-        await signInWithEmailAndPassword(auth, email, pass);
+
+        const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+        const loggedInUser = userCredential.user;
+
+        // Perform user profile check/creation after successful login
+        if (firestore && loggedInUser) {
+            const userRef = doc(firestore, "users", loggedInUser.uid);
+            const docSnap = await getDoc(userRef);
+
+            if (!docSnap.exists()) {
+                const userEmail = loggedInUser.email || "";
+                const nameParts =
+                    loggedInUser.displayName?.split(" ") || [
+                        userEmail.split("@")[0],
+                        "",
+                    ];
+                const isMaster = userEmail === "master@poolbr.com";
+
+                const newUserInfo: UserInfo = {
+                    id: loggedInUser.uid,
+                    firstName: nameParts[0],
+                    lastName: nameParts.slice(1).join(" "),
+                    email: userEmail,
+                    role: isMaster ? "master" : "owner",
+                    franchiseId: null,
+                    isActive: true,
+                    createdAt: new Date().toISOString(),
+                };
+                await setDoc(userRef, newUserInfo);
+            }
+        }
+        
         return { ok: true, redirect: "/dashboard" };
       } catch (err: any) {
         console.error("Login failed:", err);
@@ -194,7 +184,7 @@ function useProvideAuth() {
         };
       }
     },
-    [auth]
+    [auth, firestore]
   );
 
   // ✅ LOGOUT SEGURO
