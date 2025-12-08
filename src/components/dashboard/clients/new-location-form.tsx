@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,8 @@ interface NewLocationFormProps {
     franchiseId: string;
     technicians: Technician[];
     onSave: () => void;
+    onCancel: () => void;
+    locationToEdit?: ServiceLocation | null;
 }
 
 const daysOfWeek: { id: DayOfWeek, label: string }[] = [
@@ -34,10 +36,11 @@ const daysOfWeek: { id: DayOfWeek, label: string }[] = [
     { id: 'domingo', label: 'Domingo' },
 ];
 
-export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: NewLocationFormProps) {
+export function NewLocationForm({ clientId, franchiseId, technicians, onSave, onCancel, locationToEdit = null }: NewLocationFormProps) {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [isSaving, setIsSaving] = useState(false);
+    const isEditing = !!locationToEdit;
 
     const [address, setAddress] = useState('');
     const [selectedState, setSelectedState] = useState('');
@@ -49,6 +52,21 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
     const [fee, setFee] = useState<number | ''>('');
     const [dueDay, setDueDay] = useState<number | ''>('');
     
+    useEffect(() => {
+        if (locationToEdit) {
+            setAddress(locationToEdit.address || '');
+            setSelectedState(locationToEdit.state || '');
+            setSelectedCity(locationToEdit.city || '');
+            setZipCode(locationToEdit.zipCode || '');
+            setPoolDetails(locationToEdit.poolDetails || '');
+            setTechnicianId(locationToEdit.technicianId || null);
+            setServiceDays(locationToEdit.serviceDays || []);
+            setFee(locationToEdit.fee || '');
+            setDueDay(locationToEdit.dueDay || '');
+        }
+    }, [locationToEdit]);
+
+
     const handleStateChange = (stateAbbr: string) => {
         setSelectedState(stateAbbr);
         setSelectedCity(''); // Reset city when state changes
@@ -73,9 +91,7 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
 
         setIsSaving(true);
 
-        const newLocationId = uuidv4();
-        const locationData: ServiceLocation = {
-            id: newLocationId,
+        const locationData: Omit<ServiceLocation, 'id' | 'createdAt' | 'clientId' | 'franchiseId'> & { clientId: string, franchiseId: string } = {
             clientId,
             franchiseId,
             address,
@@ -85,32 +101,41 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
             poolDetails,
             technicianId,
             serviceDays,
-            fee: Number(fee) || undefined,
-            dueDay: Number(dueDay) || undefined,
-            createdAt: new Date().toISOString(),
+            fee: fee ? Number(fee) : undefined,
+            dueDay: dueDay ? Number(dueDay) : undefined,
         };
 
         try {
-            const locationRef = doc(firestore, `franchises/${franchiseId}/locations`, newLocationId);
-            await setDoc(locationRef, locationData);
+            if (isEditing && locationToEdit.id) {
+                 const locationRef = doc(firestore, `franchises/${franchiseId}/locations`, locationToEdit.id);
+                 await updateDoc(locationRef, locationData);
+                  toast({
+                    title: "Local Atualizado!",
+                    description: "O local de atendimento foi atualizado."
+                });
+            } else {
+                const newLocationId = uuidv4();
+                const locationRef = doc(firestore, `franchises/${franchiseId}/locations`, newLocationId);
+                await setDoc(locationRef, { ...locationData, id: newLocationId, createdAt: new Date().toISOString() });
+                 toast({
+                    title: "Local Adicionado!",
+                    description: "O novo local de atendimento foi salvo."
+                });
+            }
 
-            toast({
-                title: "Local Adicionado!",
-                description: "O novo local de atendimento foi salvo."
-            });
             onSave();
         } catch (error) {
-            console.error("Error adding service location:", error);
+            console.error("Error saving service location:", error);
              const permissionError = new FirestorePermissionError({
                 path: `franchises/${franchiseId}/locations`,
-                operation: 'create',
+                operation: isEditing ? 'update' : 'create',
                 requestResourceData: locationData,
             });
             errorEmitter.emit('permission-error', permissionError);
             toast({
                 variant: "destructive",
                 title: "Erro ao Salvar",
-                description: "Não foi possível adicionar o novo local."
+                description: "Não foi possível salvar o local."
             });
         } finally {
             setIsSaving(false);
@@ -207,9 +232,9 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
             </fieldset>
             
             <DialogFooter className="mt-4">
-                 <Button type="button" variant="outline" onClick={onSave} disabled={isSaving}>Cancelar</Button>
+                 <Button type="button" variant="outline" onClick={onCancel} disabled={isSaving}>Cancelar</Button>
                 <Button type="submit" disabled={isSaving}>
-                    {isSaving ? <><Spinner size="small" className="mr-2" /> Salvando...</> : "Salvar Local"}
+                    {isSaving ? <><Spinner size="small" className="mr-2" /> Salvando...</> : isEditing ? "Salvar Alterações" : "Salvar Local"}
                 </Button>
             </DialogFooter>
         </form>

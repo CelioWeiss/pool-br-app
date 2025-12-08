@@ -149,6 +149,7 @@ export default function ClientProfilePage({ params: { clientId } }: { params: { 
                         franchiseId={franchiseId!}
                         technicians={technicians || []}
                         onSave={() => setIsLocationDialogOpen(false)}
+                        onCancel={() => setIsLocationDialogOpen(false)}
                       />
                   </DialogContent>
                </Dialog>

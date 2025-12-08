@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { ServiceLocation, Technician } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, QrCode as QrCodeIcon, Download, X } from 'lucide-react';
+import { MapPin, QrCode as QrCodeIcon, Download, X, Edit } from 'lucide-react';
 import QRCode from 'qrcode';
 import {
   Dialog,
@@ -13,12 +13,18 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogTrigger,
 } from "@/components/ui/dialog";
+import { NewLocationForm } from './new-location-form';
 
-const LocationCard = ({ location, technicianName }: { location: ServiceLocation, technicianName: string }) => {
+
+const LocationCard = ({ location, technicians, onEdit }: { location: ServiceLocation, technicians: Technician[], onEdit: (location: ServiceLocation) => void }) => {
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
     const [isQrCodeDialogOpen, setIsQrCodeDialogOpen] = useState(false);
-    const qrCodeCanvasRef = useRef<HTMLCanvasElement>(null);
+
+    const technicianName = location.technicianId 
+        ? (technicians.find(t => t.id === location.technicianId) ? `${technicians.find(t => t.id === location.technicianId)?.firstName} ${technicians.find(t => t.id === location.technicianId)?.lastName}` : 'Não atribuído') 
+        : 'Não atribuído';
 
     useEffect(() => {
         if(location.id) {
@@ -51,11 +57,17 @@ const LocationCard = ({ location, technicianName }: { location: ServiceLocation,
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Detalhes:</span> {location.poolDetails}</p>
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Técnico:</span> {technicianName}</p>
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Dias de visita:</span> {location.serviceDays.join(', ')}</p>
+                <p className="text-sm font-semibold"><span className="font-medium text-muted-foreground">Mensalidade:</span> {location.fee?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'N/A'}</p>
+
                 
                 <div className="flex gap-2 pt-2">
                     <Button variant="outline" size="sm" onClick={() => setIsQrCodeDialogOpen(true)}>
                         <QrCodeIcon className="mr-2 h-4 w-4"/>
                         Ver QR Code
+                    </Button>
+                     <Button variant="secondary" size="sm" onClick={() => onEdit(location)}>
+                        <Edit className="mr-2 h-4 w-4"/>
+                        Editar
                     </Button>
                 </div>
             </div>
@@ -84,8 +96,19 @@ const LocationCard = ({ location, technicianName }: { location: ServiceLocation,
 
 export function ClientLocations({ locations, technicians }: { locations: ServiceLocation[], technicians: Technician[] }) {
     
-    const techniciansMap = new Map(technicians.map(t => [t.id, `${t.firstName} ${t.lastName}`]));
+    const [editingLocation, setEditingLocation] = useState<ServiceLocation | null>(null);
+    const [isFormOpen, setIsFormOpen] = useState(false);
 
+    const handleEdit = (location: ServiceLocation) => {
+        setEditingLocation(location);
+        setIsFormOpen(true);
+    };
+
+    const handleCloseForm = () => {
+        setEditingLocation(null);
+        setIsFormOpen(false);
+    }
+    
     if (locations.length === 0) {
         return <p className="text-sm text-muted-foreground text-center py-4">Nenhum local de atendimento cadastrado.</p>
     }
@@ -96,9 +119,28 @@ export function ClientLocations({ locations, technicians }: { locations: Service
                 <LocationCard 
                     key={location.id} 
                     location={location} 
-                    technicianName={location.technicianId ? techniciansMap.get(location.technicianId) || 'Não atribuído' : 'Não atribuído'} 
+                    technicians={technicians}
+                    onEdit={handleEdit}
                 />
             ))}
+             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Editar Local de Atendimento</DialogTitle>
+                        <DialogDescription>Atualize os dados deste local.</DialogDescription>
+                    </DialogHeader>
+                    {editingLocation && (
+                         <NewLocationForm 
+                            clientId={editingLocation.clientId}
+                            franchiseId={editingLocation.franchiseId}
+                            technicians={technicians}
+                            onSave={handleCloseForm}
+                            locationToEdit={editingLocation}
+                            onCancel={handleCloseForm}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
