@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import type { Client, Payment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useCollection } from '@/firebase';
-import { collection, query, where, writeBatch, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, writeBatch, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
-import { ReceivablesTable, type ReceivablesData } from '@/components/dashboard/accounts-receivable/receivables-table';
+import { ReceivablesTable, type AggregatedReceivable } from '@/components/dashboard/accounts-receivable/receivables-table';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
@@ -23,7 +23,7 @@ export default function AccountsReceivablePage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [currentMonth, setCurrentMonth] = useState(new Date());
-    const [receivablesData, setReceivablesData] = useState<ReceivablesData[]>([]);
+    const [receivablesData, setReceivablesData] = useState<AggregatedReceivable[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
     
@@ -48,8 +48,8 @@ export default function AccountsReceivablePage() {
         const end = endOfMonth(currentMonth);
         return query(
             collection(firestore, 'franchises', franchiseId, 'payments'),
-            where('dueDate', '>=', start.toISOString()),
-            where('dueDate', '<=', end.toISOString())
+            where('month', '==', currentMonth.getMonth() + 1),
+            where('year', '==', currentMonth.getFullYear())
         );
     }, [firestore, franchiseId, currentMonth]);
     const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
@@ -118,7 +118,7 @@ export default function AccountsReceivablePage() {
     }, [locations, clients, currentMonth, franchiseId, firestore, isLoadingLocations, isLoadingClients, toast]);
 
 
-    // --- Combine locations, clients and payments ---
+    // --- Aggregate locations, clients and payments ---
     useEffect(() => {
         if (!clients || !payments || !locations) {
             setReceivablesData([]);
@@ -126,30 +126,65 @@ export default function AccountsReceivablePage() {
         };
 
         const clientsMap = new Map(clients.map(c => [c.id, c]));
-        const paymentsMap = new Map(payments.map(p => [p.locationId, p]));
 
-        // Create a set of location IDs that have payments this month
-        const locationsWithPaymentsThisMonth = new Set(payments.map(p => p.locationId));
+        const aggregatedMap = new Map<string, AggregatedReceivable>();
 
-        // Filter locations: show locations for active clients OR inactive clients that have a payment record for the current month
-        const filteredLocations = locations.filter(location => {
+        // Filter locations that have billing info
+        const billableLocations = locations.filter(l => l.fee && l.dueDay);
+        
+        // Populate map with all clients that have at least one billable location
+        for (const location of billableLocations) {
             const client = clientsMap.get(location.clientId);
-            return (client && client.isActive) || locationsWithPaymentsThisMonth.has(location.id);
+            if (client) { // Only process if client exists
+                if (!aggregatedMap.has(client.id)) {
+                    aggregatedMap.set(client.id, {
+                        client: client,
+                        totalAmount: 0,
+                        dueDate: 0, // We will use the first location's due date for simplicity
+                        locations: [],
+                        payments: [],
+                        status: 'pending' // Default status
+                    });
+                }
+            }
+        }
+        
+        // Add locations and sum total amount
+        for (const location of billableLocations) {
+            const data = aggregatedMap.get(location.clientId);
+            if (data) {
+                data.locations.push(location);
+                data.totalAmount += location.fee || 0;
+                if (!data.dueDate) {
+                   data.dueDate = location.dueDay || 0;
+                }
+            }
+        }
+        
+        // Add payments to the aggregated data
+        for (const payment of payments) {
+             const data = aggregatedMap.get(payment.clientId);
+             if (data) {
+                data.payments.push(payment);
+             }
+        }
+        
+        // Determine the final status for each client
+        for(const data of aggregatedMap.values()) {
+            if (data.payments.length > 0 && data.payments.every(p => p.status === 'paid')) {
+                data.status = 'paid';
+            } else {
+                data.status = 'pending';
+            }
+        }
+        
+        // Filter out clients who are inactive AND have no payments this month
+        const finalData = Array.from(aggregatedMap.values()).filter(item => {
+            return item.client.isActive || item.payments.length > 0;
         });
 
-        const combinedData: ReceivablesData[] = filteredLocations
-            .filter(location => location.fee && location.dueDay) // Only include locations with billing info
-            .map(location => {
-                const client = clientsMap.get(location.clientId);
-                const payment = paymentsMap.get(location.id);
-                return {
-                    client: client!,
-                    location: location,
-                    payment: payment || null,
-                };
-            }).filter(item => !!item.client);
+        setReceivablesData(finalData);
 
-        setReceivablesData(combinedData);
     }, [clients, payments, locations]);
     
     const handleDeactivateClient = async () => {
