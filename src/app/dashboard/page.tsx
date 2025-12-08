@@ -95,7 +95,7 @@ export default function DashboardPage() {
         if (isMaster) {
             const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
             const allFranchises = franchisesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Franchise));
-
+            
             let totalClients = 0;
             let totalTechnicians = 0;
             const newClientsByMonth: Record<string, number> = {};
@@ -104,7 +104,7 @@ export default function DashboardPage() {
                 newClientsByMonth[m] = 0;
                 revenueByMonth[m] = { faturado: 0, recebido: 0 };
             });
-            
+
             await Promise.all(allFranchises.map(async (f) => {
                 const clientsSnap = await getDocs(collection(firestore, 'franchises', f.id, 'clients'));
                 totalClients += clientsSnap.size;
@@ -210,7 +210,7 @@ export default function DashboardPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [userInfo?.role, franchiseId]);
+  }, [userInfo?.role, franchiseId, firestore]);
 
     useEffect(() => {
         fetchStats();
