@@ -22,6 +22,7 @@ export default function TechniciansPage() {
   const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const auth = useMemo(() => getAuth(), []);
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -55,7 +56,6 @@ export default function TechniciansPage() {
     if (!firestore || !franchiseId) return;
     setIsSaving(true);
     
-    const auth = getAuth();
     const batch = writeBatch(firestore);
     const [firstName, ...lastNameParts] = data.name.split(' ');
 

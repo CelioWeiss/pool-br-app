@@ -15,15 +15,16 @@ import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function ClientsPage() {
-  const { userInfo, auth } = useAuth();
+  const { userInfo } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
+  const auth = useMemo(() => getAuth(), []);
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -392,5 +393,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    
