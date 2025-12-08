@@ -3,7 +3,7 @@
 
 import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Users, Wrench, Calendar } from 'lucide-react';
+import { Building2, Users, Wrench, Calendar, DollarSign } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
 import { useFirestore } from '@/firebase';
 import { collection, query, where, getCountFromServer, getDocs } from 'firebase/firestore';
@@ -55,6 +55,7 @@ export default function DashboardPage() {
     clients: 0,
     technicians: 0,
     appointmentsToday: 0,
+    monthlyRevenue: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [revenueData, setRevenueData] = useState<any[]>([]);
@@ -78,7 +79,7 @@ export default function DashboardPage() {
         const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
         const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
 
-        let newStats = { franchises: 0, clients: 0, technicians: 0, appointmentsToday: 0 };
+        let newStats = { franchises: 0, clients: 0, technicians: 0, appointmentsToday: 0, monthlyRevenue: 0 };
         let newRevenueData: any[] = [];
         let newClientStatsData: ClientStatsData[] = [];
         let newTotalActiveClients = 0;
@@ -148,13 +149,20 @@ export default function DashboardPage() {
             const allClientsSnap = await getDocs(franchiseClientsQuery);
             let active = 0;
             let inactive = 0;
+            let monthlyRevenue = 0;
             const newClientsByMonth: Record<string, number> = {};
             monthLabels.forEach(m => newClientsByMonth[m] = 0);
 
             allClientsSnap.forEach(doc => {
                 const client = doc.data() as Client;
-                if (client.isActive !== false) active++;
-                else inactive++;
+                if (client.isActive !== false) {
+                  active++;
+                  if (client.monthlyFee) {
+                    monthlyRevenue += client.monthlyFee;
+                  }
+                } else {
+                  inactive++;
+                }
 
                 if (client.createdAt) {
                     const createdAtDate = new Date(client.createdAt);
@@ -165,6 +173,7 @@ export default function DashboardPage() {
                 }
             });
             newStats.clients = active;
+            newStats.monthlyRevenue = monthlyRevenue;
             newTotalActiveClients = active;
             newTotalInactiveClients = inactive;
 
@@ -272,6 +281,12 @@ export default function DashboardPage() {
         )}
         {(userInfo.role === 'owner') && (
           <>
+            <StatCard
+              title="Faturamento Mensal"
+              value={stats.monthlyRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              icon={DollarSign}
+              isLoading={finalIsLoading}
+            />
             <StatCard
               title="Clientes Ativos"
               value={stats.clients}
