@@ -12,7 +12,7 @@ import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
 import { MonthlyRevenueChart } from '@/components/dashboard/charts/monthly-revenue-chart';
 import { ClientStatsChart, type ClientStatsData } from '@/components/dashboard/charts/client-stats-chart';
-import type { Payment, Franchise, UserInfo, Client } from '@/lib/types';
+import type { Payment, Franchise, UserInfo, Client, Appointment } from '@/lib/types';
 import { subMonths, startOfMonth, endOfMonth, format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
@@ -50,12 +50,6 @@ export default function DashboardPage() {
   const franchiseId = userInfo?.franchiseId;
   const currentDate = useMemo(() => new Date(), []);
 
-  // --- Data Fetching ---
-  const {
-    allAppointments,
-    isLoading: isLoadingAppointments
-  } = useUnifiedAppointments(franchiseId, currentDate);
-
   const [stats, setStats] = useState({
     franchises: 0,
     clients: 0,
@@ -67,19 +61,12 @@ export default function DashboardPage() {
   const [clientStatsData, setClientStatsData] = useState<ClientStatsData[]>([]);
   const [totalActiveClients, setTotalActiveClients] = useState(0);
   const [totalInactiveClients, setTotalInactiveClients] = useState(0);
+  
+  const {
+    allAppointments,
+    isLoading: isLoadingAppointments
+  } = useUnifiedAppointments(franchiseId, currentDate);
 
-
-  // --- Appointment Stats Calculation ---
-  useEffect(() => {
-    if (isLoadingAppointments || !allAppointments) return;
-    
-    const todaysAppointments = allAppointments.filter(appt => 
-        isToday(new Date(appt.scheduledDateTime)) && appt.status === 'scheduled'
-    ).length;
-
-    setStats(prev => ({...prev, appointmentsToday: todaysAppointments }));
-
-  }, [allAppointments, isLoadingAppointments]);
 
   const fetchStats = useCallback(async () => {
     if (!userInfo?.role || !firestore) return;
@@ -90,6 +77,12 @@ export default function DashboardPage() {
         const isOwner = userInfo.role === 'owner';
         const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
         const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+
+        let newStats = { franchises: 0, clients: 0, technicians: 0, appointmentsToday: 0 };
+        let newRevenueData: any[] = [];
+        let newClientStatsData: ClientStatsData[] = [];
+        let newTotalActiveClients = 0;
+        let newTotalInactiveClients = 0;
 
         if (isMaster) {
             const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
@@ -106,9 +99,11 @@ export default function DashboardPage() {
 
             await Promise.all(allFranchises.map(async (f) => {
                 if (!f.id) return;
-                const clientsSnap = await getDocs(collection(firestore, 'franchises', f.id, 'clients'));
+                const clientsSnap = await getDocs(query(collection(firestore, 'franchises', f.id, 'clients'), where('isActive', '==', true)));
                 totalClients += clientsSnap.size;
-                clientsSnap.forEach(doc => {
+                
+                 const allClientsInFranchiseSnap = await getDocs(collection(firestore, 'franchises', f.id, 'clients'));
+                 allClientsInFranchiseSnap.forEach(doc => {
                     const client = doc.data() as Client;
                     if (client.createdAt) {
                         const createdAtDate = new Date(client.createdAt);
@@ -138,14 +133,14 @@ export default function DashboardPage() {
                 });
             }));
             
-            setStats(prev => ({ ...prev, franchises: allFranchises.length, clients: totalClients, technicians: totalTechnicians }));
-            setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
-            setClientStatsData(monthLabels.map(month => ({
+            newStats = { ...newStats, franchises: allFranchises.length, clients: totalClients, technicians: totalTechnicians };
+            newRevenueData = monthLabels.map(month => ({ month, ...revenueByMonth[month] }));
+            newClientStatsData = monthLabels.map(month => ({
                 month,
                 newClients: newClientsByMonth[month] || 0,
                 inactiveClients: 0, 
-            })));
-            setTotalActiveClients(totalClients);
+            }));
+            newTotalActiveClients = totalClients;
         }
 
         if (isOwner && franchiseId) {
@@ -158,7 +153,7 @@ export default function DashboardPage() {
 
             allClientsSnap.forEach(doc => {
                 const client = doc.data() as Client;
-                if (client.isActive) active++;
+                if (client.isActive !== false) active++;
                 else inactive++;
 
                 if (client.createdAt) {
@@ -169,20 +164,20 @@ export default function DashboardPage() {
                     }
                 }
             });
-            setStats(prev => ({ ...prev, clients: active }));
-            setTotalActiveClients(active);
-            setTotalInactiveClients(inactive);
+            newStats.clients = active;
+            newTotalActiveClients = active;
+            newTotalInactiveClients = inactive;
 
             
-            setClientStatsData(monthLabels.map(month => ({
+            newClientStatsData = monthLabels.map(month => ({
                 month,
                 newClients: newClientsByMonth[month] || 0,
                 inactiveClients: 0,
-            })));
+            }));
             
             const franchiseTechniciansQuery = query(collection(firestore, 'franchises', franchiseId, 'technicians'));
             const techniciansSnap = await getCountFromServer(franchiseTechniciansQuery);
-            setStats(prev => ({ ...prev, technicians: techniciansSnap.data().count }));
+            newStats.technicians = techniciansSnap.data().count;
             
             const franchisePaymentsQuery = query(
                 collection(firestore, 'franchises', franchiseId, 'payments'),
@@ -202,17 +197,28 @@ export default function DashboardPage() {
                     }
                 }
             });
-            setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
+            newRevenueData = monthLabels.map(month => ({ month, ...revenueByMonth[month] }));
+
+            // Appointments stats for owner
+            const todaysAppointments = (allAppointments || []).filter(appt => 
+              isToday(new Date(appt.scheduledDateTime)) && appt.status === 'scheduled'
+            ).length;
+            newStats.appointmentsToday = todaysAppointments;
         }
+
+        setStats(newStats);
+        setRevenueData(newRevenueData);
+        setClientStatsData(newClientStatsData);
+        setTotalActiveClients(newTotalActiveClients);
+        setTotalInactiveClients(newTotalInactiveClients);
 
     } catch (error) {
         console.error('Error fetching stats:', error);
     } finally {
         setIsLoading(false);
     }
-  }, [userInfo?.role, franchiseId, firestore]);
+  }, [userInfo?.role, franchiseId, firestore, allAppointments]);
 
-  // --- General and Chart Stats Fetching ---
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
@@ -227,6 +233,8 @@ export default function DashboardPage() {
   if (userInfo.role === 'technician') {
     return <TechnicianDashboard />;
   }
+
+  const finalIsLoading = isLoading || (userInfo.role === 'owner' && isLoadingAppointments);
 
   return (
     <div className="space-y-8">
@@ -246,19 +254,19 @@ export default function DashboardPage() {
                 title="Total de Franquias"
                 value={stats.franchises}
                 icon={Building2}
-                isLoading={isLoading}
+                isLoading={finalIsLoading}
             />
             <StatCard
                 title="Clientes Totais"
                 value={stats.clients}
                 icon={Users}
-                isLoading={isLoading}
+                isLoading={finalIsLoading}
             />
              <StatCard
                 title="Técnicos Totais"
                 value={stats.technicians}
                 icon={Wrench}
-                isLoading={isLoading}
+                isLoading={finalIsLoading}
             />
           </>
         )}
@@ -268,19 +276,19 @@ export default function DashboardPage() {
               title="Clientes Ativos"
               value={stats.clients}
               icon={Users}
-              isLoading={isLoading}
+              isLoading={finalIsLoading}
             />
             <StatCard
               title="Total de Técnicos"
               value={stats.technicians}
               icon={Wrench}
-              isLoading={isLoading}
+              isLoading={finalIsLoading}
             />
             <StatCard
               title="Serviços Agendados Hoje"
               value={stats.appointmentsToday}
               icon={Calendar}
-              isLoading={isLoadingAppointments}
+              isLoading={finalIsLoading}
             />
           </>
         )}
@@ -289,12 +297,12 @@ export default function DashboardPage() {
        {(userInfo.role === 'owner' || userInfo.role === 'master') && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             <div className="lg:col-span-3">
-                <MonthlyRevenueChart data={revenueData} isLoading={isLoading} isMaster={userInfo.role === 'master'} />
+                <MonthlyRevenueChart data={revenueData} isLoading={finalIsLoading} isMaster={userInfo.role === 'master'} />
             </div>
              <div className="lg:col-span-2">
                 <ClientStatsChart 
                     data={clientStatsData} 
-                    isLoading={isLoading}
+                    isLoading={finalIsLoading}
                     totalActive={totalActiveClients}
                     totalInactive={totalInactiveClients}
                 />
