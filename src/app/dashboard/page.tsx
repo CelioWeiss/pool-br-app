@@ -93,7 +93,7 @@ export default function DashboardPage() {
             if (isMaster) {
                 const franchisesQuery = collection(firestore, 'franchises');
                 const franchisesSnap = await getDocs(franchisesQuery);
-                setStats(prev => ({ ...prev, franchises: franchisesSnap.size }));
+                setStats(prev => ({ ...prev, franchises: franchisesSnap.size, clients: 0, technicians: 0, appointmentsToday: 0 }));
             }
 
             if (isOwner && franchiseId) {
@@ -167,8 +167,9 @@ export default function DashboardPage() {
     }, [userInfo, firestore, franchiseId]);
 
     useEffect(() => {
+        if (!userInfo || !firestore) return;
         fetchStats();
-    }, [fetchStats]);
+    }, [userInfo?.id, userInfo?.role, franchiseId, firestore]);
 
 
   if (!userInfo) return null;
