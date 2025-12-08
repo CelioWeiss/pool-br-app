@@ -24,7 +24,7 @@ export default function FranchisesPage() {
   const { hasRole } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
-  const auth = getAuth();
+  const auth = useMemo(() => getAuth(), []);
 
   const franchisesQuery = useMemo(() => 
     firestore ? collection(firestore, 'franchises') : null
