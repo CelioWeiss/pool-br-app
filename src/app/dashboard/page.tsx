@@ -68,18 +68,6 @@ export default function DashboardPage() {
   const [totalActiveClients, setTotalActiveClients] = useState(0);
   const [totalInactiveClients, setTotalInactiveClients] = useState(0);
 
-  // Memoize queries
-  const franchisesQuery = useMemo(() => firestore ? collection(firestore, 'franchises') : null, [firestore]);
-  const franchiseClientsQuery = useMemo(() => firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null, [firestore, franchiseId]);
-  const franchiseTechniciansQuery = useMemo(() => firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'technicians')) : null, [firestore, franchiseId]);
-  const franchisePaymentsQuery = useMemo(() => {
-    if (!firestore || !franchiseId) return null;
-    const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
-    return query(
-        collection(firestore, 'franchises', franchiseId, 'payments'),
-        where('dueDate', '>=', sixMonthsAgo.toISOString())
-    );
-  }, [firestore, franchiseId]);
 
   // --- Appointment Stats Calculation ---
   useEffect(() => {
@@ -94,8 +82,7 @@ export default function DashboardPage() {
   }, [allAppointments, isLoadingAppointments]);
 
   // --- General and Chart Stats Fetching ---
-  useEffect(() => {
-    const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
       if (!userInfo || !firestore) return;
       setIsLoading(true);
   
@@ -103,70 +90,73 @@ export default function DashboardPage() {
         const isMaster = userInfo.role === 'master';
         const isOwner = userInfo.role === 'owner';
 
-        if (isMaster && franchisesQuery) {
+        if (isMaster) {
+          const franchisesQuery = collection(firestore, 'franchises');
           const franchisesSnap = await getDocs(franchisesQuery);
           setStats(prev => ({ ...prev, franchises: franchisesSnap.size }));
         }
 
         if (isOwner && franchiseId) {
           // Client Stats
-          if (franchiseClientsQuery) {
-            const allClientsSnap = await getDocs(franchiseClientsQuery);
-            let active = 0;
-            let inactive = 0;
-            const newClientsByMonth: Record<string, number> = {};
-            const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+          const franchiseClientsQuery = query(collection(firestore, 'franchises', franchiseId, 'clients'));
+          const allClientsSnap = await getDocs(franchiseClientsQuery);
+          let active = 0;
+          let inactive = 0;
+          const newClientsByMonth: Record<string, number> = {};
+          const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
 
-            allClientsSnap.forEach(doc => {
-              const client = doc.data() as UserInfo;
-              if (client.isActive) active++;
-              else inactive++;
+          allClientsSnap.forEach(doc => {
+            const client = doc.data() as UserInfo;
+            if (client.isActive) active++;
+            else inactive++;
 
-              if (client.createdAt) {
-                  const createdAtDate = new Date(client.createdAt);
-                  if (createdAtDate >= sixMonthsAgo) {
-                      const monthKey = format(createdAtDate, 'MMM', { locale: ptBR });
-                      newClientsByMonth[monthKey] = (newClientsByMonth[monthKey] || 0) + 1;
-                  }
-              }
-            });
-            setStats(prev => ({ ...prev, clients: active }));
-            setTotalActiveClients(active);
-            setTotalInactiveClients(inactive);
+            if (client.createdAt) {
+                const createdAtDate = new Date(client.createdAt);
+                if (createdAtDate >= sixMonthsAgo) {
+                    const monthKey = format(createdAtDate, 'MMM', { locale: ptBR });
+                    newClientsByMonth[monthKey] = (newClientsByMonth[monthKey] || 0) + 1;
+                }
+            }
+          });
+          setStats(prev => ({ ...prev, clients: active }));
+          setTotalActiveClients(active);
+          setTotalInactiveClients(inactive);
 
-            const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
-            setClientStatsData(monthLabels.map(month => ({
-              month,
-              newClients: newClientsByMonth[month] || 0,
-              inactiveClients: 0,
-            })));
-          }
-
+          const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
+          setClientStatsData(monthLabels.map(month => ({
+            month,
+            newClients: newClientsByMonth[month] || 0,
+            inactiveClients: 0,
+          })));
+          
           // Technician Stats
-          if (franchiseTechniciansQuery) {
-            const techniciansSnap = await getCountFromServer(franchiseTechniciansQuery);
-            setStats(prev => ({ ...prev, technicians: techniciansSnap.data().count }));
-          }
+          const franchiseTechniciansQuery = query(collection(firestore, 'franchises', franchiseId, 'technicians'));
+          const techniciansSnap = await getCountFromServer(franchiseTechniciansQuery);
+          setStats(prev => ({ ...prev, technicians: techniciansSnap.data().count }));
+          
 
           // Revenue Stats
-          if(franchisePaymentsQuery) {
-            const paymentsSnap = await getDocs(franchisePaymentsQuery);
-            const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
-            const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
-            monthLabels.forEach(m => revenueByMonth[m] = { faturado: 0, recebido: 0 });
+          const sixMonthsAgoForPayments = startOfMonth(subMonths(new Date(), 5));
+          const franchisePaymentsQuery = query(
+              collection(firestore, 'franchises', franchiseId, 'payments'),
+              where('dueDate', '>=', sixMonthsAgoForPayments.toISOString())
+          );
+          const paymentsSnap = await getDocs(franchisePaymentsQuery);
+          const revenueMonthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
+          const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
+          revenueMonthLabels.forEach(m => revenueByMonth[m] = { faturado: 0, recebido: 0 });
 
-            paymentsSnap.forEach(doc => {
-                const payment = doc.data() as Payment;
-                const monthKey = format(new Date(payment.dueDate), 'MMM', { locale: ptBR });
-                if (revenueByMonth[monthKey]) {
-                  revenueByMonth[monthKey].faturado += payment.amount;
-                  if (payment.status === 'paid') {
-                      revenueByMonth[monthKey].recebido += payment.amount;
-                  }
+          paymentsSnap.forEach(doc => {
+              const payment = doc.data() as Payment;
+              const monthKey = format(new Date(payment.dueDate), 'MMM', { locale: ptBR });
+              if (revenueByMonth[monthKey]) {
+                revenueByMonth[monthKey].faturado += payment.amount;
+                if (payment.status === 'paid') {
+                    revenueByMonth[monthKey].recebido += payment.amount;
                 }
-            });
-            setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
-          }
+              }
+          });
+          setRevenueData(revenueMonthLabels.map(month => ({ month, ...revenueByMonth[month] })));
         }
   
       } catch (error) {
@@ -174,10 +164,13 @@ export default function DashboardPage() {
       } finally {
         setIsLoading(false);
       }
-    }
-  
+    }, [userInfo, firestore, franchiseId]);
+
+  useEffect(() => {
+    if (!userInfo || !firestore) return;
     fetchStats();
-  }, [userInfo, firestore, franchiseId, franchisesQuery, franchiseClientsQuery, franchiseTechniciansQuery, franchisePaymentsQuery]);
+  }, [userInfo?.id, userInfo?.role, franchiseId, firestore, fetchStats]);
+
 
   if (!userInfo) return null;
 
