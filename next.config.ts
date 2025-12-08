@@ -8,9 +8,8 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    serverComponentsExternalPackages: ['firebase-admin'],
-  },
+  serverExternalPackages: ['firebase-admin'],
+  experimental: {},
   allowedDevOrigins: ["*.cluster-hlmk2l2htragyudeyf6f3tzsi6.cloudworkstations.dev"],
   images: {
     remotePatterns: [
