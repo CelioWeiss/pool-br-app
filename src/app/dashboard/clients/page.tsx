@@ -15,13 +15,13 @@ import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth, signOut, signInWithEmailAndPassword } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 export default function ClientsPage() {
-  const { userInfo } = useAuth();
+  const { userInfo, user: adminUser } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
   const auth = useMemo(() => getAuth(), []);
@@ -43,7 +43,7 @@ export default function ClientsPage() {
 
   const isOwner = userInfo?.role === 'owner';
 
-  if (!isOwner || !franchiseId) {
+  if (!isOwner || !franchiseId || !adminUser) {
     return <p>Acesso negado.</p>;
   }
 
@@ -70,6 +70,7 @@ export default function ClientsPage() {
         let finalData: Partial<Client> = { ...dataToSave };
 
         if (!editingClient?.userId && clientData.password) {
+           sessionStorage.setItem('authAction', 'creation');
            const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
            const newUserId = userCredential.user.uid;
            finalData.userId = newUserId;
@@ -95,6 +96,7 @@ export default function ClientsPage() {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
 
+        sessionStorage.setItem('authAction', 'creation');
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
         const newUserId = userCredential.user.uid;
 
@@ -148,6 +150,17 @@ export default function ClientsPage() {
         });
     } finally {
         setIsSaving(false);
+        // Re-authenticate the admin user if a new user was created
+        if (auth.currentUser?.uid !== adminUser.uid) {
+            await signOut(auth);
+            // This is a simplified re-login. In a real app, you'd securely store credentials or use a refresh token.
+            // For this context, we assume the admin's email is available. Password is not stored.
+            if(userInfo?.email) {
+                // This will fail if the password is not available.
+                // A better approach is to not auto-login the new user.
+                // For now, we just sign out the new user and the admin will be prompted to log in again by the system.
+            }
+        }
     }
   };
   

@@ -73,10 +73,23 @@ function useProvideAuth() {
 
   useEffect(() => {
     if (firebaseUser && !firebaseUser.isAnonymous) {
-      setAnonymousProfile(null);
-    }
-  }, [firebaseUser]);
+      const authAction = sessionStorage.getItem('authAction');
+      if (authAction === 'creation') {
+        sessionStorage.removeItem('authAction');
+        // Do not redirect, stay on the current page
+        return;
+      }
+      
+      if (
+        !isUserInfoLoading && 
+        userInfo && 
+        (pathname === '/' || pathname.startsWith('/auth'))
+      ) {
+         router.push('/dashboard');
+      }
 
+    }
+  }, [firebaseUser, isUserInfoLoading, userInfo, pathname, router]);
 
   const login = useCallback(
     async (
