@@ -31,7 +31,8 @@ const InfoCard = ({ title, value, icon: Icon }: { title: string, value: string |
 );
 
 
-export default function ClientProfilePage({ params: { clientId } }: { params: { clientId: string } }) {
+export default function ClientProfilePage({ params }: { params: Promise<{ clientId: string }> }) {
+  const { clientId } = React.use(params);
   const { userInfo } = useAuth();
   const firestore = useFirestore();
   

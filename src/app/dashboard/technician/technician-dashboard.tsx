@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { useFirestore, useCollection } from '@/firebase';
@@ -34,6 +34,8 @@ export function TechnicianDashboard() {
     const firestore = useFirestore();
     const franchiseId = userInfo?.franchiseId;
 
+    const [technicianId, setTechnicianId] = useState<string | null>(null);
+
     const techniciansQuery = useMemo(() =>
         firestore && franchiseId && userInfo?.id
             ? query(collection(firestore, 'franchises', franchiseId, 'technicians'), where('userId', '==', userInfo.id))
@@ -41,13 +43,17 @@ export function TechnicianDashboard() {
     , [firestore, franchiseId, userInfo?.id]);
 
     const { data: technicianDocs, isLoading: isLoadingTechnician } = useCollection<Technician>(techniciansQuery);
-    const technicianId = useMemo(() => technicianDocs?.[0]?.id, [technicianDocs]);
 
-    const appointmentsQuery = useMemo(() =>
-        firestore && franchiseId && technicianId
-            ? query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('technicianId', '==', technicianId))
-            : null
-    , [firestore, franchiseId, technicianId]);
+    useEffect(() => {
+        if (technicianDocs && technicianDocs.length > 0) {
+            setTechnicianId(technicianDocs[0].id);
+        }
+    }, [technicianDocs]);
+
+    const appointmentsQuery = useMemo(() => {
+        if (!firestore || !franchiseId || !technicianId) return null;
+        return query(collection(firestore, 'franchises', franchiseId, 'appointments'), where('technicianId', '==', technicianId));
+    }, [firestore, franchiseId, technicianId]);
     
     const { data: appointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
 
@@ -82,7 +88,7 @@ export function TechnicianDashboard() {
         };
     }, [appointments]);
 
-    const isLoading = isLoadingTechnician || isLoadingAppointments;
+    const isLoading = isLoadingTechnician || (technicianId !== null && isLoadingAppointments);
 
     return (
         <div className="space-y-8">
