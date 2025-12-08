@@ -60,9 +60,9 @@ function useProvideAuth() {
 
 
   const userDocRef = useMemo(() => {
-    if (!firestore || !firebaseUser?.uid) return null;
+    if (!firestore || !firebaseUser?.uid || firebaseUser.isAnonymous) return null;
     return doc(firestore, "users", firebaseUser.uid);
-  }, [firestore, firebaseUser?.uid]);
+  }, [firestore, firebaseUser]);
 
   const {
     data: userInfo,
@@ -71,10 +71,10 @@ function useProvideAuth() {
 
 
   useEffect(() => {
-    if (firebaseUser && anonymousProfile && firebaseUser.uid !== anonymousProfile.id) {
+    if (firebaseUser && !firebaseUser.isAnonymous) {
       setAnonymousProfile(null);
     }
-  }, [firebaseUser, anonymousProfile]);
+  }, [firebaseUser]);
 
 
   const login = useCallback(
@@ -113,21 +113,11 @@ function useProvideAuth() {
   );
   
   const anonymousLoginAs = useCallback(async (userToLoginAs: UserInfo) => {
-    if (!firestore) return;
     setIsLoggingIn(true);
     setAuthError(null);
     try {
-        const { user } = await signInAnonymously(auth);
-
-        const simulatedUserInfo: UserInfo = {
-            ...userToLoginAs,
-            id: user.uid 
-        };
-
-        await setDoc(doc(firestore, "users", user.uid), simulatedUserInfo);
-
-        setAnonymousProfile(simulatedUserInfo);
-
+        await signInAnonymously(auth);
+        setAnonymousProfile(userToLoginAs); // Directly set the profile in state
         router.push("/dashboard");
 
     } catch (err: any) {
@@ -136,7 +126,7 @@ function useProvideAuth() {
     } finally {
         setIsLoggingIn(false);
     }
-  }, [auth, router, firestore]);
+  }, [auth, router]);
 
   const logout = useCallback(() => {
     signOut(auth).then(() => {

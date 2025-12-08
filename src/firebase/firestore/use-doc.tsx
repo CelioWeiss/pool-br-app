@@ -50,7 +50,7 @@ export function useDoc<T = any>(
   const docPath = useMemo(() => docRef?.path, [docRef]);
 
   useEffect(() => {
-    if (!docRef) {
+    if (!docRef || !docPath) {
       setData(null);
       setIsLoading(false);
       setError(null);
@@ -93,7 +93,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [docPath]); // Re-run only when the actual document path changes.
+  }, [docPath, docRef]); // Re-run only when the actual document path changes.
 
   return { data, isLoading, error };
 }
