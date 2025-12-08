@@ -12,7 +12,7 @@ import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
 import { MonthlyRevenueChart } from '@/components/dashboard/charts/monthly-revenue-chart';
 import { ClientStatsChart, type ClientStatsData } from '@/components/dashboard/charts/client-stats-chart';
-import type { Payment, Franchise, UserInfo } from '@/lib/types';
+import type { Payment, Franchise, UserInfo, Client } from '@/lib/types';
 import { subMonths, startOfMonth, endOfMonth, format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
@@ -89,11 +89,64 @@ export default function DashboardPage() {
         try {
             const isMaster = userInfo.role === 'master';
             const isOwner = userInfo.role === 'owner';
+            const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
 
             if (isMaster) {
-                const franchisesQuery = collection(firestore, 'franchises');
-                const franchisesSnap = await getDocs(franchisesQuery);
-                setStats(prev => ({ ...prev, franchises: franchisesSnap.size, clients: 0, technicians: 0, appointmentsToday: 0 }));
+                const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
+                const allFranchises = franchisesSnap.docs.map(doc => doc.data() as Franchise);
+
+                let totalClients = 0;
+                let totalTechnicians = 0;
+                const newClientsByMonth: Record<string, number> = {};
+                const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
+                monthLabels.forEach(m => {
+                    newClientsByMonth[m] = 0;
+                    revenueByMonth[m] = { faturado: 0, recebido: 0 };
+                });
+
+                for (const f of allFranchises) {
+                    const clientsSnap = await getDocs(collection(firestore, 'franchises', f.id, 'clients'));
+                    totalClients += clientsSnap.size;
+                    clientsSnap.forEach(doc => {
+                        const client = doc.data() as Client;
+                        if (client.createdAt) {
+                             const createdAtDate = new Date(client.createdAt);
+                            const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+                            if (createdAtDate >= sixMonthsAgo) {
+                                const monthKey = format(createdAtDate, 'MMM', { locale: ptBR });
+                                newClientsByMonth[monthKey] = (newClientsByMonth[monthKey] || 0) + 1;
+                            }
+                        }
+                    });
+
+                    const techniciansSnap = await getDocs(collection(firestore, 'franchises', f.id, 'technicians'));
+                    totalTechnicians += techniciansSnap.size;
+
+                    const sixMonthsAgoForPayments = startOfMonth(subMonths(new Date(), 5));
+                    const paymentsSnap = await getDocs(query(
+                        collection(firestore, 'franchises', f.id, 'payments'),
+                        where('dueDate', '>=', sixMonthsAgoForPayments.toISOString())
+                    ));
+                    paymentsSnap.forEach(doc => {
+                        const payment = doc.data() as Payment;
+                        const monthKey = format(new Date(payment.dueDate), 'MMM', { locale: ptBR });
+                        if (revenueByMonth[monthKey]) {
+                            revenueByMonth[monthKey].faturado += payment.amount;
+                            if (payment.status === 'paid') {
+                                revenueByMonth[monthKey].recebido += payment.amount;
+                            }
+                        }
+                    });
+                }
+                
+                setStats({ franchises: allFranchises.length, clients: totalClients, technicians: totalTechnicians, appointmentsToday: 0 });
+                setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
+                setClientStatsData(monthLabels.map(month => ({
+                    month,
+                    newClients: newClientsByMonth[month] || 0,
+                    inactiveClients: 0, 
+                })));
+                setTotalActiveClients(totalClients);
             }
 
             if (isOwner && franchiseId) {
@@ -106,7 +159,7 @@ export default function DashboardPage() {
                 const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
 
                 allClientsSnap.forEach(doc => {
-                    const client = doc.data() as UserInfo;
+                    const client = doc.data() as Client;
                     if (client.isActive) active++;
                     else inactive++;
 
@@ -122,7 +175,7 @@ export default function DashboardPage() {
                 setTotalActiveClients(active);
                 setTotalInactiveClients(inactive);
 
-                const monthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
+                
                 setClientStatsData(monthLabels.map(month => ({
                     month,
                     newClients: newClientsByMonth[month] || 0,
@@ -142,9 +195,8 @@ export default function DashboardPage() {
                     where('dueDate', '>=', sixMonthsAgoForPayments.toISOString())
                 );
                 const paymentsSnap = await getDocs(franchisePaymentsQuery);
-                const revenueMonthLabels: string[] = Array.from({ length: 6 }, (_, i) => format(subMonths(new Date(), 5 - i), 'MMM', { locale: ptBR }));
                 const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
-                revenueMonthLabels.forEach(m => revenueByMonth[m] = { faturado: 0, recebido: 0 });
+                monthLabels.forEach(m => revenueByMonth[m] = { faturado: 0, recebido: 0 });
 
                 paymentsSnap.forEach(doc => {
                     const payment = doc.data() as Payment;
@@ -156,7 +208,7 @@ export default function DashboardPage() {
                         }
                     }
                 });
-                setRevenueData(revenueMonthLabels.map(month => ({ month, ...revenueByMonth[month] })));
+                setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
             }
     
         } catch (error) {
@@ -194,12 +246,26 @@ export default function DashboardPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {userInfo.role === 'master' && (
-          <StatCard
-            title="Total de Franquias"
-            value={stats.franchises}
-            icon={Building2}
-            isLoading={isLoading}
-          />
+          <>
+            <StatCard
+                title="Total de Franquias"
+                value={stats.franchises}
+                icon={Building2}
+                isLoading={isLoading}
+            />
+            <StatCard
+                title="Clientes Totais"
+                value={stats.clients}
+                icon={Users}
+                isLoading={isLoading}
+            />
+             <StatCard
+                title="Técnicos Totais"
+                value={stats.technicians}
+                icon={Wrench}
+                isLoading={isLoading}
+            />
+          </>
         )}
         {(userInfo.role === 'owner') && (
           <>
@@ -225,10 +291,10 @@ export default function DashboardPage() {
         )}
       </div>
 
-       {userInfo.role === 'owner' && (
+       {(userInfo.role === 'owner' || userInfo.role === 'master') && (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             <div className="lg:col-span-3">
-                <MonthlyRevenueChart data={revenueData} isLoading={isLoading} />
+                <MonthlyRevenueChart data={revenueData} isLoading={isLoading} isMaster={userInfo.role === 'master'} />
             </div>
              <div className="lg:col-span-2">
                 <ClientStatsChart 
@@ -247,5 +313,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

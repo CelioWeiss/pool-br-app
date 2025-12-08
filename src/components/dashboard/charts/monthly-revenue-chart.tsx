@@ -27,6 +27,7 @@ export interface MonthlyRevenueData {
 interface MonthlyRevenueChartProps {
     data: MonthlyRevenueData[];
     isLoading: boolean;
+    isMaster?: boolean;
 }
 
 const chartConfig = {
@@ -40,7 +41,7 @@ const chartConfig = {
   },
 }
 
-export function MonthlyRevenueChart({ data, isLoading }: MonthlyRevenueChartProps) {
+export function MonthlyRevenueChart({ data, isLoading, isMaster = false }: MonthlyRevenueChartProps) {
 
   const totals = useMemo(() => {
     return data.reduce((acc, item) => {
@@ -55,7 +56,7 @@ export function MonthlyRevenueChart({ data, isLoading }: MonthlyRevenueChartProp
       <CardHeader>
         <div className="flex items-start justify-between">
             <div>
-                <CardTitle>Faturamento Mensal</CardTitle>
+                <CardTitle>{isMaster ? "Faturamento Total (Todas Franquias)" : "Faturamento Mensal"}</CardTitle>
                 <CardDescription>Faturado vs. Recebido nos últimos 6 meses</CardDescription>
             </div>
             <div className="flex flex-col items-end gap-2 text-sm">
