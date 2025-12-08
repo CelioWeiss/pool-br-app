@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import type { Franchise, UserInfo } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -196,7 +197,11 @@ export default function FranchisesPage() {
                     const ownerName = owner ? `${owner.firstName} ${owner.lastName}` : 'Não encontrado';
                     return (
                     <TableRow key={franchise.id}>
-                      <TableCell className="font-medium">{franchise.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link href={`/dashboard/franchises/${franchise.id}`} className="hover:underline text-primary">
+                            {franchise.name}
+                        </Link>
+                      </TableCell>
                       <TableCell>{franchise.address}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{ownerName}</Badge>
