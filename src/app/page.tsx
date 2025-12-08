@@ -1,4 +1,4 @@
-import { ProfileSelector } from '@/components/auth/profile-selector';
+import { LoginForm } from '@/components/auth/login-form';
 import Image from 'next/image';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
@@ -23,7 +23,7 @@ export default function Home() {
         </p>
       </div>
       <div className="w-full max-w-sm mt-10">
-        <ProfileSelector />
+        <LoginForm />
       </div>
     </main>
   );
