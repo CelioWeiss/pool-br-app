@@ -167,9 +167,8 @@ export default function DashboardPage() {
     }, [userInfo?.role, franchiseId, firestore]);
 
     useEffect(() => {
-        if (!userInfo || !firestore) return;
         fetchStats();
-    }, [userInfo?.id, userInfo?.role, franchiseId, firestore]);
+    }, [fetchStats]);
 
 
   if (!userInfo) return null;
