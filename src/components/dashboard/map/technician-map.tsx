@@ -29,36 +29,34 @@ function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
     return null;
 }
 
+const MapContent = ({ technicians, appointments, locations }: { technicians: Technician[], appointments: Appointment[], locations: ServiceLocation[] }) => {
+    const mapCenter = useMemo(() => ({ lat: -23.55052, lng: -46.633308 }), []); // São Paulo center
 
-export function TechnicianMap({ apiKey, technicians, appointments, locations }: { apiKey: string, technicians: Technician[], appointments: Appointment[], locations: ServiceLocation[] }) {
-  const mapCenter = useMemo(() => ({ lat: -23.55052, lng: -46.633308 }), []); // São Paulo center
-
-  const technicianAppointments = (techId: string) => 
-    appointments
-      .filter(a => a.technicianId === techId && (a.status === 'scheduled' || a.status === 'in_progress'))
-      .map(a => {
-        const location = locations.find(l => l.id === a.locationId);
-        // This is a placeholder for geocoding the address.
-        // In a real app, you would use a geocoding service to get lat/lng from location.address.
-        // For now, we'll use a random offset from the technician's location.
-        const tech = technicians.find(t => t.id === techId);
-        if (!tech?.locationLatitude || !tech?.locationLongitude) return null;
-        return { lat: tech.locationLatitude + (Math.random() - 0.5) * 0.1, lng: tech.locationLongitude + (Math.random() - 0.5) * 0.1 };
-      })
-      .filter(Boolean) as { lat: number, lng: number }[];
+    const technicianAppointments = (techId: string) => 
+      appointments
+        .filter(a => a.technicianId === techId && (a.status === 'scheduled' || a.status === 'in_progress'))
+        .map(a => {
+          const location = locations.find(l => l.id === a.locationId);
+          // This is a placeholder for geocoding the address.
+          // In a real app, you would use a geocoding service to get lat/lng from location.address.
+          // For now, we'll use a random offset from the technician's location.
+          const tech = technicians.find(t => t.id === techId);
+          if (!tech?.locationLatitude || !tech?.locationLongitude) return null;
+          return { lat: tech.locationLatitude + (Math.random() - 0.5) * 0.1, lng: tech.locationLongitude + (Math.random() - 0.5) * 0.1 };
+        })
+        .filter(Boolean) as { lat: number, lng: number }[];
 
 
-  const techColors = ["#1A237E", "#5C6BC0", "#3F51B5"];
+    const techColors = ["#1A237E", "#5C6BC0", "#3F51B5"];
 
-  return (
-    <APIProvider apiKey={apiKey}>
-      <Map
-        mapId="poolbr-map"
-        defaultCenter={mapCenter}
-        defaultZoom={11}
-        gestureHandling={'greedy'}
-        disableDefaultUI={true}
-      >
+    return (
+        <Map
+            mapId="poolbr-map"
+            defaultCenter={mapCenter}
+            defaultZoom={11}
+            gestureHandling={'greedy'}
+            disableDefaultUI={true}
+        >
         {technicians.map((tech, index) => {
           if (!tech.locationLatitude || !tech.locationLongitude) return null;
 
@@ -87,6 +85,31 @@ export function TechnicianMap({ apiKey, technicians, appointments, locations }: 
           );
         })}
       </Map>
+    );
+}
+
+export function TechnicianMap({ apiKey, technicians, appointments, locations }: { apiKey?: string, technicians: Technician[], appointments: Appointment[], locations: ServiceLocation[] }) {
+
+  if (!apiKey) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-lg border bg-card text-center p-8">
+        <div>
+          <h2 className="text-2xl font-bold">Google Maps API Key Faltando</h2>
+          <p className="mt-2 text-muted-foreground">
+            Para exibir o mapa, por favor, configure a variável de ambiente <code className="font-mono bg-muted p-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <APIProvider apiKey={apiKey}>
+      <MapContent 
+        technicians={technicians}
+        appointments={appointments}
+        locations={locations}
+      />
     </APIProvider>
   );
 }

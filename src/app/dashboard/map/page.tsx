@@ -36,19 +36,6 @@ export default function MapPage() {
 
   const isLoading = isLoadingTechnicians || isLoadingLocations || isLoadingAppointments;
 
-  if (!apiKey) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center rounded-lg border bg-card text-center p-8">
-        <div>
-          <h2 className="text-2xl font-bold">Google Maps API Key Faltando</h2>
-          <p className="mt-2 text-muted-foreground">
-            Para exibir o mapa, por favor, configure a variável de ambiente <code className="font-mono bg-muted p-1 rounded">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code>.
-          </p>
-        </div>
-      </div>
-    );
-  }
-  
   if (!hasRole(['owner', 'master'])) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
