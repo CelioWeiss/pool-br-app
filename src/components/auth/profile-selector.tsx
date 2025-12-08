@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Spinner } from '../ui/spinner';
-import { Crown } from 'lucide-react';
+import { Crown, User } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 export function ProfileSelector() {
@@ -29,9 +29,9 @@ export function ProfileSelector() {
 
   const isLoading = isLoggingIn;
 
-  const masterUser = useMemo(() => userList.find(u => u.role === 'master'), []);
+  const masterUsers = useMemo(() => userList.filter(u => u.role === 'master'), []);
   
-  if (!masterUser) {
+  if (masterUsers.length === 0) {
     return (
         <Card>
             <CardHeader>
@@ -48,7 +48,7 @@ export function ProfileSelector() {
     <Card className="shadow-2xl">
       <CardHeader>
         <CardTitle>Entrar como Administrador</CardTitle>
-        <CardDescription>Clique no botão abaixo para entrar com o perfil Master.</CardDescription>
+        <CardDescription>Clique em um perfil para acessar o sistema.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         {isLoading && (
@@ -58,24 +58,25 @@ export function ProfileSelector() {
             </div>
         )}
 
-        {!isLoading && (
+        {!isLoading && masterUsers.map((user) => (
            <Button
+                key={user.id}
                 size="lg"
                 className="w-full h-18 justify-start p-4 gap-4 bg-primary/10 text-primary-foreground border-2 border-primary/50 hover:bg-primary/20"
-                onClick={() => handleLogin(masterUser)}
+                onClick={() => handleLogin(user)}
                 disabled={isLoading}
             >
                 <Avatar className="h-12 w-12 border-2 border-primary/50">
-                    <AvatarImage src={getAvatar(masterUser.role)} />
-                    <AvatarFallback><Crown /></AvatarFallback>
+                    <AvatarImage src={user.avatarUrl} />
+                    <AvatarFallback><User /></AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col items-start">
-                    <span className="font-bold text-lg">{masterUser.firstName} {masterUser.lastName}</span>
-                    <span className="text-sm text-primary-foreground/80 capitalize">{masterUser.role}</span>
+                    <span className="font-bold text-lg">{user.firstName} {user.lastName}</span>
+                    <span className="text-sm text-primary-foreground/80 capitalize">{user.role}</span>
                 </div>
                 <Crown className="ml-auto h-6 w-6 text-yellow-400" />
             </Button>
-        )}
+        ))}
       </CardContent>
     </Card>
   );
