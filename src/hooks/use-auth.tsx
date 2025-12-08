@@ -10,7 +10,7 @@ import React, {
   useCallback,
   useEffect,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { UserInfo, UserRole } from "@/lib/types";
 import { useUser, useFirestore, useDoc } from "@/firebase";
 import {
@@ -52,6 +52,7 @@ function useProvideAuth() {
   const firestore = useFirestore();
   const auth = getAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
