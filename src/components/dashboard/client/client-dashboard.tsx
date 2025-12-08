@@ -71,11 +71,11 @@ const dayOfWeekMap: { [key: string]: number } = {
 
 
 export function ClientDashboard() {
-  const { user, userInfo } = useAuth();
+  const { user, userInfo: baseUserInfo } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  const franchiseId = userInfo?.franchiseId;
+  const franchiseId = baseUserInfo?.franchiseId;
 
   const clientQuery = useMemo(() => 
     firestore && franchiseId && user ? query(collection(firestore, `franchises/${franchiseId}/clients`), where('userId', '==', user.uid), limit(1)) : null, 
@@ -105,7 +105,19 @@ export function ClientDashboard() {
     firestore && franchiseId && clientId ? query(collection(firestore, `franchises/${franchiseId}/appointments`), where('clientId', '==', clientId)) : null,
   [firestore, franchiseId, clientId]);
   const { data: clientAppointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsQuery);
-
+  
+  const userInfo = useMemo(() => {
+    if (!baseUserInfo) return null;
+    if (baseUserInfo.role !== 'client' || !clientData) {
+        return baseUserInfo;
+    }
+    return {
+        ...baseUserInfo,
+        firstName: clientData.contactName || baseUserInfo.firstName,
+        lastName: '',
+        avatarUrl: clientData.avatarUrl || baseUserInfo.avatarUrl,
+    }
+  }, [baseUserInfo, clientData]);
   
   const upcomingAppointment = useMemo(() => {
     if (!clientAppointments) return null;

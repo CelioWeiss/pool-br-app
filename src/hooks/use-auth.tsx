@@ -11,8 +11,8 @@ import React, {
   useEffect,
 } from "react";
 import { useRouter } from "next/navigation";
-import type { Client, UserInfo, UserRole } from "@/lib/types";
-import { useUser, useFirestore, useDoc, useCollection } from "@/firebase";
+import type { UserInfo, UserRole } from "@/lib/types";
+import { useUser, useFirestore, useDoc } from "@/firebase";
 import {
   getAuth,
   signOut,
@@ -20,15 +20,10 @@ import {
   AuthError,
   User as FirebaseUser,
   Auth,
-  createUserWithEmailAndPassword,
   signInAnonymously,
 } from "firebase/auth";
 import {
   doc,
-  collection,
-  query,
-  where,
-  limit,
   setDoc,
 } from "firebase/firestore";
 
@@ -61,8 +56,6 @@ function useProvideAuth() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
 
-  // This state is used to temporarily hold the profile for an anonymous login
-  // until the Firestore document is created and read back.
   const [anonymousProfile, setAnonymousProfile] = useState<UserInfo | null>(null);
 
 
@@ -72,59 +65,11 @@ function useProvideAuth() {
   }, [firestore, firebaseUser?.uid]);
 
   const {
-    data: baseUserInfo,
+    data: userInfo,
     isLoading: isUserInfoLoading,
   } = useDoc<UserInfo>(userDocRef);
 
-  const clientQuery = useMemo(() => {
-    if (
-      firestore &&
-      baseUserInfo?.role === "client" &&
-      baseUserInfo.franchiseId &&
-      baseUserInfo.id
-    ) {
-      return query(
-        collection(
-          firestore,
-          "franchises",
-          baseUserInfo.franchiseId,
-          "clients"
-        ),
-        where("userId", "==", baseUserInfo.id),
-        limit(1)
-      );
-    }
-    return null;
-  }, [firestore, baseUserInfo]);
 
-  const {
-    data: clientDocs,
-    isLoading: isClientLoading,
-  } = useCollection<Client>(clientQuery);
-  
-  const userInfo: UserInfo | null = useMemo(() => {
-    // During anonymous login, use the temporary profile immediately
-    if (firebaseUser?.isAnonymous && anonymousProfile && anonymousProfile.id === firebaseUser.uid) {
-      return anonymousProfile;
-    }
-    
-    if (!baseUserInfo) return null;
-
-    if (baseUserInfo.role !== "client" || !clientDocs) return baseUserInfo;
-
-    const clientProfile = clientDocs?.[0];
-    if (!clientProfile) return baseUserInfo;
-
-    return {
-      ...baseUserInfo,
-      firstName: clientProfile.contactName || baseUserInfo.firstName,
-      lastName: "",
-      avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
-    };
-  }, [baseUserInfo, clientDocs, firebaseUser, anonymousProfile]);
-
-
-  // When firebaseUser changes (e.g., on login), clear the temp profile
   useEffect(() => {
     if (firebaseUser && anonymousProfile && firebaseUser.uid !== anonymousProfile.id) {
       setAnonymousProfile(null);
@@ -172,18 +117,15 @@ function useProvideAuth() {
     setIsLoggingIn(true);
     setAuthError(null);
     try {
-        // Sign in anonymously to get a temporary Firebase user
         const { user } = await signInAnonymously(auth);
 
         const simulatedUserInfo: UserInfo = {
             ...userToLoginAs,
-            id: user.uid // Use the anonymous user's UID
+            id: user.uid 
         };
 
-        // Create the user document in Firestore so useDoc can pick it up
         await setDoc(doc(firestore, "users", user.uid), simulatedUserInfo);
 
-        // Set the profile in local state to bridge the gap before useDoc updates
         setAnonymousProfile(simulatedUserInfo);
 
         router.push("/dashboard");
@@ -198,26 +140,34 @@ function useProvideAuth() {
 
   const logout = useCallback(() => {
     signOut(auth).then(() => {
-      setAnonymousProfile(null); // Clear temp profile on logout
+      setAnonymousProfile(null);
       router.push("/");
     });
   }, [auth, router]);
 
   const hasRole = useCallback(
     (roles: UserRole | UserRole[]): boolean => {
-      if (!userInfo?.role) return false;
+      const currentRole = firebaseUser?.isAnonymous ? anonymousProfile?.role : userInfo?.role;
+      if (!currentRole) return false;
       const rolesToCheck = Array.isArray(roles) ? roles : [roles];
-      return rolesToCheck.includes(userInfo.role);
+      return rolesToCheck.includes(currentRole);
     },
-    [userInfo?.role]
+    [userInfo?.role, firebaseUser?.isAnonymous, anonymousProfile?.role]
   );
+  
+  const finalUserInfo = useMemo(() => {
+    if (firebaseUser?.isAnonymous && anonymousProfile) {
+      return anonymousProfile;
+    }
+    return userInfo;
+  }, [firebaseUser, anonymousProfile, userInfo]);
 
-  const isUserLoading = isFirebaseUserLoading || (firebaseUser && !userInfo && !isClientLoading) || isUserInfoLoading;
+  const isUserLoading = isFirebaseUserLoading || (firebaseUser && !finalUserInfo);
 
   return {
     user: firebaseUser,
     auth,
-    userInfo,
+    userInfo: finalUserInfo,
     isUserLoading,
     isLoggingIn,
     login,
