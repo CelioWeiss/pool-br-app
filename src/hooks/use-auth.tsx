@@ -8,6 +8,7 @@ import React, {
   ReactNode,
   useMemo,
   useCallback,
+  useEffect,
 } from "react";
 import { useRouter } from "next/navigation";
 import type { Client, UserInfo, UserRole } from "@/lib/types";
@@ -28,6 +29,7 @@ import {
   query,
   where,
   limit,
+  setDoc,
 } from "firebase/firestore";
 
 interface AuthContextType {
@@ -58,6 +60,11 @@ function useProvideAuth() {
 
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [authError, setAuthError] = useState<AuthError | null>(null);
+
+  // This state is used to temporarily hold the profile for an anonymous login
+  // until the Firestore document is created and read back.
+  const [anonymousProfile, setAnonymousProfile] = useState<UserInfo | null>(null);
+
 
   const userDocRef = useMemo(() => {
     if (!firestore || !firebaseUser?.uid) return null;
@@ -94,8 +101,13 @@ function useProvideAuth() {
     data: clientDocs,
     isLoading: isClientLoading,
   } = useCollection<Client>(clientQuery);
-
-  const userInfo = useMemo(() => {
+  
+  const userInfo: UserInfo | null = useMemo(() => {
+    // During anonymous login, use the temporary profile immediately
+    if (firebaseUser?.isAnonymous && anonymousProfile && anonymousProfile.id === firebaseUser.uid) {
+      return anonymousProfile;
+    }
+    
     if (!baseUserInfo) return null;
 
     if (baseUserInfo.role !== "client" || !clientDocs) return baseUserInfo;
@@ -109,7 +121,16 @@ function useProvideAuth() {
       lastName: "",
       avatarUrl: clientProfile.avatarUrl || baseUserInfo.avatarUrl,
     };
-  }, [baseUserInfo, clientDocs]);
+  }, [baseUserInfo, clientDocs, firebaseUser, anonymousProfile]);
+
+
+  // When firebaseUser changes (e.g., on login), clear the temp profile
+  useEffect(() => {
+    if (firebaseUser && anonymousProfile && firebaseUser.uid !== anonymousProfile.id) {
+      setAnonymousProfile(null);
+    }
+  }, [firebaseUser, anonymousProfile]);
+
 
   const login = useCallback(
     async (
@@ -147,25 +168,24 @@ function useProvideAuth() {
   );
   
   const anonymousLoginAs = useCallback(async (userToLoginAs: UserInfo) => {
+    if (!firestore) return;
     setIsLoggingIn(true);
     setAuthError(null);
     try {
         // Sign in anonymously to get a temporary Firebase user
         const { user } = await signInAnonymously(auth);
 
-        // Here, instead of creating a real doc, we simulate having the doc
-        // by directly controlling the state and redirecting.
-        // In a real scenario, you might link the anonymous UID to a profile.
-        
-        // This is a mock-up of what the user info would look like
         const simulatedUserInfo: UserInfo = {
             ...userToLoginAs,
             id: user.uid // Use the anonymous user's UID
         };
 
-        // For this demo, we'll assume the onAuthStateChanged listener and
-        // the useDoc hook will eventually pick up a "real" user document.
-        // The key is to redirect after a successful login.
+        // Create the user document in Firestore so useDoc can pick it up
+        await setDoc(doc(firestore, "users", user.uid), simulatedUserInfo);
+
+        // Set the profile in local state to bridge the gap before useDoc updates
+        setAnonymousProfile(simulatedUserInfo);
+
         router.push("/dashboard");
 
     } catch (err: any) {
@@ -174,10 +194,11 @@ function useProvideAuth() {
     } finally {
         setIsLoggingIn(false);
     }
-  }, [auth, router]);
+  }, [auth, router, firestore]);
 
   const logout = useCallback(() => {
     signOut(auth).then(() => {
+      setAnonymousProfile(null); // Clear temp profile on logout
       router.push("/");
     });
   }, [auth, router]);
@@ -191,14 +212,13 @@ function useProvideAuth() {
     [userInfo?.role]
   );
 
+  const isUserLoading = isFirebaseUserLoading || (firebaseUser && !userInfo && !isClientLoading) || isUserInfoLoading;
+
   return {
     user: firebaseUser,
     auth,
     userInfo,
-    isUserLoading:
-      isFirebaseUserLoading ||
-      isUserInfoLoading ||
-      isClientLoading,
+    isUserLoading,
     isLoggingIn,
     login,
     anonymousLoginAs,

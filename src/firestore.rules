@@ -56,11 +56,7 @@ service cloud.firestore {
     // =============================
     match /users/{userId} {
       allow write: if request.auth != null && request.auth.uid == userId;
-      allow read: if request.auth != null && (
-        request.auth.uid == userId || 
-        isMaster() ||
-        isSameFranchiseAsUser(userId)
-      );
+      allow read: if request.auth != null;
     }
     
     // =============================
@@ -118,5 +114,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
