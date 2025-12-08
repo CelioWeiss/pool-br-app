@@ -164,12 +164,12 @@ export default function DashboardPage() {
       } finally {
         setIsLoading(false);
       }
-    }, [userInfo, firestore, franchiseId]);
+    }, [userInfo?.role, userInfo?.franchiseId, firestore]);
 
   useEffect(() => {
     if (!userInfo || !firestore) return;
     fetchStats();
-  }, [userInfo?.id, userInfo?.role, franchiseId, firestore, fetchStats]);
+  }, [userInfo?.id, userInfo?.role, franchiseId, firestore]);
 
 
   if (!userInfo) return null;
