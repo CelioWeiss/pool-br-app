@@ -12,7 +12,7 @@ import { PendingClients } from '@/components/dashboard/pending-clients';
 import { TechnicianDashboard } from '@/components/dashboard/technician/technician-dashboard';
 import { MonthlyRevenueChart } from '@/components/dashboard/charts/monthly-revenue-chart';
 import { ClientStatsChart, type ClientStatsData } from '@/components/dashboard/charts/client-stats-chart';
-import type { Payment, Franchise, UserInfo, Client, Appointment } from '@/lib/types';
+import type { Payment, Franchise, UserInfo, Client, Appointment, ServiceLocation } from '@/lib/types';
 import { subMonths, startOfMonth, endOfMonth, format, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useUnifiedAppointments } from '@/hooks/use-unified-appointments';
@@ -145,24 +145,25 @@ export default function DashboardPage() {
         }
 
         if (isOwner && franchiseId) {
-            const franchiseClientsQuery = query(collection(firestore, 'franchises', franchiseId, 'clients'));
-            const allClientsSnap = await getDocs(franchiseClientsQuery);
+            const allClientsSnap = await getDocs(query(collection(firestore, 'franchises', franchiseId, 'clients')));
             const allClients = allClientsSnap.docs.map(doc => doc.data() as Client);
             
-            let active = 0;
-            let inactive = 0;
+            const locationsSnap = await getDocs(query(collection(firestore, 'franchises', franchiseId, 'locations')));
+            const allLocations = locationsSnap.docs.map(doc => doc.data() as ServiceLocation);
+
+            const activeClientIds = new Set(allClients.filter(c => c.isActive !== false).map(c => c.id));
+            
+            let activeClientsCount = 0;
+            let inactiveClientsCount = 0;
             let monthlyRevenue = 0;
             const newClientsByMonth: Record<string, number> = {};
             monthLabels.forEach(m => newClientsByMonth[m] = 0);
 
             allClients.forEach(client => {
                 if (client.isActive !== false) {
-                  active++;
-                  if (client.monthlyFee) {
-                    monthlyRevenue += client.monthlyFee;
-                  }
+                    activeClientsCount++;
                 } else {
-                  inactive++;
+                    inactiveClientsCount++;
                 }
 
                 if (client.createdAt) {
@@ -173,10 +174,17 @@ export default function DashboardPage() {
                     }
                 }
             });
-            newStats.clients = active;
+
+            allLocations.forEach(location => {
+                if(location.fee && activeClientIds.has(location.clientId)) {
+                    monthlyRevenue += location.fee;
+                }
+            });
+
+            newStats.clients = activeClientsCount;
             newStats.monthlyRevenue = monthlyRevenue;
-            newTotalActiveClients = active;
-            newTotalInactiveClients = inactive;
+            newTotalActiveClients = activeClientsCount;
+            newTotalInactiveClients = inactiveClientsCount;
 
             
             newClientStatsData = monthLabels.map(month => ({

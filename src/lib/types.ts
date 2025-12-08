@@ -45,6 +45,7 @@ export interface Client {
   avatarUrl?: string;
   isActive: boolean;
   createdAt: string; // ISO string
+  contractDetails?: string;
 }
 
 export interface ServiceLocation {
@@ -63,7 +64,7 @@ export interface ServiceLocation {
   createdAt: string; // ISO string
 }
 
-export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt' | 'isActive'> {
+export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt' | 'isActive' | 'contractDetails'> {
     password?: string;
 }
 
@@ -163,5 +164,3 @@ export interface Payment {
     month: number; // e.g., 1 for January
     year: number;
 }
-
-    

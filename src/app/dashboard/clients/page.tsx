@@ -57,14 +57,12 @@ export default function ClientsPage() {
     try {
       const batch = writeBatch(firestore);
   
-      const dataToSave: Partial<Pick<Client, 'name' | 'contactName' | 'contactPhone' | 'contactEmail' | 'avatarUrl' | 'monthlyFee' | 'dueDay'>> = {
+      const dataToSave: Partial<Pick<Client, 'name' | 'contactName' | 'contactPhone' | 'contactEmail' | 'avatarUrl'>> = {
           name: clientData.name,
           contactName: clientData.contactName,
           contactPhone: clientData.contactPhone,
           contactEmail: clientData.contactEmail,
           avatarUrl: clientData.avatarUrl,
-          monthlyFee: clientData.monthlyFee,
-          dueDay: clientData.dueDay,
       };
 
       if (isEditing) {
@@ -393,5 +391,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    

@@ -215,5 +215,3 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
         </form>
     )
 }
-
-    

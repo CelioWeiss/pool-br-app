@@ -13,7 +13,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { User, UploadCloud } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
-export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt'> {
+export interface NewClientFormData extends Omit<Client, 'id' | 'userId' | 'franchiseId' | 'createdAt' | 'contractDetails'> {
     password?: string;
 }
 
@@ -95,6 +95,7 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             contactPhone: phone,
             contactEmail: email,
             avatarUrl: avatarUrl,
+            isActive: client?.isActive ?? true,
         };
 
         if (showPasswordFields) {
@@ -171,5 +172,3 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
         </form>
     );
 }
-
-    

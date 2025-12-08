@@ -159,14 +159,6 @@
           "type": "string",
           "description": "Details about the client's contract."
         },
-        "monthlyFee": {
-          "type": "number",
-          "description": "The monthly fee charged to the client."
-        },
-        "dueDay": {
-            "type": "integer",
-            "description": "The day of the month the payment is due (1-31)."
-        },
         "isActive": {
             "type": "boolean",
             "description": "Whether the client is currently active."
@@ -199,6 +191,8 @@
             "poolDetails": { "type": "string", "description": "Specific details about the pool at this location." },
             "technicianId": { "type": "string", "description": "ID of the technician assigned to this location." },
             "serviceDays": { "type": "array", "items": { "type": "string" }, "description": "Days of the week for recurring service." },
+            "fee": { "type": "number", "description": "The monthly fee for this specific location." },
+            "dueDay": { "type": "integer", "description": "The day of the month the payment is due (1-31) for this location." },
             "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the location was created." }
         },
         "required": ["id", "clientId", "franchiseId", "address", "city", "state"]
@@ -475,6 +469,7 @@
         "id": { "type": "string", "description": "Unique identifier for the payment." },
         "franchiseId": { "type": "string", "description": "The ID of the franchise this payment belongs to." },
         "clientId": { "type": "string", "description": "The ID of the client this payment is for." },
+        "locationId": { "type": "string", "description": "The ID of the service location this payment is for." },
         "amount": { "type": "number", "description": "The amount of the payment." },
         "dueDate": { "type": "string", "format": "date-time", "description": "The date the payment is due." },
         "paidAt": { "type": "string", "format": "date-time", "description": "The date the payment was made." },
@@ -482,7 +477,7 @@
         "month": { "type": "integer", "description": "The month of the payment (1-12)." },
         "year": { "type": "integer", "description": "The year of the payment." }
       },
-      "required": ["id", "franchiseId", "clientId", "amount", "dueDate", "status", "month", "year"]
+      "required": ["id", "franchiseId", "clientId", "locationId", "amount", "dueDate", "status", "month", "year"]
     }
   },
   "auth": {
