@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Users, Wrench, Calendar } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
-import { useFirestore, useCollection } from '@/firebase';
+import { useFirestore } from '@/firebase';
 import { collection, query, where, getCountFromServer, getDocs } from 'firebase/firestore';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
         if (isMaster) {
             const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
-            const allFranchises = franchisesSnap.docs.map(doc => doc.data() as Franchise);
+            const allFranchises = franchisesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Franchise));
 
             let totalClients = 0;
             let totalTechnicians = 0;
