@@ -15,6 +15,7 @@ import type { ServiceLocation, Technician, DayOfWeek } from '@/lib/types';
 import { states, cities } from '@/lib/brazil-locations';
 import { Spinner } from '@/components/ui/spinner';
 import { v4 as uuidv4 } from 'uuid';
+import { Separator } from '@/components/ui/separator';
 
 interface NewLocationFormProps {
     clientId: string;
@@ -45,6 +46,8 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
     const [poolDetails, setPoolDetails] = useState('');
     const [technicianId, setTechnicianId] = useState<string | null>(null);
     const [serviceDays, setServiceDays] = useState<DayOfWeek[]>([]);
+    const [fee, setFee] = useState<number | ''>('');
+    const [dueDay, setDueDay] = useState<number | ''>('');
     
     const handleStateChange = (stateAbbr: string) => {
         setSelectedState(stateAbbr);
@@ -82,6 +85,8 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
             poolDetails,
             technicianId,
             serviceDays,
+            fee: Number(fee) || undefined,
+            dueDay: Number(dueDay) || undefined,
             createdAt: new Date().toISOString(),
         };
 
@@ -184,6 +189,22 @@ export function NewLocationForm({ clientId, franchiseId, technicians, onSave }: 
                     ))}
                 </div>
             </div>
+
+            <Separator />
+            
+            <fieldset className="space-y-4">
+                <legend className="text-sm font-medium text-muted-foreground">Dados Financeiros (para este local)</legend>
+                <div className="grid grid-cols-2 gap-4">
+                     <div className="grid gap-2">
+                        <Label htmlFor="fee">Valor da Mensalidade (R$)</Label>
+                        <Input id="fee" type="number" value={fee} onChange={e => setFee(Number(e.target.value))} disabled={isSaving}/>
+                    </div>
+                     <div className="grid gap-2">
+                        <Label htmlFor="dueDay">Dia do Vencimento</Label>
+                        <Input id="dueDay" type="number" min="1" max="31" value={dueDay} onChange={e => setDueDay(Number(e.target.value))} disabled={isSaving}/>
+                    </div>
+                </div>
+            </fieldset>
             
             <DialogFooter className="mt-4">
                  <Button type="button" variant="outline" onClick={onSave} disabled={isSaving}>Cancelar</Button>

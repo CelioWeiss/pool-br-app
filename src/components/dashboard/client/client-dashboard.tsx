@@ -177,6 +177,7 @@ export function ClientDashboard() {
 
   const clientName = clientData?.name || userInfo.firstName;
   const clientInitials = (clientName || '').split(' ').map(n => n[0]).join('').substring(0, 2);
+  const totalFee = (locations || []).reduce((sum, loc) => sum + (loc.fee || 0), 0);
 
   return (
     <div className="space-y-8">
@@ -193,13 +194,13 @@ export function ClientDashboard() {
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <InfoCard 
-                title="Mensalidade"
-                value={clientData?.monthlyFee ? clientData.monthlyFee.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A'}
+                title="Mensalidade Total"
+                value={totalFee > 0 ? totalFee.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A'}
                 icon={DollarSign}
             />
             <InfoCard 
                 title="Vencimento"
-                value={clientData?.dueDay ? `Dia ${clientData.dueDay}`: 'N/A'}
+                value={primaryLocation?.dueDay ? `Dia ${primaryLocation.dueDay}`: 'N/A'}
                 icon={Calendar}
             />
              <InfoCard 
@@ -267,3 +268,5 @@ export function ClientDashboard() {
     </div>
   );
 }
+
+    

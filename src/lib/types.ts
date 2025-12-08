@@ -43,8 +43,6 @@ export interface Client {
   contactEmail: string;
   franchiseId: string;
   avatarUrl?: string;
-  monthlyFee?: number;
-  dueDay?: number;
   isActive: boolean;
   createdAt: string; // ISO string
 }
@@ -60,6 +58,8 @@ export interface ServiceLocation {
   poolDetails: string;
   technicianId: string | null;
   serviceDays: DayOfWeek[];
+  fee?: number;
+  dueDay?: number;
   createdAt: string; // ISO string
 }
 
@@ -155,6 +155,7 @@ export interface Payment {
     id: string;
     franchiseId: string;
     clientId: string;
+    locationId: string;
     amount: number;
     dueDate: string; // ISO string
     paidAt?: string; // ISO string
@@ -162,3 +163,5 @@ export interface Payment {
     month: number; // e.g., 1 for January
     year: number;
 }
+
+    

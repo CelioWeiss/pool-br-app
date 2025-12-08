@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import type { Client, Payment } from '@/lib/types';
+import type { Client, Payment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, writeBatch, getDocs, doc, addDoc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
@@ -30,6 +30,12 @@ export default function AccountsReceivablePage() {
     const franchiseId = userInfo?.franchiseId;
 
     // --- Data Fetching ---
+    const locationsQuery = useMemo(() =>
+        firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'locations')) : null,
+        [firestore, franchiseId]
+    );
+    const { data: locations, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsQuery);
+    
     const clientsQuery = useMemo(() =>
         firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null,
         [firestore, franchiseId]
@@ -52,10 +58,13 @@ export default function AccountsReceivablePage() {
     // --- Generate payments for the current month if they don't exist ---
     useEffect(() => {
         const generateMonthlyPayments = async () => {
-            if (!clients || !franchiseId || !firestore) return;
+            if (!locations || !franchiseId || !firestore || !clients) return;
             
             const activeClients = clients.filter(c => c.isActive);
-            if(activeClients.length === 0) return;
+            const activeClientIds = new Set(activeClients.map(c => c.id));
+            const locationsToBill = locations.filter(l => activeClientIds.has(l.clientId) && l.fee && l.dueDay);
+            
+            if(locationsToBill.length === 0) return;
 
             setIsProcessing(true);
             const month = currentMonth.getMonth() + 1;
@@ -67,18 +76,19 @@ export default function AccountsReceivablePage() {
                 where('year', '==', year)
             );
             const paymentDocsForMonthSnapshot = await getDocs(paymentDocsForMonthQuery);
-            const existingClientIds = new Set(paymentDocsForMonthSnapshot.docs.map(doc => doc.data().clientId));
+            const existingLocationIds = new Set(paymentDocsForMonthSnapshot.docs.map(doc => doc.data().locationId));
 
             const batch = writeBatch(firestore);
             let hasNewPayments = false;
 
-            for (const client of activeClients) {
-                if (client.monthlyFee && client.dueDay && !existingClientIds.has(client.id)) {
-                    const dueDate = new Date(year, month - 1, client.dueDay);
+            for (const location of locationsToBill) {
+                if (location.fee && location.dueDay && !existingLocationIds.has(location.id)) {
+                    const dueDate = new Date(year, month - 1, location.dueDay);
                     const newPayment: Omit<Payment, 'id'> = {
                         franchiseId,
-                        clientId: client.id,
-                        amount: client.monthlyFee,
+                        clientId: location.clientId,
+                        locationId: location.id,
+                        amount: location.fee,
                         dueDate: dueDate.toISOString(),
                         status: 'pending',
                         month,
@@ -102,42 +112,45 @@ export default function AccountsReceivablePage() {
              setIsProcessing(false);
         };
 
-        if(!isLoadingClients) {
+        if(!isLoadingLocations && !isLoadingClients) {
             generateMonthlyPayments();
         }
-    }, [clients, currentMonth, franchiseId, firestore, isLoadingClients, toast]);
+    }, [locations, clients, currentMonth, franchiseId, firestore, isLoadingLocations, isLoadingClients, toast]);
 
 
-    // --- Combine clients and payments ---
+    // --- Combine locations, clients and payments ---
     useEffect(() => {
-        if (!clients || !payments) {
+        if (!clients || !payments || !locations) {
             setReceivablesData([]);
             return;
         };
 
         const clientsMap = new Map(clients.map(c => [c.id, c]));
-        const paymentsMap = new Map(payments.map(p => [p.clientId, p]));
+        const paymentsMap = new Map(payments.map(p => [p.locationId, p]));
 
-        // Create a set of client IDs that have payments this month
-        const clientsWithPaymentsThisMonth = new Set(payments.map(p => p.clientId));
+        // Create a set of location IDs that have payments this month
+        const locationsWithPaymentsThisMonth = new Set(payments.map(p => p.locationId));
 
-        // Filter clients: show active clients OR inactive clients that have a payment record for the current month
-        const filteredClients = clients.filter(client => {
-            return client.isActive || clientsWithPaymentsThisMonth.has(client.id);
+        // Filter locations: show locations for active clients OR inactive clients that have a payment record for the current month
+        const filteredLocations = locations.filter(location => {
+            const client = clientsMap.get(location.clientId);
+            return (client && client.isActive) || locationsWithPaymentsThisMonth.has(location.id);
         });
 
-        const combinedData: ReceivablesData[] = filteredClients
-            .filter(client => client.monthlyFee && client.dueDay) // Only include clients with billing info
-            .map(client => {
-                const payment = paymentsMap.get(client.id);
+        const combinedData: ReceivablesData[] = filteredLocations
+            .filter(location => location.fee && location.dueDay) // Only include locations with billing info
+            .map(location => {
+                const client = clientsMap.get(location.clientId);
+                const payment = paymentsMap.get(location.id);
                 return {
-                    client,
+                    client: client!,
+                    location: location,
                     payment: payment || null,
                 };
-            });
+            }).filter(item => !!item.client);
 
         setReceivablesData(combinedData);
-    }, [clients, payments]);
+    }, [clients, payments, locations]);
     
     const handleDeactivateClient = async () => {
         if (!clientToDeactivate || !firestore || !franchiseId) return;
@@ -169,7 +182,7 @@ export default function AccountsReceivablePage() {
         return <p>Acesso negado.</p>;
     }
     
-    const isLoading = isLoadingClients || isLoadingPayments || isProcessing;
+    const isLoading = isLoadingClients || isLoadingPayments || isProcessing || isLoadingLocations;
     
     return (
         <div className="space-y-8">
@@ -233,3 +246,5 @@ export default function AccountsReceivablePage() {
         </div>
     );
 }
+
+    

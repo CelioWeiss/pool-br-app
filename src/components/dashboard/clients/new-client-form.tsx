@@ -34,8 +34,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
-    const [monthlyFee, setMonthlyFee] = useState<number | ''>('');
-    const [dueDay, setDueDay] = useState<number | ''>('');
 
 
     const isEditing = !!client;
@@ -48,8 +46,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             setEmail(client.contactEmail || '');
             setPhone(client.contactPhone || '');
             setAvatarUrl(client.avatarUrl || '');
-            setMonthlyFee(client.monthlyFee || '');
-            setDueDay(client.dueDay || '');
         } else {
             setName('');
             setContactName('');
@@ -58,8 +54,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             setPassword('');
             setConfirmPassword('');
             setAvatarUrl('');
-            setMonthlyFee('');
-            setDueDay('');
         }
     }, [client]);
 
@@ -101,8 +95,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             contactPhone: phone,
             contactEmail: email,
             avatarUrl: avatarUrl,
-            monthlyFee: Number(monthlyFee) || undefined,
-            dueDay: Number(dueDay) || undefined,
         };
 
         if (showPasswordFields) {
@@ -155,22 +147,6 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
                     <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || (isEditing && !!client.userId) } />
                 </div>
             </div>
-            
-            <Separator />
-
-             <fieldset className="space-y-4">
-                <legend className="text-sm font-medium text-muted-foreground">Dados Financeiros</legend>
-                <div className="grid grid-cols-2 gap-4">
-                     <div className="grid gap-2">
-                        <Label htmlFor="monthlyFee">Valor da Mensalidade (R$)</Label>
-                        <Input id="monthlyFee" type="number" value={monthlyFee} onChange={e => setMonthlyFee(Number(e.target.value))} disabled={isSaving}/>
-                    </div>
-                     <div className="grid gap-2">
-                        <Label htmlFor="dueDay">Dia do Vencimento</Label>
-                        <Input id="dueDay" type="number" min="1" max="31" value={dueDay} onChange={e => setDueDay(Number(e.target.value))} disabled={isSaving}/>
-                    </div>
-                </div>
-            </fieldset>
 
             {showPasswordFields && (
                 <fieldset className="border-t pt-4 space-y-4">
@@ -195,3 +171,5 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
         </form>
     );
 }
+
+    

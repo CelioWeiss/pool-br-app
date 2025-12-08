@@ -19,6 +19,18 @@
           "type": "string",
           "description": "Reference to User representing the owner of this franchise. (Relationship: User 1:1 Franchise)"
         },
+        "address": {
+          "type": "string",
+          "description": "The address of the franchise."
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "The contact email for the franchise."
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "The contact phone for the franchise."
+        },
         "details": {
           "type": "string",
           "description": "Additional details or notes about the franchise."
@@ -34,6 +46,11 @@
         "pixKey": {
           "type": "string",
           "description": "PIX key for the franchise to receive payments."
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the franchise was created."
         }
       },
       "required": [
@@ -84,6 +101,11 @@
         "isActive": {
             "type": "boolean",
             "description": "Whether the user account is active."
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the user was created."
         }
       },
       "required": [
@@ -137,17 +159,14 @@
           "type": "string",
           "description": "Details about the client's contract."
         },
-        "monthlyFee": {
-          "type": "number",
-          "description": "The monthly fee charged to the client."
-        },
-        "dueDay": {
-            "type": "integer",
-            "description": "The day of the month the payment is due (1-31)."
-        },
         "isActive": {
             "type": "boolean",
             "description": "Whether the client is currently active."
+        },
+         "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the client was created."
         }
       },
       "required": [
@@ -171,7 +190,10 @@
             "zipCode": { "type": "string", "description": "Postal or ZIP code." },
             "poolDetails": { "type": "string", "description": "Specific details about the pool at this location." },
             "technicianId": { "type": "string", "description": "ID of the technician assigned to this location." },
-            "serviceDays": { "type": "array", "items": { "type": "string" }, "description": "Days of the week for recurring service." }
+            "serviceDays": { "type": "array", "items": { "type": "string" }, "description": "Days of the week for recurring service." },
+            "fee": { "type": "number", "description": "The monthly fee for this specific location." },
+            "dueDay": { "type": "integer", "description": "The day of the month the payment is due (1-31) for this location." },
+            "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp when the location was created." }
         },
         "required": ["id", "clientId", "franchiseId", "address", "city", "state"]
     },
@@ -201,6 +223,14 @@
           "type": "string",
           "description": "The last name of the technician."
         },
+         "phone": {
+            "type": "string",
+            "description": "The phone number of the technician."
+        },
+        "email": {
+            "type": "string",
+            "description": "The email of the technician."
+        },
         "location": {
           "type": "string",
           "description": "Current location coordinates of the technician (e.g., latitude, longitude)."
@@ -208,6 +238,15 @@
         "availability": {
           "type": "string",
           "description": "Technician availability."
+        },
+        "isActive": {
+            "type": "boolean",
+            "description": "Whether the technician is active."
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the technician was created."
         }
       },
       "required": [
@@ -430,6 +469,7 @@
         "id": { "type": "string", "description": "Unique identifier for the payment." },
         "franchiseId": { "type": "string", "description": "The ID of the franchise this payment belongs to." },
         "clientId": { "type": "string", "description": "The ID of the client this payment is for." },
+        "locationId": { "type": "string", "description": "The ID of the service location this payment is for." },
         "amount": { "type": "number", "description": "The amount of the payment." },
         "dueDate": { "type": "string", "format": "date-time", "description": "The date the payment is due." },
         "paidAt": { "type": "string", "format": "date-time", "description": "The date the payment was made." },
@@ -437,7 +477,7 @@
         "month": { "type": "integer", "description": "The month of the payment (1-12)." },
         "year": { "type": "integer", "description": "The year of the payment." }
       },
-      "required": ["id", "franchiseId", "clientId", "amount", "dueDate", "status", "month", "year"]
+      "required": ["id", "franchiseId", "clientId", "locationId", "amount", "dueDate", "status", "month", "year"]
     }
   },
   "auth": {

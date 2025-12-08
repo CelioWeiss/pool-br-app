@@ -4,7 +4,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import type { Franchise, UserInfo, Client, Technician, Payment } from '@/lib/types';
+import type { Franchise, UserInfo, Client, Technician, Payment, ServiceLocation } from '@/lib/types';
 import { useFirestore, useDoc, useCollection } from '@/firebase';
 import { doc, collection, query, where, getCountFromServer, getDocs } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
@@ -51,6 +51,11 @@ export default function FranchiseDetailsPage() {
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
   , [firestore, franchiseId]);
   const { data: clientList, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
+  
+  const locationsQuery = useMemo(() =>
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'locations') : null
+  , [firestore, franchiseId]);
+  const { data: locationList, isLoading: isLoadingLocations } = useCollection<ServiceLocation>(locationsQuery);
 
   const fetchDashboardData = useCallback(async () => {
     if (!firestore || !franchiseId) return;
@@ -120,7 +125,7 @@ export default function FranchiseDetailsPage() {
     }
   }, [fetchDashboardData, hasRole]);
 
-  const pageLoading = isLoading || isLoadingFranchise || isLoadingClients;
+  const pageLoading = isLoading || isLoadingFranchise || isLoadingClients || isLoadingLocations;
 
   if (!hasRole('master')) {
     return <p>Acesso negado.</p>;
@@ -133,6 +138,8 @@ export default function FranchiseDetailsPage() {
   if (!franchise) {
     return <p>Franquia não encontrada.</p>;
   }
+  
+  const clientsMap = new Map(clientList?.map(c => [c.id, c]));
 
   return (
     <div className="space-y-8">
@@ -158,36 +165,41 @@ export default function FranchiseDetailsPage() {
        <Card>
           <CardHeader>
             <CardTitle>Saúde da Franquia</CardTitle>
-            <CardDescription>Visão geral da base de clientes da franquia.</CardDescription>
+            <CardDescription>Visão geral da base de clientes e locais da franquia.</CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoadingClients ? (
+            {isLoadingLocations || isLoadingClients ? (
               <div className="flex justify-center items-center h-48"><Spinner /></div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>Local</TableHead>
                     <TableHead>Mensalidade</TableHead>
                     <TableHead>Dia Venc.</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clientList && clientList.length > 0 ? clientList.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.name}</TableCell>
+                  {locationList && locationList.length > 0 ? locationList.map((location) => {
+                    const client = clientsMap.get(location.clientId);
+                    if (!client) return null;
+                    
+                    return (
+                    <TableRow key={location.id}>
                       <TableCell>
-                        <Badge variant={client.isActive ? 'default' : 'destructive'} className={client.isActive ? 'bg-green-100 text-green-800' : ''}>
+                         <Badge variant={client.isActive ? 'default' : 'destructive'} className={client.isActive ? 'bg-green-100 text-green-800' : ''}>
                           {client.isActive ? 'Ativo' : 'Inativo'}
                         </Badge>
+                        <p className="font-medium mt-1">{client.name}</p>
                       </TableCell>
-                      <TableCell>{client.monthlyFee?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'N/A'}</TableCell>
-                      <TableCell>{client.dueDay || 'N/A'}</TableCell>
+                      <TableCell>{location.address}</TableCell>
+                      <TableCell>{location.fee?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'N/A'}</TableCell>
+                      <TableCell>{location.dueDay || 'N/A'}</TableCell>
                     </TableRow>
-                  )) : (
+                  )}) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center">Nenhum cliente encontrado.</TableCell>
+                      <TableCell colSpan={4} className="text-center">Nenhum local encontrado.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -198,3 +210,5 @@ export default function FranchiseDetailsPage() {
     </div>
   );
 }
+
+    

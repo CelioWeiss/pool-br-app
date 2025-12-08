@@ -2,11 +2,11 @@
 "use client";
 
 import { useState } from 'react';
-import type { Client, Payment } from '@/lib/types';
+import type { Client, Payment, ServiceLocation } from '@/lib/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CheckCircle, Clock, Undo, MoreHorizontal, UserX } from 'lucide-react';
+import { CheckCircle, Clock, Undo, MoreHorizontal, UserX, MapPin } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 export interface ReceivablesData {
     client: Client;
+    location: ServiceLocation;
     payment: Payment | null;
 }
 
@@ -55,7 +56,7 @@ export function ReceivablesTable({ data, onDeactivateClient }: ReceivablesTableP
     if (data.length === 0) {
         return (
             <div className="text-center text-muted-foreground py-10">
-                Nenhum cliente com dados de faturamento para este mês.
+                Nenhum local com dados de faturamento para este mês.
             </div>
         );
     }
@@ -72,15 +73,21 @@ export function ReceivablesTable({ data, onDeactivateClient }: ReceivablesTableP
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {data.map(({ client, payment }) => {
+                {data.map(({ client, location, payment }) => {
                     const status = payment?.status || 'pending';
                     const isUpdating = updatingId === payment?.id;
 
                     return (
-                        <TableRow key={client.id}>
-                            <TableCell className="font-medium">{client.name}</TableCell>
+                        <TableRow key={location.id}>
                             <TableCell>
-                                {payment ? format(new Date(payment.dueDate), 'dd/MM/yyyy') : `Dia ${client.dueDay}`}
+                                <div className="font-medium">{client.name}</div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <MapPin className="h-3 w-3" />
+                                    {location.address}
+                                </div>
+                            </TableCell>
+                            <TableCell>
+                                {payment ? format(new Date(payment.dueDate), 'dd/MM/yyyy') : `Dia ${location.dueDay}`}
                             </TableCell>
                             <TableCell>
                                 {payment?.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) ?? 'N/A'}
@@ -139,3 +146,5 @@ export function ReceivablesTable({ data, onDeactivateClient }: ReceivablesTableP
         </Table>
     );
 }
+
+    
