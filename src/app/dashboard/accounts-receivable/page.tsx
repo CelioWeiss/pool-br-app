@@ -23,7 +23,10 @@ export default function AccountsReceivablePage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [currentMonth, setCurrentMonth] = useState(new Date());
-
+    const [receivablesData, setReceivablesData] = useState<ReceivablesData[]>([]);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
+    
     const franchiseId = userInfo?.franchiseId;
 
     // --- Data Fetching ---
@@ -31,7 +34,6 @@ export default function AccountsReceivablePage() {
         firestore && franchiseId ? query(collection(firestore, 'franchises', franchiseId, 'clients')) : null,
         [firestore, franchiseId]
     );
-
     const { data: clients, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
 
     const paymentsQuery = useMemo(() => {
@@ -46,10 +48,6 @@ export default function AccountsReceivablePage() {
     }, [firestore, franchiseId, currentMonth]);
     const { data: payments, isLoading: isLoadingPayments } = useCollection<Payment>(paymentsQuery);
 
-    // --- Data processing and state management ---
-    const [receivablesData, setReceivablesData] = useState<ReceivablesData[]>([]);
-    const [isProcessing, setIsProcessing] = useState(false);
-    const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
     
     // --- Generate payments for the current month if they don't exist ---
     useEffect(() => {
@@ -235,5 +233,3 @@ export default function AccountsReceivablePage() {
         </div>
     );
 }
-
-    
