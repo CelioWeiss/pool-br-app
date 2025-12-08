@@ -105,9 +105,7 @@ export default function DashboardPage() {
                 revenueByMonth[m] = { faturado: 0, recebido: 0 };
             });
             
-            // Wait for all franchisee data to be processed
             await Promise.all(allFranchises.map(async (f) => {
-                // Clients
                 const clientsSnap = await getDocs(collection(firestore, 'franchises', f.id, 'clients'));
                 totalClients += clientsSnap.size;
                 clientsSnap.forEach(doc => {
@@ -121,11 +119,9 @@ export default function DashboardPage() {
                     }
                 });
 
-                // Technicians
                 const techniciansSnap = await getDocs(collection(firestore, 'franchises', f.id, 'technicians'));
                 totalTechnicians += techniciansSnap.size;
 
-                // Payments
                 const paymentsSnap = await getDocs(query(
                     collection(firestore, 'franchises', f.id, 'payments'),
                     where('dueDate', '>=', sixMonthsAgo.toISOString())
@@ -142,7 +138,7 @@ export default function DashboardPage() {
                 });
             }));
             
-            setStats({ franchises: allFranchises.length, clients: totalClients, technicians: totalTechnicians, appointmentsToday: 0 });
+            setStats(prev => ({ ...prev, franchises: allFranchises.length, clients: totalClients, technicians: totalTechnicians }));
             setRevenueData(monthLabels.map(month => ({ month, ...revenueByMonth[month] })));
             setClientStatsData(monthLabels.map(month => ({
                 month,
@@ -153,12 +149,12 @@ export default function DashboardPage() {
         }
 
         if (isOwner && franchiseId) {
-            // Client Stats
             const franchiseClientsQuery = query(collection(firestore, 'franchises', franchiseId, 'clients'));
             const allClientsSnap = await getDocs(franchiseClientsQuery);
             let active = 0;
             let inactive = 0;
             const newClientsByMonth: Record<string, number> = {};
+            monthLabels.forEach(m => newClientsByMonth[m] = 0);
 
             allClientsSnap.forEach(doc => {
                 const client = doc.data() as Client;
@@ -184,12 +180,10 @@ export default function DashboardPage() {
                 inactiveClients: 0,
             })));
             
-            // Technician Stats
             const franchiseTechniciansQuery = query(collection(firestore, 'franchises', franchiseId, 'technicians'));
             const techniciansSnap = await getCountFromServer(franchiseTechniciansQuery);
             setStats(prev => ({ ...prev, technicians: techniciansSnap.data().count }));
             
-            // Revenue Stats
             const franchisePaymentsQuery = query(
                 collection(firestore, 'franchises', franchiseId, 'payments'),
                 where('dueDate', '>=', sixMonthsAgo.toISOString())
@@ -216,7 +210,7 @@ export default function DashboardPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [userInfo?.role, franchiseId, firestore]);
+  }, [userInfo?.role, franchiseId]);
 
     useEffect(() => {
         fetchStats();
