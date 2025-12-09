@@ -1,4 +1,5 @@
 
+
 import { collection, writeBatch, doc, getDocs, query, where, serverTimestamp } from "firebase/firestore";
 import { eachDayOfInterval, startOfMonth, endOfMonth, set, format } from "date-fns";
 import type { Firestore } from 'firebase/firestore';
@@ -55,7 +56,9 @@ export async function gerarAgendaDoMesNoFirestore({
   const batch = writeBatch(firestore);
   let hasNewAppointments = false;
 
-  locations.forEach(location => {
+  const activeLocations = locations.filter(location => location.isActive !== false);
+
+  activeLocations.forEach(location => {
     if (!location.serviceDays?.length || !location.technicianId) return;
 
     const serviceDaysAsNumbers = location.serviceDays.map(d => dayOfWeekMap[d]);
