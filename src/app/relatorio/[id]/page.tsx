@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo } from 'react';
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useFirestore, useDoc } from "@/firebase";
 import { doc } from "firebase/firestore";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
@@ -13,24 +13,17 @@ import { AlertTriangle } from 'lucide-react';
 import DashboardLayout from '@/app/dashboard/layout';
 
 export default function RelatorioPage() {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const firestore = useFirestore();
 
-  const appointmentId = Array.isArray(params.id) ? params.id[0] : params.id;
-  
-  const [franchiseId, setFranchiseId] = React.useState<string | null>(null);
+  const appointmentId = searchParams.get('appointmentId');
+  const franchiseId = searchParams.get('franchiseId');
 
   const appointmentDocRef = useMemo(() =>
     (firestore && franchiseId && appointmentId) ? doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId) : null
   , [firestore, franchiseId, appointmentId]);
 
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
-  
-  React.useEffect(() => {
-    if (appointment && !franchiseId) {
-      setFranchiseId(appointment.franchiseId);
-    }
-  }, [appointment, franchiseId]);
 
   const clientId = appointment?.clientId;
   const locationId = appointment?.locationId;
@@ -54,8 +47,7 @@ export default function RelatorioPage() {
   
   const { data: technician, isLoading: isLoadingTechnician } = useDoc<Technician>(technicianDocRef);
 
-
-  const isLoading = isLoadingAppointment || isLoadingClient || isLoadingLocation || isLoadingTechnician || !franchiseId;
+  const isLoading = isLoadingAppointment || isLoadingClient || isLoadingLocation || isLoadingTechnician;
 
   const renderContent = () => {
     if (isLoading) {
@@ -81,7 +73,6 @@ export default function RelatorioPage() {
              </div>
         )
     }
-
 
     return (
       <div className="p-4 space-y-6 max-w-6xl mx-auto">

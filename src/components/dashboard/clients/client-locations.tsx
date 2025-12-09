@@ -30,8 +30,9 @@ const LocationCard = ({ location, technicians, onEdit, onToggleStatus, onDelete 
         : 'Não atribuído';
 
     useEffect(() => {
-        if(location.id) {
-            QRCode.toDataURL(location.id, { width: 300, margin: 2 })
+        if(location.id && location.franchiseId) {
+            const qrData = JSON.stringify({ appointmentId: location.id, franchiseId: location.franchiseId });
+            QRCode.toDataURL(qrData, { width: 300, margin: 2 })
                 .then(url => {
                     setQrCodeDataUrl(url);
                 })
@@ -39,7 +40,7 @@ const LocationCard = ({ location, technicians, onEdit, onToggleStatus, onDelete 
                     console.error(err);
                 });
         }
-    }, [location.id]);
+    }, [location.id, location.franchiseId]);
     
     const downloadQRCode = () => {
       const link = document.createElement('a');

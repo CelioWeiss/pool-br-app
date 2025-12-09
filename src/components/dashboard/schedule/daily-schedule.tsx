@@ -30,10 +30,10 @@ const AppointmentItem = ({ appointment, client, technician, location, onReschedu
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
   
   const handleStartAppointment = async () => {
-    if (!userInfo?.franchiseId || appointment.id.startsWith('auto-')) return;
+    if (!userInfo?.franchiseId || !appointment.id) return;
   
     setIsUpdating(true);
-    router.push(`/relatorio/${appointment.id}`);
+    router.push(`/relatorio?appointmentId=${appointment.id}&franchiseId=${userInfo.franchiseId}`);
   };
 
 
@@ -90,7 +90,7 @@ const AppointmentItem = ({ appointment, client, technician, location, onReschedu
        )}
        {appointment.status === 'completed' && appointment.serviceReportId && (
           <Button asChild variant="outline" size="sm">
-            <Link href={`/relatorio/${appointment.id}`}>
+            <Link href={`/relatorio?appointmentId=${appointment.id}&franchiseId=${appointment.franchiseId}`}>
               <FileText className="mr-2 h-4 w-4" />
               Ver Relatório
             </Link>

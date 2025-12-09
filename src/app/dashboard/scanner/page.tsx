@@ -13,7 +13,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useRouter } from 'next/navigation';
 
 export default function ScannerPage() {
-    const { hasRole } = useAuth();
+    const { hasRole, userInfo } = useAuth();
     const router = useRouter();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,7 +24,6 @@ export default function ScannerPage() {
     const streamRef = useRef<MediaStream | null>(null);
 
     const getCameraPermission = useCallback(async () => {
-        // Se já tiver uma stream, pare-a antes de pedir uma nova
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
             streamRef.current = null;
@@ -42,12 +41,11 @@ export default function ScannerPage() {
                 return await navigator.mediaDevices.getUserMedia({ video: true });
             });
             
-            streamRef.current = stream; // Armazena a stream na ref
+            streamRef.current = stream;
             setHasCameraPermission(true);
 
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
-                // Iniciar o vídeo manualmente é mais confiável em dispositivos móveis
                 videoRef.current.play().catch(e => {
                     console.error("Video play failed:", e);
                     toast({
@@ -68,11 +66,8 @@ export default function ScannerPage() {
         }
     }, [toast]);
 
-    // Solicita permissão da câmera na montagem do componente
     useEffect(() => {
         getCameraPermission();
-
-        // Cleanup: parar a stream de vídeo quando o componente desmonta
         return () => {
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
@@ -80,15 +75,12 @@ export default function ScannerPage() {
         };
     }, [getCameraPermission]);
 
-    // Lógica para escanear o frame do vídeo
     useEffect(() => {
         let animationFrameId: number;
 
         const tick = () => {
             if (!isScanning || !videoRef.current?.HAVE_ENOUGH_DATA || !canvasRef.current || !hasCameraPermission) {
-                if (isScanning) {
-                    animationFrameId = requestAnimationFrame(tick);
-                }
+                if (isScanning) animationFrameId = requestAnimationFrame(tick);
                 return;
             }
             
@@ -108,13 +100,22 @@ export default function ScannerPage() {
                     });
 
                     if (code?.data) {
-                        setScannedData(code.data);
-                        setIsScanning(false);
-                        if (navigator.vibrate) {
-                            navigator.vibrate(200);
+                        try {
+                            const qrData = JSON.parse(code.data);
+                            if (qrData.appointmentId && qrData.franchiseId) {
+                                setScannedData(`ID do Atendimento: ${qrData.appointmentId}`);
+                                setIsScanning(false);
+                                if (navigator.vibrate) navigator.vibrate(200);
+                                router.push(`/relatorio?appointmentId=${qrData.appointmentId}&franchiseId=${qrData.franchiseId}`);
+                            } else {
+                                throw new Error("QR Code inválido: Faltam dados essenciais.");
+                            }
+                        } catch (e) {
+                           console.error("QR Code inválido ou mal formatado", e);
+                           toast({ variant: "destructive", title: "QR Code Inválido", description: "Este QR code não parece ser um código de atendimento válido." });
+                           setIsScanning(false);
+                           setTimeout(() => setIsScanning(true), 2000); // Tenta escanear de novo após 2s
                         }
-                        // Após escanear, redireciona para a página de relatório
-                        router.push(`/relatorio/${code.data}`);
                     }
                 } catch (e) {
                     console.error("Erro no processamento do jsQR", e);
@@ -128,10 +129,8 @@ export default function ScannerPage() {
         
         animationFrameId = requestAnimationFrame(tick);
 
-        return () => {
-            cancelAnimationFrame(animationFrameId);
-        };
-    }, [isScanning, hasCameraPermission, router]);
+        return () => cancelAnimationFrame(animationFrameId);
+    }, [isScanning, hasCameraPermission, router, toast]);
     
     if (!hasRole('technician')) {
         return <p>Acesso negado.</p>;
@@ -140,8 +139,7 @@ export default function ScannerPage() {
     const handleRescan = () => {
         setScannedData(null);
         setIsScanning(true);
-        // Garante que o vídeo volte a tocar
-        getCameraPermission(); // Re-solicita para garantir que a stream está ativa
+        getCameraPermission();
     };
 
     return (
@@ -195,7 +193,7 @@ export default function ScannerPage() {
                             <Alert>
                                 <AlertTitle>Redirecionando para Atendimento:</AlertTitle>
                                 <AlertDescription className="break-all font-mono text-base">
-                                    ID: {scannedData}
+                                    {scannedData}
                                 </AlertDescription>
                             </Alert>
                              <Button onClick={handleRescan} className="w-full">
