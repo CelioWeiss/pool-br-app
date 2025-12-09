@@ -74,13 +74,11 @@ export default function ClientProfilePage({ params }: { params: { clientId: stri
     
     const pending = allAppointments
       .filter(appt => appt.status === 'scheduled' || appt.status === 'in_progress')
-      .sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime())
-      .slice(0, 5);
+      .sort((a, b) => new Date(a.scheduledDateTime).getTime() - new Date(b.scheduledDateTime).getTime());
 
     const completed = allAppointments
       .filter(appt => appt.status === 'completed' || appt.status === 'cancelled')
-      .sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime())
-      .slice(0, 5);
+      .sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
       
     return { pendingAppointments: pending, completedAppointments: completed };
   }, [clientAppointments]);
