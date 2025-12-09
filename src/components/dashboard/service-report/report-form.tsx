@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { collection, doc, writeBatch, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
-import { db, storage } from "@/firebase";
+import { db, storage } from "@/firebase"; // Importação direta (sem import dinâmico)
 
 // CONSTANTES (simplificadas para teste)
 const waterParameters = [
