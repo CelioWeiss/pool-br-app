@@ -145,7 +145,7 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
                 </div>
                  <div className="grid gap-2">
                     <Label htmlFor="email">Email de Contato</Label>
-                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving || (isEditing && !!client.userId) } />
+                    <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required disabled={isSaving} />
                 </div>
             </div>
 

@@ -1,8 +1,9 @@
 
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,7 @@ export default function ClientsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const auth = useMemo(() => getAuth(), []);
+  const router = useRouter();
 
   const franchiseId = userInfo?.franchiseId;
 
@@ -43,6 +45,19 @@ export default function ClientsPage() {
 
   const isOwner = userInfo?.role === 'owner';
 
+  useEffect(() => {
+    // This effect ensures we don't get stuck on this page if the admin session is lost
+    // during a sub-action (like creating a new user).
+    if (auth.currentUser && auth.currentUser.email !== adminUser?.email) {
+      const adminPassword = sessionStorage.getItem('adminPassword');
+      if (adminUser?.email && adminPassword) {
+        signInWithEmailAndPassword(auth, adminUser.email, adminPassword);
+      } else {
+        router.push('/');
+      }
+    }
+  }, [auth.currentUser, adminUser, auth, router]);
+
   if (!isOwner || !franchiseId || !adminUser) {
     return <p>Acesso negado.</p>;
   }
@@ -54,7 +69,7 @@ export default function ClientsPage() {
     
     const isEditing = !!clientId;
     const originalAdminEmail = adminUser.email;
-    const adminPassword = sessionStorage.getItem('adminPassword'); // Assume password was stored on login
+    const adminPassword = sessionStorage.getItem('adminPassword');
   
     try {
       const batch = writeBatch(firestore);
@@ -67,11 +82,13 @@ export default function ClientsPage() {
           avatarUrl: clientData.avatarUrl,
       };
 
-      if (isEditing) {
+      if (isEditing && editingClient) {
         const clientRef = doc(firestore, 'franchises', franchiseId, 'clients', clientId);
         let finalData: Partial<Client> = { ...dataToSave };
 
-        if (!editingClient?.userId && clientData.password) {
+        // Handle creating a user for an existing client that doesn't have one
+        if (!editingClient.userId && clientData.password) {
+           sessionStorage.setItem('authAction', 'creation');
            const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
            const newUserId = userCredential.user.uid;
            finalData.userId = newUserId;
@@ -87,22 +104,24 @@ export default function ClientsPage() {
                email: clientData.contactEmail,
                isActive: true,
            };
-           batch.set(userRef, newUserProfile);
-           // After creating the user, immediately sign the admin back in
-           if(adminPassword) {
-              await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
-           } else {
-              await signOut(auth); // Sign out new user, admin will have to re-login manually
-           }
+           batch.set(userRef, {...newUserProfile, createdAt: new Date().toISOString()});
+        }
+        
+        batch.update(clientRef, finalData);
+
+        // Also update the user profile if the email changed
+        if (editingClient.userId && editingClient.contactEmail !== clientData.contactEmail) {
+            const userRef = doc(firestore, 'users', editingClient.userId);
+            batch.update(userRef, { email: clientData.contactEmail });
         }
 
-        batch.update(clientRef, finalData);
 
       } else { // Creating a new client
         if (!clientData.password) {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
-
+        
+        sessionStorage.setItem('authAction', 'creation');
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
         const newUserId = userCredential.user.uid;
 
@@ -158,15 +177,15 @@ export default function ClientsPage() {
         setIsSaving(false);
         // Re-authenticate the admin user if a new user was created
         if (auth.currentUser?.email !== originalAdminEmail) {
-            if(adminPassword) {
+            await signOut(auth); // Sign out the newly created user
+            if(adminPassword) { // Sign the admin back in
                 await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
             } else {
-                // If password isn't stored, we have to sign out the new user and let admin re-login.
-                await signOut(auth);
-                router.push('/'); // Force re-login
+                router.push('/'); // Force re-login if password not available
                 toast({ title: 'Sessão Expirada', description: 'Por favor, faça login novamente.' });
             }
         }
+        sessionStorage.removeItem('authAction');
     }
   };
   
@@ -410,5 +429,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    
