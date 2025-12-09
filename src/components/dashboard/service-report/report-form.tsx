@@ -12,7 +12,7 @@ import { UploadCloud, X, CheckCircle } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { Client, Appointment, ServiceReport, ServiceLocation } from "@/lib/types";
+import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -58,7 +58,7 @@ const missingProductsItems = [
 ];
 
 
-export function ServiceReportForm({ appointment, client, location }: { appointment: Appointment; client: Client, location: ServiceLocation }) {
+export function ServiceReportForm({ appointment, client, location, technician }: { appointment: Appointment; client: Client, location: ServiceLocation, technician: Technician }) {
   const { toast } = useToast();
   const router = useRouter();
   const firestore = useFirestore();
@@ -157,7 +157,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
     if (!firestore || existingReport) return;
     
     setIsSaving(true);
-    const { franchiseId, clientId, technicianId, locationId } = appointment;
+    const { franchiseId, clientId, locationId } = appointment;
 
     try {
         const batch = writeBatch(firestore);
@@ -170,7 +170,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
         const newReportData: Omit<ServiceReport, 'id'> = {
             franchiseId,
             appointmentId: appointment.id,
-            technicianId,
+            technicianId: technician.id,
             clientId,
             locationId,
             ...parameters,
