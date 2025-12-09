@@ -110,7 +110,7 @@ export function NewClientForm({ onSave, onCancel, client = null, isSaving }: New
             <div className="grid gap-2 items-center grid-cols-3">
                 <div className="flex flex-col items-center gap-2">
                      <Avatar className="h-20 w-20">
-                        <AvatarImage src={avatarUrl} alt={name} />
+                        <AvatarImage src={avatarUrl || undefined} alt={name} />
                         <AvatarFallback><User className="h-10 w-10" /></AvatarFallback>
                     </Avatar>
                     <Button type="button" size="sm" variant="outline" onClick={() => avatarFileInputRef.current?.click()}>
