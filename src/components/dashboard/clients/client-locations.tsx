@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { ServiceLocation, Technician } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MapPin, QrCode as QrCodeIcon, Download, X, Edit } from 'lucide-react';
+import { MapPin, QrCode as QrCodeIcon, Download, X, Edit, MoreHorizontal, Trash2, PowerOff, Power } from 'lucide-react';
 import QRCode from 'qrcode';
 import {
   Dialog,
@@ -15,10 +15,13 @@ import {
   DialogDescription,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NewLocationForm } from './new-location-form';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 
-const LocationCard = ({ location, technicians, onEdit }: { location: ServiceLocation, technicians: Technician[], onEdit: (location: ServiceLocation) => void }) => {
+const LocationCard = ({ location, technicians, onEdit, onToggleStatus, onDelete }: { location: ServiceLocation, technicians: Technician[], onEdit: (location: ServiceLocation) => void, onToggleStatus: (location: ServiceLocation) => void, onDelete: (location: ServiceLocation) => void }) => {
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
     const [isQrCodeDialogOpen, setIsQrCodeDialogOpen] = useState(false);
 
@@ -47,11 +50,39 @@ const LocationCard = ({ location, technicians, onEdit }: { location: ServiceLoca
       document.body.removeChild(link);
     };
 
+    const isActive = location.isActive !== false;
+
     return (
         <>
-            <div className="border p-4 rounded-lg space-y-3">
+            <div className={cn("border p-4 rounded-lg space-y-3 relative", !isActive && "bg-muted/50 opacity-70")}>
+                <div className="absolute top-2 right-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                            <DropdownMenuItem onClick={() => onEdit(location)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onToggleStatus(location)}>
+                                {isActive ? <PowerOff className="mr-2 h-4 w-4" /> : <Power className="mr-2 h-4 w-4" />}
+                                {isActive ? 'Inativar' : 'Ativar'}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => onDelete(location)} className="text-destructive">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Excluir
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
                 <div>
-                    <h4 className="font-semibold text-base flex items-center gap-2"><MapPin className="h-4 w-4"/> {location.address}</h4>
+                    <h4 className="font-semibold text-base flex items-center gap-2 pr-10">
+                        <MapPin className="h-4 w-4"/> {location.address}
+                         {!isActive && <Badge variant="destructive">Inativo</Badge>}
+                    </h4>
                     <p className="text-sm text-muted-foreground">{location.city}, {location.state}</p>
                 </div>
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Detalhes:</span> {location.poolDetails}</p>
@@ -64,10 +95,6 @@ const LocationCard = ({ location, technicians, onEdit }: { location: ServiceLoca
                     <Button variant="outline" size="sm" onClick={() => setIsQrCodeDialogOpen(true)}>
                         <QrCodeIcon className="mr-2 h-4 w-4"/>
                         Ver QR Code
-                    </Button>
-                     <Button variant="secondary" size="sm" onClick={() => onEdit(location)}>
-                        <Edit className="mr-2 h-4 w-4"/>
-                        Editar
                     </Button>
                 </div>
             </div>
@@ -94,7 +121,7 @@ const LocationCard = ({ location, technicians, onEdit }: { location: ServiceLoca
 }
 
 
-export function ClientLocations({ locations, technicians }: { locations: ServiceLocation[], technicians: Technician[] }) {
+export function ClientLocations({ locations, technicians, onToggleStatus, onDelete }: { locations: ServiceLocation[], technicians: Technician[], onToggleStatus: (location: ServiceLocation) => void, onDelete: (location: ServiceLocation) => void }) {
     
     const [editingLocation, setEditingLocation] = useState<ServiceLocation | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -112,15 +139,24 @@ export function ClientLocations({ locations, technicians }: { locations: Service
     if (locations.length === 0) {
         return <p className="text-sm text-muted-foreground text-center py-4">Nenhum local de atendimento cadastrado.</p>
     }
+    
+    const sortedLocations = [...locations].sort((a, b) => {
+        const statusA = a.isActive !== false ? 1 : 0;
+        const statusB = b.isActive !== false ? 1 : 0;
+        return statusB - statusA;
+    });
+
 
     return (
         <div className="space-y-4">
-            {locations.map(location => (
+            {sortedLocations.map(location => (
                 <LocationCard 
                     key={location.id} 
                     location={location} 
                     technicians={technicians}
                     onEdit={handleEdit}
+                    onToggleStatus={onToggleStatus}
+                    onDelete={onDelete}
                 />
             ))}
              <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>

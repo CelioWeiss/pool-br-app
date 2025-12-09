@@ -61,6 +61,7 @@ export interface ServiceLocation {
   serviceDays: DayOfWeek[];
   fee?: number;
   dueDay?: number;
+  isActive?: boolean;
   createdAt: string; // ISO string
 }
 

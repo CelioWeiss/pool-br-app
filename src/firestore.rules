@@ -83,8 +83,9 @@ service cloud.firestore {
       }
       
       match /locations/{locationId} {
-          allow create, write: if isMaster() || isFranchiseOwner(franchiseId) || isClientOwnerOfLocation();
+          allow create, update: if isMaster() || isFranchiseOwner(franchiseId) || isClientOwnerOfLocation();
           allow read, list: if isMaster() || isUserInFranchise(franchiseId);
+          allow delete: if isMaster() || isFranchiseOwner(franchiseId);
       }
       
       match /appointments/{appointmentId} {
