@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useMemo, useCallback, useRef, useState } from "react";
@@ -14,7 +15,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { UploadCloud, X, CheckCircle, WiFiOff } from "lucide-react";
+import { UploadCloud, X, CheckCircle, WifiOff } from "lucide-react";
 
 import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -453,7 +454,7 @@ export function ServiceReportForm(props: {
     <form onSubmit={handleSubmit} className="space-y-6">
       {!isOnline && (
         <Alert>
-          <WiFiOff className="h-4 w-4" />
+          <WifiOff className="h-4 w-4" />
           <AlertTitle>Modo offline</AlertTitle>
           <AlertDescription>
             Você está sem internet agora. Ao finalizar, o relatório será salvo no seu celular e enviado
@@ -632,3 +633,5 @@ export function ServiceReportForm(props: {
     </form>
   );
 }
+
+    
