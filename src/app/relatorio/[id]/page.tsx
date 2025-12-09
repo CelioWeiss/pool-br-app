@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo } from 'react';
+import { useMemo, use } from 'react';
 import { useParams } from "next/navigation";
 import { useFirestore, useDoc } from "@/firebase";
 import { doc } from "firebase/firestore";

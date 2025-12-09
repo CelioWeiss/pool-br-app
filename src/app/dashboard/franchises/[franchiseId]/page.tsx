@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, use } from 'react';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import type { Franchise, UserInfo, Client, Technician, Payment, ServiceLocation } from '@/lib/types';

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useMemo } from 'react';
+import React, { useMemo, use } from 'react';
 import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -161,5 +161,3 @@ export default function QuoteDetailsPage() {
         </>
     );
 }
-
-    
