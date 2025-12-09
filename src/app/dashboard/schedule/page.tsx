@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
-import type { Appointment, Technician, Client, ServiceLocation } from '@/lib/types';
+import type { Appointment, Technician, Client, ServiceLocation, AppointmentStatus } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ChevronLeft, ChevronRight, User } from 'lucide-react';
@@ -18,18 +18,20 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from '@/components/ui/calendar';
 import { DailySchedule } from '@/components/dashboard/schedule/daily-schedule';
-import { useFirestore, useCollection } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { collection, query, where, doc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { gerarAgendaDoMesNoFirestore } from '@/lib/schedule-generator';
 import { RescheduleModal } from '@/components/dashboard/schedule/reschedule-modal';
+import { useToast } from '@/hooks/use-toast';
 
 
 export default function SchedulePage() {
   const { userInfo, hasRole } = useAuth();
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
@@ -146,6 +148,32 @@ export default function SchedulePage() {
     setDailySchedule({ pendingAppointments: pending, completedAppointments: completed });
   }, [selectedDate, filteredAppointments]);
 
+  const handleCancelAppointment = async (appointment: Appointment) => {
+    if (!firestore || !franchiseId || !appointment.id) return;
+
+    const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointment.id);
+    try {
+      await updateDoc(appointmentRef, { status: 'cancelled' });
+      toast({
+        title: "Agendamento Cancelado",
+        description: "O agendamento foi marcado como cancelado.",
+      });
+    } catch (error) {
+      console.error("Error cancelling appointment:", error);
+      const permissionError = new FirestorePermissionError({
+        path: appointmentRef.path,
+        operation: 'update',
+        requestResourceData: { status: 'cancelled' },
+      });
+      errorEmitter.emit('permission-error', permissionError);
+      toast({
+        variant: "destructive",
+        title: "Erro ao cancelar",
+        description: "Não foi possível cancelar o agendamento.",
+      });
+    }
+  };
+
 
   if (!hasRole(['owner', 'technician'])) {
     return <p>Acesso negado.</p>;
@@ -245,6 +273,7 @@ export default function SchedulePage() {
                 technicians={technicians || []}
                 locations={allLocations || []}
                 onReschedule={setAppointmentToReschedule}
+                onCancel={handleCancelAppointment}
               />
             )}
           </CardContent>

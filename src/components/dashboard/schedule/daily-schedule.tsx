@@ -13,10 +13,10 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { Spinner } from '@/components/ui/spinner';
 import { useAuth } from '@/hooks/use-auth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
-const AppointmentItem = ({ appointment, client, technician, location, onReschedule }: { appointment: Appointment, client?: Client, technician?: Technician, location?: ServiceLocation, onReschedule: (appointment: Appointment) => void }) => {
+const AppointmentItem = ({ appointment, client, technician, location, onReschedule, onCancel }: { appointment: Appointment, client?: Client, technician?: Technician, location?: ServiceLocation, onReschedule: (appointment: Appointment) => void, onCancel: (appointment: Appointment) => void }) => {
   const router = useRouter();
-  const firestore = useFirestore();
   const { userInfo } = useAuth();
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -30,23 +30,10 @@ const AppointmentItem = ({ appointment, client, technician, location, onReschedu
   const currentStatus = statusInfo[appointment.status] || statusInfo.scheduled;
   
   const handleStartAppointment = async () => {
-    if (!firestore || !userInfo?.franchiseId || appointment.id.startsWith('auto-')) return;
+    if (!userInfo?.franchiseId || appointment.id.startsWith('auto-')) return;
   
     setIsUpdating(true);
-    try {
-      const appointmentRef = doc(firestore, `franchises/${userInfo.franchiseId}/appointments`, appointment.id);
-      await updateDoc(appointmentRef, { status: 'in_progress' });
-      router.push(`/relatorio/${appointment.id}`);
-    } catch (error) {
-      console.error("Error updating appointment status:", error);
-      const permissionError = new FirestorePermissionError({
-          path: `franchises/${userInfo.franchiseId}/appointments/${appointment.id}`,
-          operation: 'update',
-          requestResourceData: { status: 'in_progress' },
-      });
-      errorEmitter.emit('permission-error', permissionError);
-      setIsUpdating(false);
-    }
+    router.push(`/relatorio/${appointment.id}`);
   };
 
 
@@ -70,10 +57,28 @@ const AppointmentItem = ({ appointment, client, technician, location, onReschedu
       </div>
        {(appointment.status === 'scheduled' || appointment.status === 'in_progress') && (
          <div className="flex items-center gap-2">
-            <Button onClick={() => onReschedule(appointment)} size="sm" variant="outline">
-              <CalendarClock className="mr-2 h-4 w-4" />
-              Reagendar
+            <Button onClick={() => onReschedule(appointment)} size="sm" variant="outline" title="Reagendar">
+              <CalendarClock className="h-4 w-4" />
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="destructive" title="Cancelar">
+                  <X className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Cancelar Agendamento?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação marcará o agendamento como cancelado, mas ele permanecerá no histórico. Deseja continuar?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Voltar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onCancel(appointment)}>Sim, Cancelar</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <Button onClick={handleStartAppointment} size="sm" disabled={isUpdating}>
                 {isUpdating ? (
                     <><Spinner size="small" className="mr-2" /> Atualizando...</>
@@ -95,7 +100,7 @@ const AppointmentItem = ({ appointment, client, technician, location, onReschedu
   );
 };
 
-const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, techniciansMap, locationsMap, onReschedule }: { title: string, appointments: Appointment[], icon: React.ElementType, clientsMap: Map<string, Client>, techniciansMap: Map<string, Technician>, locationsMap: Map<string, ServiceLocation>, onReschedule: (appointment: Appointment) => void }) => {
+const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, techniciansMap, locationsMap, onReschedule, onCancel }: { title: string, appointments: Appointment[], icon: React.ElementType, clientsMap: Map<string, Client>, techniciansMap: Map<string, Technician>, locationsMap: Map<string, ServiceLocation>, onReschedule: (appointment: Appointment) => void, onCancel: (appointment: Appointment) => void }) => {
   if (appointments.length === 0) {
     return null;
   }
@@ -118,6 +123,7 @@ const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, technici
                     technician={techniciansMap.get(appt.technicianId)}
                     location={locationsMap.get(appt.locationId)}
                     onReschedule={onReschedule}
+                    onCancel={onCancel}
                 />
               ))}
             </div>
@@ -126,7 +132,7 @@ const AppointmentList = ({ title, appointments, icon: Icon, clientsMap, technici
   )
 }
 
-export function DailySchedule({ pendingAppointments, completedAppointments, clients, technicians, locations, onReschedule }: { pendingAppointments: Appointment[], completedAppointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[], onReschedule: (appointment: Appointment) => void }) {
+export function DailySchedule({ pendingAppointments, completedAppointments, clients, technicians, locations, onReschedule, onCancel }: { pendingAppointments: Appointment[], completedAppointments: Appointment[], clients: Client[], technicians: Technician[], locations: ServiceLocation[], onReschedule: (appointment: Appointment) => void, onCancel: (appointment: Appointment) => void }) {
   const clientsMap = useMemo(() => new Map(clients?.map(c => [c.id, c])), [clients]);
   const techniciansMap = useMemo(() => new Map(technicians?.map(t => [t.id, t])), [technicians]);
   const locationsMap = useMemo(() => new Map(locations?.map(l => [l.id, l])), [locations]);
@@ -154,6 +160,7 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
         techniciansMap={techniciansMap}
         locationsMap={locationsMap}
         onReschedule={onReschedule}
+        onCancel={onCancel}
       />
       <AppointmentList 
         title="Concluídos no Dia"
@@ -163,6 +170,7 @@ export function DailySchedule({ pendingAppointments, completedAppointments, clie
         techniciansMap={techniciansMap}
         locationsMap={locationsMap}
         onReschedule={onReschedule}
+        onCancel={onCancel}
       />
     </Accordion>
   );
