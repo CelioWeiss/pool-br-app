@@ -31,7 +31,7 @@ const StatCard = ({ title, value, icon: Icon, isLoading }: { title: string, valu
 );
 
 export default function FranchiseDetailsPage() {
-  const params = useParams();
+  const params = use(useParams());
   const firestore = useFirestore();
   const { hasRole } = useAuth();
   
