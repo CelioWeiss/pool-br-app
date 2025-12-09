@@ -29,19 +29,18 @@ export default function ClientsPage() {
   const router = useRouter();
 
   const franchiseId = userInfo?.franchiseId;
-
-  const clientsQuery = useMemo(() => 
-    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
-  , [firestore, franchiseId]);
   
-  const { data: clientList, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
-
   const [isNewClientDialogOpen, setIsNewClientDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
   const [clientToActivate, setClientToActivate] = useState<Client | null>(null);
 
+  const clientsQuery = useMemo(() => 
+    firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
+  , [firestore, franchiseId]);
+  
+  const { data: clientList, isLoading: isLoadingClients } = useCollection<Client>(clientsQuery);
 
   const isOwner = userInfo?.role === 'owner';
 
@@ -57,10 +56,6 @@ export default function ClientsPage() {
       }
     }
   }, [auth.currentUser, adminUser, auth, router]);
-
-  if (!isOwner || !franchiseId || !adminUser) {
-    return <p>Acesso negado.</p>;
-  }
 
   const handleSaveClient = async (clientData: NewClientFormData, clientId?: string) => {
     if (!firestore || !auth || !franchiseId || !adminUser?.email) return;
@@ -176,7 +171,7 @@ export default function ClientsPage() {
     } finally {
         setIsSaving(false);
         // Re-authenticate the admin user if a new user was created
-        if (auth.currentUser?.email !== originalAdminEmail) {
+        if (sessionStorage.getItem('authAction') === 'creation') {
             await signOut(auth); // Sign out the newly created user
             if(adminPassword) { // Sign the admin back in
                 await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
@@ -261,6 +256,10 @@ export default function ClientsPage() {
     });
     return { activeClients: active, inactiveClients: inactive };
   }, [clientList]);
+
+  if (!isOwner || !franchiseId || !adminUser) {
+    return <p>Acesso negado.</p>;
+  }
 
   return (
     <>

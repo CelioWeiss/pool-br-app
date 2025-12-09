@@ -79,9 +79,13 @@ function useProvideAuth() {
       !firebaseUser.isAnonymous &&
       !isUserInfoLoading &&
       userInfo &&
-      pathname === '/'
+      pathname === '/' &&
+      sessionStorage.getItem('authAction') !== 'creation'
     ) {
       router.push('/dashboard');
+    }
+     if (sessionStorage.getItem('authAction') === 'creation') {
+      sessionStorage.removeItem('authAction');
     }
   }, [firebaseUser, isUserInfoLoading, userInfo, pathname, router]);
 
