@@ -14,13 +14,13 @@ import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { UploadCloud, X, CheckCircle, WifiOff, RefreshCw } from "lucide-react";
+import { UploadCloud, X, CheckCircle, WifiOff, RefreshCw, AlertTriangle } from "lucide-react";
 
 import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 
-import { useFirestore, useStorage, useDoc, db, storage } from "@/firebase";
-import { writeBatch, doc, collection, getDoc } from "firebase/firestore";
+import { useFirestore, useDoc, db, storage, FirestorePermissionError, errorEmitter } from "@/firebase";
+import { writeBatch, doc, collection, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 
@@ -98,10 +98,12 @@ function safeParse<T>(value: string | null): T | null {
 }
 
 function readQueue(): PendingReport[] {
+  if(typeof window === "undefined") return [];
   return safeParse<PendingReport[]>(localStorage.getItem(OFFLINE_QUEUE_KEY)) ?? [];
 }
 
 function writeQueue(queue: PendingReport[]) {
+  if(typeof window === "undefined") return;
   localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
 }
 
@@ -163,20 +165,36 @@ export function ServiceReportForm(props: {
   const { appointmentId, franchiseId } = props;
   const router = useRouter();
   const { toast } = useToast();
+  const firestore = useFirestore();
 
-  const [appointment, setAppointment] = useState<Appointment | null>(null);
-  const [client, setClient] = useState<Client | null>(null);
-  const [location, setLocation] = useState<ServiceLocation | null>(null);
-  const [technician, setTechnician] = useState<Technician | null>(null);
-  
-  // UI / estado
-  const [isLoading, setIsLoading] = useState(true);
+  // ----- BUSCA DE DADOS -----
+  const appointmentDocRef = useMemo(() =>
+    firestore && franchiseId && appointmentId ? doc(firestore, 'franchises', franchiseId, 'appointments', appointmentId) : null
+  , [firestore, franchiseId, appointmentId]);
+  const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
+
+  const clientDocRef = useMemo(() =>
+    firestore && franchiseId && appointment?.clientId ? doc(firestore, 'franchises', franchiseId, 'clients', appointment.clientId) : null
+  , [firestore, franchiseId, appointment?.clientId]);
+  const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
+
+  const locationDocRef = useMemo(() =>
+    firestore && franchiseId && appointment?.locationId ? doc(firestore, 'franchises', franchiseId, 'locations', appointment.locationId) : null
+  , [firestore, franchiseId, appointment?.locationId]);
+  const { data: location, isLoading: isLoadingLocation } = useDoc<ServiceLocation>(locationDocRef);
+
+  const technicianDocRef = useMemo(() =>
+    firestore && franchiseId && appointment?.technicianId ? doc(firestore, 'franchises', franchiseId, 'technicians', appointment.technicianId) : null
+  , [firestore, franchiseId, appointment?.technicianId]);
+  const { data: technician, isLoading: isLoadingTechnician } = useDoc<Technician>(technicianDocRef);
+
+  // ----- ESTADO DO COMPONENTE -----
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
   const [pendingCount, setPendingCount] = useState(0);
 
-  // formulário
+  // ----- ESTADO DO FORMULÁRIO -----
   const [previews, setPreviews] = useState<(string | null)[]>([null, null, null, null]);
   const [parameters, setParameters] = useState<Record<string, number>>(() =>
     Object.fromEntries(waterParameters.map((p) => [p.key, p.defaultValue])) as Record<string, number>
@@ -185,54 +203,38 @@ export function ServiceReportForm(props: {
   const [missingProducts, setMissingProducts] = useState<string[]>([]);
   const [observations, setObservations] = useState("");
 
-  // Carregamento de dados inicial
+  const isLoading = isLoadingAppointment || isLoadingClient || isLoadingLocation || isLoadingTechnician;
+
+  // Carregamento de dados de um relatório existente
   useEffect(() => {
-    async function loadData() {
-      if (!appointmentId || !franchiseId) return;
-
-      setIsLoading(true);
-      try {
-        const appointmentDoc = await getDoc(doc(db, `franchises/${franchiseId}/appointments`, appointmentId));
-        if (!appointmentDoc.exists()) throw new Error("Atendimento não encontrado");
+    async function loadExistingReport() {
+        if (!appointment?.serviceReportId || !firestore || !franchiseId) return;
         
-        const appointmentData = { id: appointmentDoc.id, ...appointmentDoc.data() } as Appointment;
-        setAppointment(appointmentData);
-
-        const [clientDoc, locationDoc, techDoc, reportDoc] = await Promise.all([
-          appointmentData.clientId ? getDoc(doc(db, `franchises/${franchiseId}/clients`, appointmentData.clientId)) : null,
-          appointmentData.locationId ? getDoc(doc(db, `franchises/${franchiseId}/locations`, appointmentData.locationId)) : null,
-          appointmentData.technicianId ? getDoc(doc(db, `franchises/${franchiseId}/technicians`, appointmentData.technicianId)) : null,
-          appointmentData.serviceReportId ? getDoc(doc(db, `franchises/${franchiseId}/serviceReports`, appointmentData.serviceReportId)) : null,
-        ]);
-        
-        if (clientDoc?.exists()) setClient({ id: clientDoc.id, ...clientDoc.data() } as Client);
-        if (locationDoc?.exists()) setLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
-        if (techDoc?.exists()) setTechnician({ id: techDoc.id, ...techDoc.data() } as Technician);
-        
-        if (reportDoc?.exists()) {
-          const existingReport = reportDoc.data() as ServiceReport;
-          const paramKeys = waterParameters.map((p) => p.key);
-          const loadedParams: Record<string, number> = {};
-          for (const key of paramKeys) {
-            loadedParams[key] = (existingReport as any)[key] ?? waterParameters.find((p) => p.key === key)?.defaultValue ?? 0;
-          }
-          setParameters(loadedParams);
-          setServicesPerformed(existingReport.servicesPerformed || []);
-          setMissingProducts(existingReport.missingProducts || []);
-          setObservations(existingReport.observations || "");
-          const urls = (existingReport.photoUrls || []).slice(0, 4);
-          setPreviews([urls[0] ?? null, urls[1] ?? null, urls[2] ?? null, urls[3] ?? null]);
+        try {
+            const reportDocRef = doc(firestore, 'franchises', franchiseId, 'serviceReports', appointment.serviceReportId);
+            const reportDoc = await getDoc(reportDocRef);
+            
+            if (reportDoc.exists()) {
+                const existingReport = reportDoc.data() as ServiceReport;
+                const paramKeys = waterParameters.map((p) => p.key);
+                const loadedParams: Record<string, number> = {};
+                for (const key of paramKeys) {
+                    loadedParams[key] = (existingReport as any)[key] ?? waterParameters.find((p) => p.key === key)?.defaultValue ?? 0;
+                }
+                setParameters(loadedParams);
+                setServicesPerformed(existingReport.servicesPerformed || []);
+                setMissingProducts(existingReport.missingProducts || []);
+                setObservations(existingReport.observations || "");
+                
+                const urls = (existingReport.photoUrls || []).slice(0, 4);
+                setPreviews([urls[0] ?? null, urls[1] ?? null, urls[2] ?? null, urls[3] ?? null]);
+            }
+        } catch (err) {
+            console.error("Falha ao carregar relatório existente", err);
         }
-
-      } catch (err) {
-        console.error("Failed to load appointment data", err);
-        toast({ variant: "destructive", title: "Erro ao Carregar", description: "Não foi possível carregar os dados do atendimento."})
-      } finally {
-        setIsLoading(false);
-      }
     }
-    loadData();
-  }, [appointmentId, franchiseId, toast]);
+    loadExistingReport();
+  }, [appointment?.serviceReportId, firestore, franchiseId]);
 
 
   // online/offline + pending count
@@ -240,22 +242,12 @@ export function ServiceReportForm(props: {
     if (typeof window === "undefined") return;
 
     const update = () => setPendingCount(readQueue().length);
-
-    const onOnline = () => {
-      setIsOnline(true);
-      update();
-      void syncPendingReports(); // tenta enviar ao voltar
-    };
-    const onOffline = () => {
-      setIsOnline(false);
-      update();
-    };
+    const onOnline = () => { setIsOnline(true); update(); void syncPendingReports(); };
+    const onOffline = () => { setIsOnline(false); update(); };
 
     update();
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-
-    // tentativa inicial (se já estiver online ao abrir)
     if (navigator.onLine) void syncPendingReports();
 
     return () => {
@@ -293,7 +285,6 @@ export function ServiceReportForm(props: {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // limite mais seguro para celular e para localStorage
     if (file.size > 5 * 1024 * 1024) {
       toast({ variant: "destructive", title: "Arquivo muito grande", description: "Escolha uma foto com até 5MB." });
       return;
@@ -303,7 +294,6 @@ export function ServiceReportForm(props: {
       const raw = await fileToDataUrl(file);
       const compressed = await compressDataUrl(raw, 1400, 0.68);
 
-      // validação de “tamanho” do dataURL (evita estourar storage local)
       if (compressed.length > 1_800_000) {
         toast({
           variant: "destructive",
@@ -328,11 +318,10 @@ export function ServiceReportForm(props: {
     if (!db || !storage) throw new Error("Firebase indisponível no momento.");
     const appointmentIdSafe = pending.appointmentId;
 
-    // 1) upload das fotos (se houver)
     const photoUrls: string[] = [];
     for (const dataUrl of pending.photoDataUrls) {
       if (!dataUrl) continue;
-      if (dataUrl.startsWith("http")) { // Já é uma URL, não precisa de upload
+      if (dataUrl.startsWith("http")) { 
         photoUrls.push(dataUrl);
         continue;
       }
@@ -354,7 +343,6 @@ export function ServiceReportForm(props: {
       photoUrls.push(url);
     }
 
-    // 2) monta doc do relatório
     const reportRef = pending.serviceReportId
       ? doc(db, `franchises/${pending.franchiseId}/serviceReports`, pending.serviceReportId)
       : doc(collection(db, `franchises/${pending.franchiseId}/serviceReports`));
@@ -374,7 +362,6 @@ export function ServiceReportForm(props: {
       createdAt: pending.createdAt,
     };
 
-    // 3) batch (relatório + update do agendamento)
     const batch = writeBatch(db);
     batch.set(reportRef, reportData, { merge: true });
 
@@ -386,16 +373,13 @@ export function ServiceReportForm(props: {
 
   /** ---------- sincronização (fila) ---------- */
   const syncPendingReports = useCallback(async () => {
-    if (!db || !storage) return;
-    if (typeof window === "undefined" || !navigator.onLine) return;
+    if (!db || !storage || !navigator.onLine) return;
 
     setIsSaving(true);
     toast({ title: "Sincronizando...", description: "Enviando relatórios pendentes." });
-
-    while (true) {
-      const queue = readQueue();
-      if (queue.length === 0) break;
-      
+    
+    let queue = readQueue();
+    while (queue.length > 0) {
       const pending = queue[0];
       try {
         await sendReportOnline(pending);
@@ -403,12 +387,13 @@ export function ServiceReportForm(props: {
       } catch (err) {
         console.error(`Falha ao sincronizar o relatório ${pending.id}`, err);
         toast({ variant: "destructive", title: "Erro na Sincronização", description: `Não foi possível enviar o relatório. Ele permanecerá na fila.` });
-        break; // Para e tenta de novo mais tarde para não travar
+        break; // Para e tenta de novo mais tarde
       }
+      queue = readQueue();
     }
     
-    setPendingCount(readQueue().length);
-    if(readQueue().length === 0) {
+    setPendingCount(queue.length);
+    if(queue.length === 0) {
       toast({ title: "Sincronização Concluída", description: "Todos os relatórios foram enviados." });
     }
     
@@ -426,13 +411,12 @@ export function ServiceReportForm(props: {
     }
 
     const { franchiseId, clientId, locationId } = appointment;
-    const appointmentIdSafe = appointmentId; // Use a prop aqui
     
     const pending: PendingReport = {
       id: uuidv4(),
       createdAt: new Date().toISOString(),
       franchiseId,
-      appointmentId: appointmentIdSafe,
+      appointmentId: appointmentId,
       clientId,
       locationId,
       technicianId: technician.id,
@@ -444,8 +428,7 @@ export function ServiceReportForm(props: {
       serviceReportId: appointment.serviceReportId,
     };
     
-    // se estiver claramente offline -> só fila
-    if (!navigator.onLine || !db || !storage) {
+    if (!navigator.onLine) {
       enqueuePending(pending);
       setPendingCount(readQueue().length);
       setIsSuccess(true);
@@ -456,7 +439,6 @@ export function ServiceReportForm(props: {
       return;
     }
 
-    // tenta enviar online; se der erro de rede/permissão, cai para fila (não perde dados)
     setIsSaving(true);
     try {
       await sendReportOnline(pending);
@@ -484,10 +466,16 @@ export function ServiceReportForm(props: {
   
   if (!appointment || !client || !location || !technician) {
     return (
-      <div className="text-center py-10">
-        <h2 className="text-2xl font-bold">Erro ao Carregar</h2>
-        <p className="mt-2 text-muted-foreground">Não foi possível carregar os dados completos deste atendimento.</p>
-        <Button onClick={() => router.push('/dashboard')} className="mt-4">Voltar</Button>
+      <div className="flex h-[80vh] items-center justify-center">
+        <Card className="max-w-md text-center">
+            <CardHeader>
+                <CardTitle className="flex items-center justify-center gap-2"><AlertTriangle className="text-destructive"/> Atendimento Não Encontrado</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <p>Não foi possível carregar os dados completos do atendimento. Verifique o ID e tente novamente.</p>
+                <Button onClick={() => router.push('/dashboard')} className="mt-4">Voltar</Button>
+            </CardContent>
+        </Card>
       </div>
     );
   }
@@ -495,6 +483,11 @@ export function ServiceReportForm(props: {
   if (isSuccess) {
     return (
       <div className="space-y-6">
+         <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight">Relatório de Atendimento</h1>
+            <p className="text-muted-foreground text-lg">Cliente: <span className="font-semibold">{client.name}</span></p>
+            <p className="text-muted-foreground">Endereço: <span className="font-semibold">{location.address}</span></p>
+        </div>
         <Alert>
           <CheckCircle className="h-4 w-4" />
           <AlertTitle>Pronto!</AlertTitle>
@@ -515,6 +508,11 @@ export function ServiceReportForm(props: {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+       <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">Relatório de Atendimento</h1>
+          <p className="text-muted-foreground text-lg">Cliente: <span className="font-semibold">{client.name}</span></p>
+          <p className="text-muted-foreground">Endereço: <span className="font-semibold">{location.address}</span></p>
+        </div>
       {!isOnline && (
         <Alert variant="destructive">
           <WifiOff className="h-4 w-4" />
