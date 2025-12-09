@@ -42,7 +42,6 @@ export default function QuotesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
-
   if (!hasRole(['master', 'owner']) || !franchiseId) {
     return <p>Acesso negado.</p>;
   }
@@ -232,5 +231,3 @@ export default function QuotesPage() {
     </div>
   );
 }
-
-    
