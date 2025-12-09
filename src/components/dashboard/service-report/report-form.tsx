@@ -14,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { UploadCloud, X, CheckCircle, WifiOff, RefreshCw } from "lucide-react";
+import { UploadCloud, X, CheckCircle, WifiOff, RefreshCw, AlertTriangle } from "lucide-react";
 
 import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -156,18 +156,39 @@ async function compressDataUrl(dataUrl: string, maxSide = 1400, quality = 0.7): 
 /** =========================
  *  COMPONENTE PRINCIPAL
  *  ========================= */
-export function ServiceReportForm(props: {
-  appointment: Appointment;
-  client: Client;
-  location: ServiceLocation;
-  technician: Technician;
-}) {
-  const { appointment, client, location, technician } = props;
-
+export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentId: string, franchiseId: string }) {
   const { toast } = useToast();
   const router = useRouter();
   const firestore = useFirestore();
   const storage = useStorage();
+
+  const appointmentDocRef = useMemo(() =>
+    doc(firestore, `franchises/${franchiseId}/appointments`, appointmentId)
+  , [firestore, franchiseId, appointmentId]);
+
+  const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
+
+  const clientId = appointment?.clientId;
+  const locationId = appointment?.locationId;
+  const technicianId = appointment?.technicianId;
+  
+  const clientDocRef = useMemo(() => 
+      (clientId) ? doc(firestore, `franchises/${franchiseId}/clients`, clientId) : null
+  , [firestore, franchiseId, clientId]);
+  
+  const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
+
+  const locationDocRef = useMemo(() =>
+    (locationId) ? doc(firestore, `franchises/${franchiseId}/locations`, locationId) : null
+  , [firestore, franchiseId, locationId]);
+
+  const { data: location, isLoading: isLoadingLocation } = useDoc<ServiceLocation>(locationDocRef);
+
+  const technicianDocRef = useMemo(() =>
+    (technicianId) ? doc(firestore, `franchises/${franchiseId}/technicians`, technicianId) : null
+  , [firestore, franchiseId, technicianId]);
+  
+  const { data: technician, isLoading: isLoadingTechnician } = useDoc<Technician>(technicianDocRef);
 
   // UI / estado
   const [isSaving, setIsSaving] = useState(false);
@@ -186,9 +207,9 @@ export function ServiceReportForm(props: {
 
   // edição (quando já existe serviceReportId)
   const reportDocRef = useMemo(() => {
-    if (!firestore || !appointment.franchiseId || !appointment.serviceReportId) return null;
-    return doc(firestore, `franchises/${appointment.franchiseId}/serviceReports`, appointment.serviceReportId);
-  }, [firestore, appointment]);
+    if (!appointment?.serviceReportId) return null;
+    return doc(firestore, `franchises/${franchiseId}/serviceReports`, appointment.serviceReportId);
+  }, [firestore, franchiseId, appointment]);
 
   const { data: existingReport } = useDoc<ServiceReport>(reportDocRef);
 
@@ -306,6 +327,12 @@ export function ServiceReportForm(props: {
     const photoUrls: string[] = [];
     for (const dataUrl of pending.photoDataUrls) {
       if (!dataUrl) continue;
+      
+      // If it's already an HTTP URL, it's already uploaded.
+      if (dataUrl.startsWith("http")) {
+        photoUrls.push(dataUrl);
+        continue;
+      }
 
       const [header, base64] = dataUrl.split(",");
       const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
@@ -355,7 +382,7 @@ export function ServiceReportForm(props: {
   /** ---------- sincronização (fila) ---------- */
   const syncPendingReports = useCallback(async () => {
     if (!firestore || !storage) return;
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !navigator.onLine) return;
 
     const queue = readQueue();
     if (queue.length === 0) return;
@@ -385,6 +412,8 @@ export function ServiceReportForm(props: {
   /** ---------- submit (online -> envia, offline -> fila) ---------- */
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
+    if (!appointment || !technician) return;
 
     const { franchiseId, clientId, locationId, id: appointmentId } = appointment;
 
@@ -438,9 +467,40 @@ export function ServiceReportForm(props: {
   };
 
   /** ---------- render ---------- */
+  const isLoading = isLoadingAppointment || isLoadingClient || isLoadingLocation || isLoadingTechnician;
+
+  if (isLoading) {
+    return (
+        <div className="flex h-[80vh] items-center justify-center">
+          <Spinner size="large" />
+          <p className="ml-4">Carregando dados do atendimento...</p>
+        </div>
+    );
+  }
+
+  if (!appointment || !client || !location || !technician) {
+      return (
+            <div className="flex h-[80vh] items-center justify-center">
+            <Card className="max-w-md text-center">
+                <CardHeader>
+                    <CardTitle className="flex items-center justify-center gap-2"><AlertTriangle className="text-destructive"/> Atendimento Não Encontrado</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p>Não foi possível carregar os dados completos do atendimento. Verifique o ID e tente novamente.</p>
+                </CardContent>
+            </Card>
+            </div>
+      )
+  }
+
   if (isSuccess) {
     return (
       <div className="space-y-6">
+        <div className="space-y-1">
+            <h1 className="text-3xl font-bold tracking-tight">Relatório de Atendimento</h1>
+            <p className="text-muted-foreground text-lg">Cliente: <span className="font-semibold">{client.name}</span></p>
+            <p className="text-muted-foreground">Endereço: <span className="font-semibold">{location.address}</span></p>
+        </div>
         <Alert>
           <CheckCircle className="h-4 w-4" />
           <AlertTitle>Pronto!</AlertTitle>
@@ -460,193 +520,201 @@ export function ServiceReportForm(props: {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {!isOnline && (
-        <Alert variant="destructive">
-          <WifiOff className="h-4 w-4" />
-          <AlertTitle>Modo offline</AlertTitle>
-          <AlertDescription>
-            Sem internet agora: ao finalizar, o relatório fica salvo no celular e será enviado automaticamente quando o
-            sinal voltar.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {pendingCount > 0 && (
-        <Alert>
-          <AlertTitle>Relatórios pendentes</AlertTitle>
-          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>Você tem <b>{pendingCount}</b> relatório(s) aguardando sincronização.</span>
-            <Button type="button" onClick={() => void syncPendingReports()} disabled={isSaving || !isOnline}>
-              <RefreshCw className="mr-2 h-4 w-4" /> Sincronizar agora
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Parâmetros da Água</CardTitle>
-              <CardDescription>Ajuste os valores medidos.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5 pt-2">
-              {waterParameters.map((param) => (
-                <div key={param.key} className="grid gap-2">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor={param.key}>{param.name}</Label>
-                    <span className="text-sm font-medium text-muted-foreground">
-                      {parameters[param.key]} {param.unit}
-                    </span>
-                  </div>
-                  <Slider
-                    name={param.key}
-                    min={param.min}
-                    max={param.max}
-                    step={param.step}
-                    value={[parameters[param.key]]}
-                    onValueChange={(v) => handleParameterChange(param.key, v)}
-                    disabled={isSaving}
-                    style={{ touchAction: "none" }}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Fotos do Serviço</CardTitle>
-              <CardDescription>Até 4 fotos (recomendado: bem perto da área tratada).</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              {[0, 1, 2, 3].map((index) => (
-                <div key={index} className="space-y-2">
-                  <Label htmlFor={`photo-${index}`} className="sr-only">
-                    Foto {index + 1}
-                  </Label>
-
-                  {previews[index] ? (
-                    <div className="relative">
-                      <Image
-                        src={previews[index] as string}
-                        alt={`Foto ${index + 1}`}
-                        width={320}
-                        height={420}
-                        className="rounded-md object-cover aspect-[3/4] w-full"
-                      />
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="destructive"
-                        className="absolute top-2 right-2 h-6 w-6"
-                        onClick={() => clearPreview(index)}
-                        disabled={isSaving}
-                      >
-                        <X size={14} />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center w-full">
-                      <Label
-                        htmlFor={`photo-${index}`}
-                        className="flex flex-col items-center justify-center w-full aspect-[3/4] border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-accent"
-                      >
-                        <div className="flex flex-col items-center justify-center text-center p-2">
-                          <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
-                          <p className="text-xs text-muted-foreground">Tocar para foto</p>
-                        </div>
-                        <Input
-                          id={`photo-${index}`}
-                          name={`photo-${index}`}
-                          type="file"
-                          className="hidden"
-                          accept="image/png, image/jpeg, image/webp"
-                          capture="environment"
-                          onChange={(e) => void handleFileChange(e, index)}
-                          disabled={isSaving}
-                        />
-                      </Label>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Serviços Realizados</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {servicesPerformedItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`service-${item.id}`}
-                    checked={servicesPerformed.includes(item.label)}
-                    onCheckedChange={(checked) => handleCheckboxChange(setServicesPerformed, item.label, Boolean(checked))}
-                    disabled={isSaving}
-                  />
-                  <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">
-                    {item.label}
-                  </Label>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Produtos Faltantes</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {missingProductsItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`product-${item.id}`}
-                    checked={missingProducts.includes(item.label)}
-                    onCheckedChange={(checked) => handleCheckboxChange(setMissingProducts, item.label, Boolean(checked))}
-                    disabled={isSaving}
-                  />
-                  <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">
-                    {item.label}
-                  </Label>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Observações</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                id="observations"
-                name="observations"
-                placeholder="Alguma observação importante sobre o serviço ou a piscina..."
-                rows={4}
-                value={observations}
-                onChange={(e) => setObservations(e.target.value)}
-                disabled={isSaving}
-              />
-            </CardContent>
-          </Card>
-
-          <Button type="submit" disabled={isSaving} className="w-full" size="lg">
-            {isSaving ? (
-              <>
-                <Spinner size="small" className="mr-2" /> Enviando...
-              </>
-            ) : (
-              "Finalizar Relatório"
-            )}
-          </Button>
-        </div>
+    <>
+      <div className="space-y-1 mb-6">
+        <h1 className="text-3xl font-bold tracking-tight">Relatório de Atendimento</h1>
+        <p className="text-muted-foreground text-lg">Cliente: <span className="font-semibold">{client.name}</span></p>
+        <p className="text-muted-foreground">Endereço: <span className="font-semibold">{location.address}</span></p>
       </div>
-    </form>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {!isOnline && (
+          <Alert variant="destructive">
+            <WifiOff className="h-4 w-4" />
+            <AlertTitle>Modo offline</AlertTitle>
+            <AlertDescription>
+              Sem internet agora: ao finalizar, o relatório fica salvo no celular e será enviado automaticamente quando o
+              sinal voltar.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {pendingCount > 0 && (
+          <Alert>
+            <AlertTitle>Relatórios pendentes</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>Você tem <b>{pendingCount}</b> relatório(s) aguardando sincronização.</span>
+              <Button type="button" onClick={() => void syncPendingReports()} disabled={isSaving || !isOnline}>
+                <RefreshCw className="mr-2 h-4 w-4" /> Sincronizar agora
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Parâmetros da Água</CardTitle>
+                <CardDescription>Ajuste os valores medidos.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5 pt-2">
+                {waterParameters.map((param) => (
+                  <div key={param.key} className="grid gap-2">
+                    <div className="flex justify-between items-center">
+                      <Label htmlFor={param.key}>{param.name}</Label>
+                      <span className="text-sm font-medium text-muted-foreground">
+                        {parameters[param.key]} {param.unit}
+                      </span>
+                    </div>
+                    <Slider
+                      name={param.key}
+                      min={param.min}
+                      max={param.max}
+                      step={param.step}
+                      value={[parameters[param.key]]}
+                      onValueChange={(v) => handleParameterChange(param.key, v)}
+                      disabled={isSaving}
+                      style={{ touchAction: "none" }}
+                    />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Fotos do Serviço</CardTitle>
+                <CardDescription>Até 4 fotos (recomendado: bem perto da área tratada).</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                {[0, 1, 2, 3].map((index) => (
+                  <div key={index} className="space-y-2">
+                    <Label htmlFor={`photo-${index}`} className="sr-only">
+                      Foto {index + 1}
+                    </Label>
+
+                    {previews[index] ? (
+                      <div className="relative">
+                        <Image
+                          src={previews[index] as string}
+                          alt={`Foto ${index + 1}`}
+                          width={320}
+                          height={420}
+                          className="rounded-md object-cover aspect-[3/4] w-full"
+                        />
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="destructive"
+                          className="absolute top-2 right-2 h-6 w-6"
+                          onClick={() => clearPreview(index)}
+                          disabled={isSaving}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center w-full">
+                        <Label
+                          htmlFor={`photo-${index}`}
+                          className="flex flex-col items-center justify-center w-full aspect-[3/4] border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-accent"
+                        >
+                          <div className="flex flex-col items-center justify-center text-center p-2">
+                            <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
+                            <p className="text-xs text-muted-foreground">Tocar para foto</p>
+                          </div>
+                          <Input
+                            id={`photo-${index}`}
+                            name={`photo-${index}`}
+                            type="file"
+                            className="hidden"
+                            accept="image/png, image/jpeg, image/webp"
+                            capture="environment"
+                            onChange={(e) => void handleFileChange(e, index)}
+                            disabled={isSaving}
+                          />
+                        </Label>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Serviços Realizados</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {servicesPerformedItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`service-${item.id}`}
+                      checked={servicesPerformed.includes(item.label)}
+                      onCheckedChange={(checked) => handleCheckboxChange(setServicesPerformed, item.label, Boolean(checked))}
+                      disabled={isSaving}
+                    />
+                    <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">
+                      {item.label}
+                    </Label>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Produtos Faltantes</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {missingProductsItems.map((item) => (
+                  <div key={item.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`product-${item.id}`}
+                      checked={missingProducts.includes(item.label)}
+                      onCheckedChange={(checked) => handleCheckboxChange(setMissingProducts, item.label, Boolean(checked))}
+                      disabled={isSaving}
+                    />
+                    <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">
+                      {item.label}
+                    </Label>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Observações</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  id="observations"
+                  name="observations"
+                  placeholder="Alguma observação importante sobre o serviço ou a piscina..."
+                  rows={4}
+                  value={observations}
+                  onChange={(e) => setObservations(e.target.value)}
+                  disabled={isSaving}
+                />
+              </CardContent>
+            </Card>
+
+            <Button type="submit" disabled={isSaving} className="w-full" size="lg">
+              {isSaving ? (
+                <>
+                  <Spinner size="small" className="mr-2" /> Enviando...
+                </>
+              ) : (
+                "Finalizar Relatório"
+              )}
+            </Button>
+          </div>
+        </div>
+      </form>
+    </>
   );
 }
