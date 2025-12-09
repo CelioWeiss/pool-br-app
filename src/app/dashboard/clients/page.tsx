@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,7 +16,7 @@ import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth, signOut, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -27,6 +27,7 @@ export default function ClientsPage() {
   const firestore = useFirestore();
   const auth = useMemo(() => getAuth(), []);
   const router = useRouter();
+  const params = use(useParams());
 
   const franchiseId = userInfo?.franchiseId;
   
@@ -44,27 +45,12 @@ export default function ClientsPage() {
 
   const isOwner = userInfo?.role === 'owner';
 
-  useEffect(() => {
-    // This effect ensures we don't get stuck on this page if the admin session is lost
-    // during a sub-action (like creating a new user).
-    if (auth.currentUser && auth.currentUser.email !== adminUser?.email) {
-      const adminPassword = sessionStorage.getItem('adminPassword');
-      if (adminUser?.email && adminPassword) {
-        signInWithEmailAndPassword(auth, adminUser.email, adminPassword);
-      } else {
-        router.push('/');
-      }
-    }
-  }, [auth.currentUser, adminUser, auth, router]);
-
   const handleSaveClient = async (clientData: NewClientFormData, clientId?: string) => {
     if (!firestore || !auth || !franchiseId || !adminUser?.email) return;
   
     setIsSaving(true);
     
     const isEditing = !!clientId;
-    const originalAdminEmail = adminUser.email;
-    const adminPassword = sessionStorage.getItem('adminPassword');
   
     try {
       const batch = writeBatch(firestore);
@@ -83,7 +69,6 @@ export default function ClientsPage() {
 
         // Handle creating a user for an existing client that doesn't have one
         if (!editingClient.userId && clientData.password) {
-           sessionStorage.setItem('authAction', 'creation');
            const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
            const newUserId = userCredential.user.uid;
            finalData.userId = newUserId;
@@ -116,7 +101,6 @@ export default function ClientsPage() {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
         
-        sessionStorage.setItem('authAction', 'creation');
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
         const newUserId = userCredential.user.uid;
 
@@ -170,17 +154,6 @@ export default function ClientsPage() {
         });
     } finally {
         setIsSaving(false);
-        // Re-authenticate the admin user if a new user was created
-        if (sessionStorage.getItem('authAction') === 'creation') {
-            await signOut(auth); // Sign out the newly created user
-            if(adminPassword) { // Sign the admin back in
-                await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
-            } else {
-                router.push('/'); // Force re-login if password not available
-                toast({ title: 'Sessão Expirada', description: 'Por favor, faça login novamente.' });
-            }
-        }
-        sessionStorage.removeItem('authAction');
     }
   };
   
@@ -428,3 +401,5 @@ export default function ClientsPage() {
     </>
   );
 }
+
+    
