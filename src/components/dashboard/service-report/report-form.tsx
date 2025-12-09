@@ -69,6 +69,11 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
   const [parameters, setParameters] = useState<Record<string, number>>(() =>
     waterParameters.reduce((acc, p) => ({ ...acc, [p.key]: p.defaultValue }), {})
   );
+  
+  const [servicesPerformed, setServicesPerformed] = useState<string[]>([]);
+  const [missingProducts, setMissingProducts] = useState<string[]>([]);
+  const [observations, setObservations] = useState("");
+
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   
@@ -81,7 +86,6 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
 
   useEffect(() => {
     if(existingReport) {
-        // Populate form with existing report data
         const paramKeys = waterParameters.map(p => p.key);
         const existingParams: Record<string, number> = {};
         for(const key of paramKeys) {
@@ -93,8 +97,9 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
         }
         setParameters(existingParams);
         
-        // This is a simplified way to handle populating checkboxes and text areas.
-        // For photos, we just show them if they exist.
+        setServicesPerformed(existingReport.servicesPerformed || []);
+        setMissingProducts(existingReport.missingProducts || []);
+        setObservations(existingReport.observations || "");
         setPreviews([...(existingReport.photoUrls || []), null, null, null, null].slice(0, 4));
     }
   }, [existingReport]);
@@ -134,6 +139,19 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
       setParameters(prev => ({ ...prev, [key]: value[0] }));
   }
 
+  const handleCheckboxChange = (
+    list: string[],
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    value: string,
+    checked: boolean
+  ) => {
+    if (checked) {
+      setter([...list, value]);
+    } else {
+      setter(list.filter(item => item !== value));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firestore || existingReport) return;
@@ -147,7 +165,6 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
         const newReportId = uuidv4();
         const reportRef = doc(firestore, `franchises/${franchiseId}/serviceReports`, newReportId);
 
-        const formData = new FormData(e.currentTarget);
         const photoUrls = previews.filter((p): p is string => p !== null);
 
         const newReportData: Omit<ServiceReport, 'id'> = {
@@ -156,18 +173,11 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             technicianId,
             clientId,
             locationId,
-            chlorine: parameters['chlorine'],
-            ph: parameters['ph'],
-            alkalinity: parameters['alkalinity'],
-            cya: parameters['cya'],
-            calciumHardness: parameters['calciumHardness'],
-            orp: parameters['orp'],
-            tds: parameters['tds'],
-            temperature: parameters['temperature'],
-            servicesPerformed: formData.getAll('servicesPerformed') as string[],
-            missingProducts: formData.getAll('missingProducts') as string[],
-            observations: formData.get("observations") as string,
-            photoUrls: photoUrls,
+            ...parameters,
+            servicesPerformed,
+            missingProducts,
+            observations,
+            photoUrls,
             createdAt: new Date().toISOString(),
         };
         
@@ -187,7 +197,6 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
             description: "O relatório de serviço foi salvo e o cliente será notificado.",
         });
         
-        // Wait 2 seconds before redirecting to give user feedback
         setTimeout(() => router.push('/dashboard/schedule'), 2000);
 
     } catch (err: any) {
@@ -211,9 +220,8 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
 
 
   if (isSuccess || (existingReport && !isSaving)) {
-    // If the form was just submitted successfully OR a report already exists, show view-only mode
     const reportData = existingReport || null;
-    const isFormDisabled = true; // Always disable if we are in view mode
+    const isFormDisabled = true;
 
     return (
         <div className="space-y-6">
@@ -328,6 +336,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                                 step={param.step}
                                 value={[parameters[param.key]]}
                                 onValueChange={(value) => handleParameterChange(param.key, value)}
+                                touch-action="none"
                             />
                         </div>
                     ))}
@@ -376,7 +385,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                 <CardContent className="grid grid-cols-2 gap-4">
                     {servicesPerformedItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} />
+                            <Checkbox id={`service-${item.id}`} name="servicesPerformed" value={item.label} onCheckedChange={(checked) => handleCheckboxChange(servicesPerformed, setServicesPerformed, item.label, !!checked)} />
                             <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -390,7 +399,7 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                 <CardContent className="grid grid-cols-2 gap-4">
                     {missingProductsItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
-                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} />
+                             <Checkbox id={`product-${item.id}`} name="missingProducts" value={item.label} onCheckedChange={(checked) => handleCheckboxChange(missingProducts, setMissingProducts, item.label, !!checked)} />
                             <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">{item.label}</Label>
                         </div>
                     ))}
@@ -407,6 +416,8 @@ export function ServiceReportForm({ appointment, client, location }: { appointme
                         name="observations"
                         placeholder="Alguma observação importante sobre o serviço ou a piscina..."
                         rows={4}
+                        value={observations}
+                        onChange={(e) => setObservations(e.target.value)}
                     />
                 </CardContent>
             </Card>
