@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useEffect, useMemo, useCallback, useRef, useState } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -15,7 +14,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 
-import { UploadCloud, X, CheckCircle, WifiOff } from "lucide-react";
+import { UploadCloud, X, CheckCircle, WifiOff, RefreshCw } from "lucide-react";
 
 import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +25,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 
 /** =========================
- *  CONSTANTES (mesmo modelo do seu projeto)
+ *  CONSTANTES
  *  ========================= */
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
@@ -68,8 +67,9 @@ const missingProductsItems = [
  *  OFFLINE QUEUE (localStorage)
  *  ========================= */
 type PendingReport = {
-  id: string; // id local para resolver reenvio
+  id: string;
   createdAt: string;
+
   franchiseId: string;
   appointmentId: string;
   clientId: string;
@@ -81,15 +81,13 @@ type PendingReport = {
   missingProducts: string[];
   observations: string;
 
-  // dataURLs (base64) para enviar depois
+  // fotos (dataURLs) — para enviar depois quando voltar a internet
   photoDataUrls: string[];
-  // se existir um serviceReportId já criado no backend (caso de edição)
   serviceReportId?: string;
 };
 
 const OFFLINE_QUEUE_KEY = "pool_service_reports_pending_v1";
 
-/** Helpers simples (sem libs externas) */
 function safeParse<T>(value: string | null): T | null {
   if (!value) return null;
   try {
@@ -114,12 +112,11 @@ function enqueuePending(report: PendingReport) {
 }
 
 function removePending(id: string) {
-  const q = readQueue().filter((x) => x.id !== id);
-  writeQueue(q);
+  writeQueue(readQueue().filter((x) => x.id !== id));
 }
 
 /** =========================
- *  IMAGE COMPRESSION (mobile-friendly)
+ *  IMAGE HELPERS (mobile friendly)
  *  ========================= */
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -130,22 +127,20 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-/** Resiza para evitar “foto pesada” no 4G e reduzir falhas */
-async function compressDataUrl(dataUrl: string, maxSide = 1600, quality = 0.72): Promise<string> {
-  // se não for imagem padrão, devolve o original
+async function compressDataUrl(dataUrl: string, maxSide = 1400, quality = 0.7): Promise<string> {
   if (!dataUrl.startsWith("data:image")) return dataUrl;
 
   const img = document.createElement("img");
   img.src = dataUrl;
 
-  await new Promise((resolve, reject) => {
-    img.onload = () => resolve(true);
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
     img.onerror = () => reject(new Error("Falha ao carregar imagem para compressão"));
   });
 
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
-  const w = Math.round(img.width * scale);
-  const h = Math.round(img.height * scale);
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
 
   const canvas = document.createElement("canvas");
   canvas.width = w;
@@ -174,21 +169,22 @@ export function ServiceReportForm(props: {
   const firestore = useFirestore();
   const storage = useStorage();
 
-  // UI / estados
+  // UI / estado
   const [isSaving, setIsSaving] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+  const [pendingCount, setPendingCount] = useState(0);
 
-  // dados do formulário
+  // formulário
   const [previews, setPreviews] = useState<(string | null)[]>([null, null, null, null]);
-  const [parameters, setParameters] = useState<Record<string, number>>(
-    () => Object.fromEntries(waterParameters.map((p) => [p.key, p.defaultValue])) as Record<string, number>
+  const [parameters, setParameters] = useState<Record<string, number>>(() =>
+    Object.fromEntries(waterParameters.map((p) => [p.key, p.defaultValue])) as Record<string, number>
   );
   const [servicesPerformed, setServicesPerformed] = useState<string[]>([]);
   const [missingProducts, setMissingProducts] = useState<string[]>([]);
   const [observations, setObservations] = useState("");
 
-  // referência para edição (quando existir serviceReportId)
+  // edição (quando já existe serviceReportId)
   const reportDocRef = useMemo(() => {
     if (!firestore || !appointment.franchiseId || !appointment.serviceReportId) return null;
     return doc(firestore, `franchises/${appointment.franchiseId}/serviceReports`, appointment.serviceReportId);
@@ -196,7 +192,6 @@ export function ServiceReportForm(props: {
 
   const { data: existingReport } = useDoc<ServiceReport>(reportDocRef);
 
-  /** --------- carregar relatório existente (quando houver) --------- */
   useEffect(() => {
     if (!existingReport) return;
 
@@ -215,96 +210,37 @@ export function ServiceReportForm(props: {
     setPreviews([urls[0] ?? null, urls[1] ?? null, urls[2] ?? null, urls[3] ?? null]);
   }, [existingReport]);
 
-  /** --------- monitorar conectividade e tentar sincronizar --------- */
-  const trySyncPending = useCallback(async () => {
-    if (!navigator.onLine) return;
-    if (!firestore || !storage) return;
-
-    const queue = readQueue();
-    if (queue.length === 0) return;
-
-    // tenta enviar um por um (mais robusto)
-    for (const pending of queue) {
-      try {
-        // 1) subir fotos (dataURL -> upload)
-        const photoUrls: string[] = [];
-        for (const dataUrl of pending.photoDataUrls) {
-          if (!dataUrl) continue;
-
-          const [header, base64] = dataUrl.split(",");
-          const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
-          const binary = atob(base64 || "");
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-          const blob = new Blob([bytes], { type: mime });
-          const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
-          const storageRef = ref(storage, path);
-          const snap = await uploadBytes(storageRef, blob);
-          const url = await getDownloadURL(snap.ref);
-          photoUrls.push(url);
-        }
-
-        // 2) gravar no Firestore (report + update appointment)
-        const reportRef = pending.serviceReportId
-          ? doc(firestore, `franchises/${pending.franchiseId}/serviceReports/${pending.serviceReportId}`)
-          : doc(collection(firestore, `franchises/${pending.franchiseId}/serviceReports`));
-
-        const reportData: Omit<ServiceReport, "id"> & { id: string } = {
-          id: reportRef.id,
-          franchiseId: pending.franchiseId,
-          appointmentId: pending.appointmentId,
-          technicianId: pending.technicianId,
-          clientId: pending.clientId,
-          locationId: pending.locationId,
-          ...pending.parameters,
-          servicesPerformed: pending.servicesPerformed,
-          missingProducts: pending.missingProducts,
-          observations: pending.observations,
-          photoUrls,
-          createdAt: pending.createdAt,
-        };
-
-        const batch = writeBatch(firestore);
-        batch.set(reportRef, reportData, { merge: true });
-
-        const appointmentRef = doc(firestore, `franchises/${pending.franchiseId}/appointments`, pending.appointmentId);
-        batch.update(appointmentRef, { serviceReportId: reportRef.id, status: "completed" });
-
-        await batch.commit();
-
-        // sucesso -> remove da fila
-        removePending(pending.id);
-      } catch (err) {
-        console.error("Sync failed for a pending report:", err)
-        // se falhar, mantém na fila e segue (tenta de novo na próxima reconexão)
-      }
-    }
-  }, [firestore, storage]);
-
+  // online/offline + pending count
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const update = () => setPendingCount(readQueue().length);
+
     const onOnline = () => {
       setIsOnline(true);
-      // tenta sincronizar assim que voltar
-      void trySyncPending();
+      update();
+      void syncPendingReports(); // tenta enviar ao voltar
     };
-    const onOffline = () => setIsOnline(false);
+    const onOffline = () => {
+      setIsOnline(false);
+      update();
+    };
 
+    update();
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
 
-    // tentativa inicial (caso o usuário abriu já online)
-    void trySyncPending();
+    // tentativa inicial (se já estiver online ao abrir)
+    if (navigator.onLine) void syncPendingReports();
 
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [trySyncPending]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, storage]);
 
-  /** --------- helpers de UI --------- */
+  /** ---------- helpers de UI ---------- */
   const handleParameterChange = (key: string, value: number[]) => {
     setParameters((prev) => ({ ...prev, [key]: value[0] }));
   };
@@ -323,29 +259,34 @@ export function ServiceReportForm(props: {
       next[index] = null;
       return next;
     });
-
     const input = document.getElementById(`photo-${index}`) as HTMLInputElement | null;
     if (input) input.value = "";
   };
 
-  /** --------- Fotos: mobile friendly (camera + compressão) --------- */
+  /** ---------- fotos (mobile) ---------- */
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // limite bem claro (evita erro e dá experiência melhor no 4G)
-    if (file.size > 6 * 1024 * 1024) {
-      toast({
-        variant: "destructive",
-        title: "Arquivo muito grande",
-        description: "Escolha uma foto com até 6MB (ou tire uma mais próxima).",
-      });
+    // limite mais seguro para celular e para localStorage
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "Arquivo muito grande", description: "Escolha uma foto com até 5MB." });
       return;
     }
 
     try {
       const raw = await fileToDataUrl(file);
-      const compressed = await compressDataUrl(raw, 1600, 0.72);
+      const compressed = await compressDataUrl(raw, 1400, 0.68);
+
+      // validação de “tamanho” do dataURL (evita estourar storage local)
+      if (compressed.length > 1_800_000) {
+        toast({
+          variant: "destructive",
+          title: "Foto ainda está pesada",
+          description: "Tire mais perto (ou com menos resolução) para reduzir o tamanho.",
+        });
+        return;
+      }
 
       setPreviews((prev) => {
         const next = [...prev];
@@ -353,23 +294,100 @@ export function ServiceReportForm(props: {
         return next;
       });
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Não foi possível processar a imagem",
-        description: err?.message || "Tente novamente com outra foto.",
-      });
+      toast({ variant: "destructive", title: "Falha ao processar imagem", description: err?.message || "Tente outra foto." });
     }
   };
 
-  /** --------- ENVIAR (online) ou ENFILEIRAR (offline) --------- */
+  /** ---------- envio ONLINE (Storage + Firestore) ---------- */
+  const sendReportOnline = async (pending: PendingReport) => {
+    if (!firestore || !storage) throw new Error("Firebase indisponível no momento.");
+
+    // 1) upload das fotos (se houver)
+    const photoUrls: string[] = [];
+    for (const dataUrl of pending.photoDataUrls) {
+      if (!dataUrl) continue;
+
+      const [header, base64] = dataUrl.split(",");
+      const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
+      const binary = atob(base64 || "");
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const blob = new Blob([bytes], { type: mime });
+      const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
+      const storageRef = ref(storage, path);
+
+      const snap = await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(snap.ref);
+      photoUrls.push(url);
+    }
+
+    // 2) monta doc do relatório
+    const reportRef = pending.serviceReportId
+      ? doc(firestore, `franchises/${pending.franchiseId}/serviceReports`, pending.serviceReportId)
+      : doc(collection(firestore, `franchises/${pending.franchiseId}/serviceReports`));
+
+    const reportData: Omit<ServiceReport, "id"> & { id: string } = {
+      id: reportRef.id,
+      franchiseId: pending.franchiseId,
+      appointmentId: pending.appointmentId,
+      technicianId: pending.technicianId,
+      clientId: pending.clientId,
+      locationId: pending.locationId,
+      ...pending.parameters,
+      servicesPerformed: pending.servicesPerformed,
+      missingProducts: pending.missingProducts,
+      observations: pending.observations,
+      photoUrls,
+      createdAt: pending.createdAt,
+    };
+
+    // 3) batch (relatório + update do agendamento)
+    const batch = writeBatch(firestore);
+    batch.set(reportRef, reportData, { merge: true });
+
+    const appointmentRef = doc(firestore, "franchises", pending.franchiseId, "appointments", pending.appointmentId);
+    batch.update(appointmentRef, { serviceReportId: reportRef.id, status: "completed" });
+
+    await batch.commit();
+  };
+
+  /** ---------- sincronização (fila) ---------- */
+  const syncPendingReports = useCallback(async () => {
+    if (!firestore || !storage) return;
+    if (typeof window === "undefined") return;
+
+    const queue = readQueue();
+    if (queue.length === 0) return;
+
+    setIsSaving(true);
+    try {
+      // processa um por um para aumentar chance de concluir pelo menos parte
+      for (const pending of queue) {
+        await sendReportOnline(pending);
+        removePending(pending.id);
+      }
+      setPendingCount(readQueue().length);
+      toast({ title: "Sincronização concluída", description: "Todos os relatórios pendentes foram enviados." });
+    } catch (err: any) {
+      // mantém os pendentes para tentar de novo depois
+      setPendingCount(readQueue().length);
+      toast({
+        variant: "destructive",
+        title: "Sincronização não concluída",
+        description: err?.message || "O relatório ficou salvo no celular e será reenviado automaticamente ao voltar a internet.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [firestore, storage, toast]);
+
+  /** ---------- submit (online -> envia, offline -> fila) ---------- */
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const { franchiseId, clientId, locationId, id: appointmentId } = appointment;
 
-    const cleanPhotoData = previews.filter(Boolean) as string[];
-
-    // monta o payload base (para online ou offline)
     const pending: PendingReport = {
       id: uuidv4(),
       createdAt: new Date().toISOString(),
@@ -378,58 +396,48 @@ export function ServiceReportForm(props: {
       clientId,
       locationId,
       technicianId: technician.id,
-
       parameters,
       servicesPerformed,
       missingProducts,
       observations,
-      photoDataUrls: cleanPhotoData,
+      photoDataUrls: (previews.filter(Boolean) as string[]).slice(0, 4),
       serviceReportId: appointment.serviceReportId,
     };
 
-    // se estiver OFFLINE ou Firebase não estiver acessível -> salva localmente
+    // se estiver claramente offline -> só fila
     if (!navigator.onLine || !firestore || !storage) {
       enqueuePending(pending);
-
-      toast({
-        title: "Relatório salvo no seu celular (offline)",
-        description:
-          "Assim que o aparelho voltar a ter internet, o envio será feito automaticamente.",
-      });
-
+      setPendingCount(readQueue().length);
       setIsSuccess(true);
+      toast({
+        title: "Relatório salvo no celular (offline)",
+        description: "Assim que o sinal voltar, o envio é feito automaticamente.",
+      });
       return;
     }
 
-    // se estiver ONLINE -> tenta enviar já (melhor experiência)
+    // tenta enviar online; se der erro de rede/permissão, cai para fila (não perde dados)
     setIsSaving(true);
     try {
-      // envia imediatamente (reusa a mesma lógica do sync)
-      enqueuePending(pending); // coloca na fila para garantir que não perca nada
-      await trySyncPending();
-
-      // se conseguiu enviar, o item some da fila (senão ele fica e será tentado depois)
-      toast({
-        title: "Relatório enviado!",
-        description: "O relatório foi sincronizado com o painel/cliente.",
-      });
-
+      await sendReportOnline(pending);
       setIsSuccess(true);
+      toast({ title: "Relatório enviado!", description: "O relatório foi registrado com sucesso." });
       setTimeout(() => router.push("/dashboard/schedule"), 1200);
     } catch (err: any) {
-      // em caso de falha (ex.: Storage com erro momentâneo) mantém na fila
+      enqueuePending(pending);
+      setPendingCount(readQueue().length);
+      setIsSuccess(true);
       toast({
         variant: "destructive",
-        title: "Não foi possível enviar agora",
-        description: "Seu relatório ficou salvo no celular e será enviado assim que voltar a internet.",
+        title: "Envio não concluído agora",
+        description: "O relatório foi salvo no celular e será enviado automaticamente quando voltar a internet.",
       });
-      setIsSuccess(true);
     } finally {
       setIsSaving(false);
     }
   };
 
-  /** --------- Render --------- */
+  /** ---------- render ---------- */
   if (isSuccess) {
     return (
       <div className="space-y-6">
@@ -438,9 +446,9 @@ export function ServiceReportForm(props: {
           <AlertTitle>Pronto!</AlertTitle>
           <AlertDescription>
             {isOnline ? (
-              <>Relatório {navigator.onLine ? "sincronizado" : "salvo offline"} com sucesso.</>
+              <>Relatório {pendingCount > 0 ? "pendente para sincronizar" : "enviado"} com sucesso.</>
             ) : (
-              <>Você está offline — o relatório foi guardado no aparelho e será enviado quando o sinal voltar.</>
+              <>Você está offline — o relatório foi guardado no celular e será enviado quando voltar o sinal.</>
             )}
             <Button onClick={() => router.push("/dashboard/schedule")} className="mt-4 w-full">
               Voltar para a Agenda
@@ -458,8 +466,20 @@ export function ServiceReportForm(props: {
           <WifiOff className="h-4 w-4" />
           <AlertTitle>Modo offline</AlertTitle>
           <AlertDescription>
-            Você está sem internet agora. Ao finalizar, o relatório será salvo no seu celular e enviado
-            automaticamente quando o sinal voltar.
+            Sem internet agora: ao finalizar, o relatório fica salvo no celular e será enviado automaticamente quando o
+            sinal voltar.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {pendingCount > 0 && (
+        <Alert>
+          <AlertTitle>Relatórios pendentes</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>Você tem <b>{pendingCount}</b> relatório(s) aguardando sincronização.</span>
+            <Button type="button" onClick={() => void syncPendingReports()} disabled={isSaving || !isOnline}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Sincronizar agora
+            </Button>
           </AlertDescription>
         </Alert>
       )}
@@ -567,9 +587,7 @@ export function ServiceReportForm(props: {
                   <Checkbox
                     id={`service-${item.id}`}
                     checked={servicesPerformed.includes(item.label)}
-                    onCheckedChange={(checked) =>
-                      handleCheckboxChange(setServicesPerformed, item.label, Boolean(checked))
-                    }
+                    onCheckedChange={(checked) => handleCheckboxChange(setServicesPerformed, item.label, Boolean(checked))}
                     disabled={isSaving}
                   />
                   <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">
@@ -590,9 +608,7 @@ export function ServiceReportForm(props: {
                   <Checkbox
                     id={`product-${item.id}`}
                     checked={missingProducts.includes(item.label)}
-                    onCheckedChange={(checked) =>
-                      handleCheckboxChange(setMissingProducts, item.label, Boolean(checked))
-                    }
+                    onCheckedChange={(checked) => handleCheckboxChange(setMissingProducts, item.label, Boolean(checked))}
                     disabled={isSaving}
                   />
                   <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">
@@ -634,5 +650,3 @@ export function ServiceReportForm(props: {
     </form>
   );
 }
-
-    
