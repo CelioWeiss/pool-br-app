@@ -228,6 +228,110 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
     setPreviews([urls[0] ?? null, urls[1] ?? null, urls[2] ?? null, urls[3] ?? null]);
   }, [existingReport]);
 
+  /** ---------- envio ONLINE (Storage + Firestore) ---------- */
+  const sendReportOnline = useCallback(async (pending: PendingReport) => {
+    if (!firestore || !storage) throw new Error("Firebase indisponível no momento.");
+
+    // 1) upload das fotos (se houver)
+    const photoUrls: string[] = [];
+    for (const dataUrl of pending.photoDataUrls) {
+        if (!dataUrl) continue;
+        
+        // If it's already an HTTP URL, it's already uploaded.
+        if (dataUrl.startsWith("http")) {
+            photoUrls.push(dataUrl);
+            continue;
+        }
+
+        const [header, base64] = dataUrl.split(",");
+        const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
+        const binary = atob(base64 || "");
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        const blob = new Blob([bytes], { type: mime });
+        const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
+        const storageRef = ref(storage, path);
+
+        const snap = await uploadBytes(storageRef, blob);
+        const url = await getDownloadURL(snap.ref);
+        photoUrls.push(url);
+    }
+
+    // 2) monta doc do relatório
+    const reportRef = pending.serviceReportId
+      ? doc(firestore, `franchises/${pending.franchiseId}/serviceReports`, pending.serviceReportId)
+      : doc(collection(firestore, `franchises/${pending.franchiseId}/serviceReports`));
+
+    const reportData: Omit<ServiceReport, "id"> & { id: string } = {
+      id: reportRef.id,
+      franchiseId: pending.franchiseId,
+      appointmentId: pending.appointmentId,
+      technicianId: pending.technicianId,
+      clientId: pending.clientId,
+      locationId: pending.locationId,
+      ...pending.parameters,
+      servicesPerformed: pending.servicesPerformed,
+      missingProducts: pending.missingProducts,
+      observations: pending.observations,
+      photoUrls,
+      createdAt: pending.createdAt,
+    };
+
+    // 3) batch (relatório + update do agendamento)
+    const batch = writeBatch(firestore);
+    batch.set(reportRef, reportData, { merge: true });
+
+    const appointmentRef = doc(firestore, "franchises", pending.franchiseId, "appointments", pending.appointmentId);
+    batch.update(appointmentRef, { serviceReportId: reportRef.id, status: "completed" });
+
+    await batch.commit();
+  }, [firestore, storage]);
+
+  /** ---------- sincronização (fila) ---------- */
+  const syncPendingReports = useCallback(async () => {
+    if (!firestore || !storage || typeof window === "undefined" || !navigator.onLine) return;
+    
+    let isSyncing = false; // Simple lock
+    if (isSyncing) return;
+    isSyncing = true;
+
+    setIsSaving(true);
+    try {
+        while (true) {
+            const queue = readQueue();
+            if (queue.length === 0) break;
+            
+            const pending = queue[0];
+            try {
+                await sendReportOnline(pending);
+                removePending(pending.id);
+            } catch (err) {
+                console.error("Failed to sync a pending report, will retry later:", err);
+                // Stop on first error to avoid repeated failures in a bad network state
+                break;
+            }
+        }
+
+        const remainingCount = readQueue().length;
+        if (remainingCount === 0) {
+            toast({ title: "Sincronização concluída", description: "Todos os relatórios pendentes foram enviados." });
+        }
+        setPendingCount(remainingCount);
+
+    } catch (err: any) {
+      setPendingCount(readQueue().length);
+      toast({
+        variant: "destructive",
+        title: "Sincronização não concluída",
+        description: err?.message || "Alguns relatórios permanecem salvos no celular e serão reenviados automaticamente.",
+      });
+    } finally {
+      setIsSaving(false);
+      isSyncing = false;
+    }
+  }, [firestore, storage, toast, sendReportOnline]);
+
   // online/offline + pending count
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -256,7 +360,7 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
       window.removeEventListener("offline", onOffline);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, storage]);
+  }, [syncPendingReports]);
 
   /** ---------- helpers de UI ---------- */
   const handleParameterChange = (key: string, value: number[]) => {
@@ -316,109 +420,27 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
     }
   };
 
-  /** ---------- envio ONLINE (Storage + Firestore) ---------- */
-  const sendReportOnline = async (pending: PendingReport) => {
-    if (!firestore || !storage) throw new Error("Firebase indisponível no momento.");
-
-    // 1) upload das fotos (se houver)
-    const photoUrls: string[] = [];
-    for (const dataUrl of pending.photoDataUrls) {
-      if (!dataUrl) continue;
-      
-      // If it's already an HTTP URL, it's already uploaded.
-      if (dataUrl.startsWith("http")) {
-        photoUrls.push(dataUrl);
-        continue;
-      }
-
-      const [header, base64] = dataUrl.split(",");
-      const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
-      const binary = atob(base64 || "");
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-      const blob = new Blob([bytes], { type: mime });
-      const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
-      const storageRef = ref(storage, path);
-
-      const snap = await uploadBytes(storageRef, blob);
-      const url = await getDownloadURL(snap.ref);
-      photoUrls.push(url);
-    }
-
-    // 2) monta doc do relatório
-    const reportRef = pending.serviceReportId
-      ? doc(firestore, `franchises/${pending.franchiseId}/serviceReports`, pending.serviceReportId)
-      : doc(collection(firestore, `franchises/${pending.franchiseId}/serviceReports`));
-
-    const reportData: Omit<ServiceReport, "id"> & { id: string } = {
-      id: reportRef.id,
-      franchiseId: pending.franchiseId,
-      appointmentId: pending.appointmentId,
-      technicianId: pending.technicianId,
-      clientId: pending.clientId,
-      locationId: pending.locationId,
-      ...pending.parameters,
-      servicesPerformed: pending.servicesPerformed,
-      missingProducts: pending.missingProducts,
-      observations: pending.observations,
-      photoUrls,
-      createdAt: pending.createdAt,
-    };
-
-    // 3) batch (relatório + update do agendamento)
-    const batch = writeBatch(firestore);
-    batch.set(reportRef, reportData, { merge: true });
-
-    const appointmentRef = doc(firestore, "franchises", pending.franchiseId, "appointments", pending.appointmentId);
-    batch.update(appointmentRef, { serviceReportId: reportRef.id, status: "completed" });
-
-    await batch.commit();
-  };
-
-  /** ---------- sincronização (fila) ---------- */
-  const syncPendingReports = useCallback(async () => {
-    if (!firestore || !storage) return;
-    if (typeof window === "undefined" || !navigator.onLine) return;
-
-    const queue = readQueue();
-    if (queue.length === 0) return;
-
-    setIsSaving(true);
-    try {
-      // processa um por um para aumentar chance de concluir pelo menos parte
-      for (const pending of queue) {
-        await sendReportOnline(pending);
-        removePending(pending.id);
-      }
-      setPendingCount(readQueue().length);
-      toast({ title: "Sincronização concluída", description: "Todos os relatórios pendentes foram enviados." });
-    } catch (err: any) {
-      // mantém os pendentes para tentar de novo depois
-      setPendingCount(readQueue().length);
-      toast({
-        variant: "destructive",
-        title: "Sincronização não concluída",
-        description: err?.message || "O relatório ficou salvo no celular e será reenviado automaticamente ao voltar a internet.",
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  }, [firestore, storage, toast]);
-
   /** ---------- submit (online -> envia, offline -> fila) ---------- */
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!appointment || !technician) return;
 
-    const { franchiseId, clientId, locationId, id: appointmentId } = appointment;
+    const { clientId, locationId } = appointment;
+    const appointmentIdSafe = appointmentId;
+
+
+    const newPhotoDataUrls = (previews.filter(p => p && p.startsWith('data:image')) as string[]);
+    const existingPhotoUrls = (previews.filter(p => p && p.startsWith('http')) as string[]);
+
+    const allPhotoUrls = [...existingPhotoUrls, ...newPhotoDataUrls];
+
 
     const pending: PendingReport = {
       id: uuidv4(),
-      createdAt: new Date().toISOString(),
+      createdAt: existingReport?.createdAt || new Date().toISOString(),
       franchiseId,
-      appointmentId,
+      appointmentId: appointmentIdSafe,
       clientId,
       locationId,
       technicianId: technician.id,
@@ -426,7 +448,7 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
       servicesPerformed,
       missingProducts,
       observations,
-      photoDataUrls: (previews.filter(Boolean) as string[]).slice(0, 4),
+      photoDataUrls: allPhotoUrls,
       serviceReportId: appointment.serviceReportId,
     };
 
@@ -715,4 +737,3 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
     </>
   );
 }
-
