@@ -73,13 +73,6 @@ function useProvideAuth() {
 
   useEffect(() => {
     if (firebaseUser && !firebaseUser.isAnonymous) {
-      const authAction = sessionStorage.getItem('authAction');
-      if (authAction === 'creation') {
-        sessionStorage.removeItem('authAction');
-        // Do not redirect, stay on the current page
-        return;
-      }
-      
       if (
         !isUserInfoLoading && 
         userInfo && 
@@ -101,6 +94,8 @@ function useProvideAuth() {
 
       try {
         await signInWithEmailAndPassword(auth, email, pass);
+        // Store password in session storage for re-authentication after creating a new user
+        sessionStorage.setItem('adminPassword', pass);
         setIsLoggingIn(false);
         return { ok: true, redirect: "/dashboard" };
 
@@ -144,6 +139,7 @@ function useProvideAuth() {
 
   const logout = useCallback(() => {
     signOut(auth).then(() => {
+      sessionStorage.removeItem('adminPassword'); // Clear password on logout
       setAnonymousProfile(null);
       router.push("/");
     });
@@ -198,3 +194,5 @@ export function useAuth() {
   }
   return context;
 }
+
+    

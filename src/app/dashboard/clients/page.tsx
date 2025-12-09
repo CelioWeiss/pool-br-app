@@ -48,11 +48,13 @@ export default function ClientsPage() {
   }
 
   const handleSaveClient = async (clientData: NewClientFormData, clientId?: string) => {
-    if (!firestore || !auth || !franchiseId) return;
+    if (!firestore || !auth || !franchiseId || !adminUser?.email) return;
   
     setIsSaving(true);
     
     const isEditing = !!clientId;
+    const originalAdminEmail = adminUser.email;
+    const adminPassword = sessionStorage.getItem('adminPassword'); // Assume password was stored on login
   
     try {
       const batch = writeBatch(firestore);
@@ -70,7 +72,6 @@ export default function ClientsPage() {
         let finalData: Partial<Client> = { ...dataToSave };
 
         if (!editingClient?.userId && clientData.password) {
-           sessionStorage.setItem('authAction', 'creation');
            const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
            const newUserId = userCredential.user.uid;
            finalData.userId = newUserId;
@@ -87,6 +88,12 @@ export default function ClientsPage() {
                isActive: true,
            };
            batch.set(userRef, newUserProfile);
+           // After creating the user, immediately sign the admin back in
+           if(adminPassword) {
+              await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
+           } else {
+              await signOut(auth); // Sign out new user, admin will have to re-login manually
+           }
         }
 
         batch.update(clientRef, finalData);
@@ -96,7 +103,6 @@ export default function ClientsPage() {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
 
-        sessionStorage.setItem('authAction', 'creation');
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
         const newUserId = userCredential.user.uid;
 
@@ -151,14 +157,14 @@ export default function ClientsPage() {
     } finally {
         setIsSaving(false);
         // Re-authenticate the admin user if a new user was created
-        if (auth.currentUser?.uid !== adminUser.uid) {
-            await signOut(auth);
-            // This is a simplified re-login. In a real app, you'd securely store credentials or use a refresh token.
-            // For this context, we assume the admin's email is available. Password is not stored.
-            if(userInfo?.email) {
-                // This will fail if the password is not available.
-                // A better approach is to not auto-login the new user.
-                // For now, we just sign out the new user and the admin will be prompted to log in again by the system.
+        if (auth.currentUser?.email !== originalAdminEmail) {
+            if(adminPassword) {
+                await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
+            } else {
+                // If password isn't stored, we have to sign out the new user and let admin re-login.
+                await signOut(auth);
+                router.push('/'); // Force re-login
+                toast({ title: 'Sessão Expirada', description: 'Por favor, faça login novamente.' });
             }
         }
     }
@@ -404,3 +410,5 @@ export default function ClientsPage() {
     </>
   );
 }
+
+    
