@@ -168,27 +168,24 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
 
   const { data: appointment, isLoading: isLoadingAppointment } = useDoc<Appointment>(appointmentDocRef);
 
-  const clientId = appointment?.clientId;
-  const locationId = appointment?.locationId;
-  const technicianId = appointment?.technicianId;
-  
-  const clientDocRef = useMemo(() => 
-      (clientId) ? doc(firestore, `franchises/${franchiseId}/clients`, clientId) : null
-  , [firestore, franchiseId, clientId]);
-  
+  const clientDocRef = useMemo(() => {
+    if (!firestore || !franchiseId || !appointment?.clientId) return null;
+    return doc(firestore, `franchises/${franchiseId}/clients`, appointment.clientId);
+  }, [firestore, franchiseId, appointment?.clientId]);
   const { data: client, isLoading: isLoadingClient } = useDoc<Client>(clientDocRef);
 
-  const locationDocRef = useMemo(() =>
-    (locationId) ? doc(firestore, `franchises/${franchiseId}/locations`, locationId) : null
-  , [firestore, franchiseId, locationId]);
-
+  const locationDocRef = useMemo(() => {
+    if (!firestore || !franchiseId || !appointment?.locationId) return null;
+    return doc(firestore, `franchises/${franchiseId}/locations`, appointment.locationId);
+  }, [firestore, franchiseId, appointment?.locationId]);
   const { data: location, isLoading: isLoadingLocation } = useDoc<ServiceLocation>(locationDocRef);
 
-  const technicianDocRef = useMemo(() =>
-    (technicianId) ? doc(firestore, `franchises/${franchiseId}/technicians`, technicianId) : null
-  , [firestore, franchiseId, technicianId]);
-  
+  const technicianDocRef = useMemo(() => {
+    if (!firestore || !franchiseId || !appointment?.technicianId) return null;
+    return doc(firestore, `franchises/${franchiseId}/technicians`, appointment.technicianId);
+  }, [firestore, franchiseId, appointment?.technicianId]);
   const { data: technician, isLoading: isLoadingTechnician } = useDoc<Technician>(technicianDocRef);
+
 
   // UI / estado
   const [isSaving, setIsSaving] = useState(false);
@@ -207,9 +204,9 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
 
   // edição (quando já existe serviceReportId)
   const reportDocRef = useMemo(() => {
-    if (!appointment?.serviceReportId) return null;
+    if (!firestore || !franchiseId || !appointment?.serviceReportId) return null;
     return doc(firestore, `franchises/${franchiseId}/serviceReports`, appointment.serviceReportId);
-  }, [firestore, franchiseId, appointment]);
+  }, [firestore, franchiseId, appointment?.serviceReportId]);
 
   const { data: existingReport } = useDoc<ServiceReport>(reportDocRef);
 
@@ -718,3 +715,4 @@ export function ServiceReportForm({ appointmentId, franchiseId }: { appointmentI
     </>
   );
 }
+
