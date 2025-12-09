@@ -20,12 +20,13 @@ import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
 import { useCollection } from '@/firebase';
 import { Spinner } from '@/components/ui/spinner';
 import type { NewFranchiseFormData } from '@/components/dashboard/franchises/new-franchise-form';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { firebaseConfig } from '@/firebase/config';
 
 export default function FranchisesPage() {
   const { hasRole } = useAuth();
   const { toast } = useToast();
   const firestore = useFirestore();
-  const auth = useMemo(() => getAuth(), []);
 
   const franchisesQuery = useMemo(() => 
     firestore ? collection(firestore, 'franchises') : null
@@ -49,13 +50,18 @@ export default function FranchisesPage() {
   }
 
   const handleSaveFranchise = async (data: NewFranchiseFormData) => {
-    if (!firestore || !auth) return;
+    if (!firestore) return;
     
     setIsSaving(true);
     
+    // Create a temporary, secondary Firebase app instance for user creation
+    const tempAppName = `temp-franchise-creation-${Date.now()}`;
+    const tempApp = initializeApp(firebaseConfig, tempAppName);
+    const tempAuth = getAuth(tempApp);
+
     try {
-      // 1. Create the user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, data.ownerEmail, data.password);
+      // 1. Create the user in Firebase Auth using the temporary instance
+      const userCredential = await createUserWithEmailAndPassword(tempAuth, data.ownerEmail, data.password);
       const ownerUid = userCredential.user.uid;
 
       // 2. Prepare Firestore batch write for atomicity
@@ -113,6 +119,8 @@ export default function FranchisesPage() {
       });
     } finally {
       setIsSaving(false);
+      // Clean up the temporary app instance
+      await deleteApp(tempApp);
     }
   };
 
