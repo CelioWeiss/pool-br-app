@@ -17,7 +17,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useFirestore, FirestorePermissionError, errorEmitter, useDoc } from "@/firebase";
-import { writeBatch, doc, collection } from "firebase/firestore";
+import { writeBatch, doc, collection, getDoc, setDoc } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -62,9 +63,9 @@ export function ServiceReportForm({ appointment, client, location, technician }:
   const { toast } = useToast();
   const router = useRouter();
   const firestore = useFirestore();
+  const storage = useMemo(() => firestore ? getStorage(firestore.app) : null, [firestore]);
 
-  const [previews, setPreviews] = useState<(string | null)[]>([null, null, null, null]);
-  const fileInputRefs = [useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null), useRef<HTMLInputElement>(null)];
+  const [previews, setPreviews] = useState<( { file: File; dataUrl: string } | null)[]>([null, null, null, null]);
   
   const [parameters, setParameters] = useState<Record<string, number>>(() =>
     waterParameters.reduce((acc, p) => ({ ...acc, [p.key]: p.defaultValue }), {})
@@ -100,7 +101,9 @@ export function ServiceReportForm({ appointment, client, location, technician }:
         setServicesPerformed(existingReport.servicesPerformed || []);
         setMissingProducts(existingReport.missingProducts || []);
         setObservations(existingReport.observations || "");
-        setPreviews([...(existingReport.photoUrls || []), null, null, null, null].slice(0, 4));
+        
+        const existingImagePreviews = (existingReport.photoUrls || []).map(url => ({ file: new File([], url), dataUrl: url }));
+        setPreviews([...existingImagePreviews, null, null, null, null].slice(0, 4));
     }
   }, [existingReport]);
 
@@ -119,7 +122,7 @@ export function ServiceReportForm({ appointment, client, location, technician }:
       const reader = new FileReader();
       reader.onloadend = () => {
         const newPreviews = [...previews];
-        newPreviews[index] = reader.result as string;
+        newPreviews[index] = { file, dataUrl: reader.result as string };
         setPreviews(newPreviews);
       };
       reader.readAsDataURL(file);
@@ -130,9 +133,6 @@ export function ServiceReportForm({ appointment, client, location, technician }:
     const newPreviews = [...previews];
     newPreviews[index] = null;
     setPreviews(newPreviews);
-    if(fileInputRefs[index].current) {
-        fileInputRefs[index].current.value = "";
-    }
   }
   
   const handleParameterChange = (key: string, value: number[]) => {
@@ -154,22 +154,55 @@ export function ServiceReportForm({ appointment, client, location, technician }:
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!firestore || existingReport) return;
+
+    if (!firestore || !storage) {
+        toast({
+            variant: "destructive",
+            title: "Erro de Inicialização",
+            description: "Os serviços do Firebase não estão prontos. Tente novamente."
+        });
+        return;
+    }
+
+    if (existingReport) {
+        toast({
+            variant: "default",
+            title: "Relatório já finalizado",
+            description: "Este atendimento já possui um relatório salvo."
+        });
+        return;
+    }
     
     setIsSaving(true);
-    const { franchiseId, clientId, locationId } = appointment;
-
+    
     try {
+        const { franchiseId, clientId, locationId, id: appointmentId } = appointment;
+
+        // 1. Upload das imagens
+        const uploadPromises = previews.map(async (preview, index) => {
+            if (preview && preview.file && !preview.dataUrl.startsWith('http')) {
+                const filePath = `service-reports/${franchiseId}/${appointmentId}/${uuidv4()}-${preview.file.name}`;
+                const storageRef = ref(storage, filePath);
+                await uploadBytes(storageRef, preview.file);
+                return getDownloadURL(storageRef);
+            }
+            if (preview && preview.dataUrl.startsWith('http')) {
+                return preview.dataUrl; // Manter URL existente
+            }
+            return null;
+        });
+
+        const photoUrls = (await Promise.all(uploadPromises)).filter((url): url is string => !!url);
+
+        // 2. Preparar dados e referências
         const batch = writeBatch(firestore);
-        
         const newReportId = uuidv4();
         const reportRef = doc(firestore, `franchises/${franchiseId}/serviceReports`, newReportId);
 
-        const photoUrls = previews.filter((p): p is string => p !== null);
-
-        const newReportData: Omit<ServiceReport, 'id'> = {
+        const newReportData: ServiceReport = {
+            id: newReportId,
             franchiseId,
-            appointmentId: appointment.id,
+            appointmentId,
             technicianId: technician.id,
             clientId,
             locationId,
@@ -180,15 +213,16 @@ export function ServiceReportForm({ appointment, client, location, technician }:
             photoUrls,
             createdAt: new Date().toISOString(),
         };
-        
-        batch.set(reportRef, { ...newReportData, id: newReportId });
 
+        batch.set(reportRef, newReportData);
+        
         const appointmentRef = doc(firestore, `franchises/${franchiseId}/appointments`, appointment.id);
         batch.update(appointmentRef, {
-            serviceReportId: reportRef.id,
+            serviceReportId: newReportId,
             status: 'completed',
         });
-
+        
+        // 3. Commit
         await batch.commit();
 
         setIsSuccess(true);
@@ -202,7 +236,7 @@ export function ServiceReportForm({ appointment, client, location, technician }:
     } catch (err: any) {
         console.error("Error submitting report:", err);
         const permissionError = new FirestorePermissionError({
-          path: `franchises/${franchiseId}/serviceReports`,
+          path: `franchises/${appointment.franchiseId}/serviceReports`,
           operation: 'create',
           requestResourceData: {}, // simplified for brevity
         });
@@ -354,7 +388,7 @@ export function ServiceReportForm({ appointment, client, location, technician }:
                           <Label htmlFor={`photo-${index}`} className="sr-only">Foto {index + 1}</Label>
                           {previews[index] ? (
                             <div className="relative">
-                                <Image src={previews[index] as string} alt={`Preview ${index+1}`} width={300} height={400} className="rounded-md object-cover aspect-[3/4] w-full" />
+                                <Image src={previews[index]!.dataUrl} alt={`Preview ${index+1}`} width={300} height={400} className="rounded-md object-cover aspect-[3/4] w-full" />
                                 <Button type="button" size="icon" variant="destructive" className="absolute top-2 right-2 h-6 w-6" onClick={() => clearPreview(index)}>
                                     <X size={14}/>
                                 </Button>
@@ -366,7 +400,7 @@ export function ServiceReportForm({ appointment, client, location, technician }:
                                         <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
                                         <p className="text-xs text-muted-foreground">Clique para enviar</p>
                                     </div>
-                                    <Input id={`photo-${index}`} name={`photo-${index}`} type="file" className="hidden" accept="image/png, image/jpeg, image/webp" onChange={(e) => handleFileChange(e, index)} ref={fileInputRefs[index]} />
+                                    <Input id={`photo-${index}`} name={`photo-${index}`} type="file" className="hidden" accept="image/png, image/jpeg, image/webp" onChange={(e) => handleFileChange(e, index)} />
                                 </Label>
                             </div> 
                           )}
@@ -430,3 +464,5 @@ export function ServiceReportForm({ appointment, client, location, technician }:
     </form>
   );
 }
+
+    
