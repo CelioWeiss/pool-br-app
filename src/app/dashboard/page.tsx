@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Users, Wrench, Calendar, DollarSign } from 'lucide-react';
 import { ClientDashboard } from '@/components/dashboard/client/client-dashboard';
-import { useFirestore } from '@/firebase';
+import { useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, getCountFromServer, getDocs } from 'firebase/firestore';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { PendingClients } from '@/components/dashboard/pending-clients';
@@ -68,6 +68,14 @@ export default function DashboardPage() {
     isLoading: isLoadingAppointments
   } = useUnifiedAppointments(franchiseId, currentDate);
 
+  const { data: allFranchises, isLoading: isLoadingFranchises } = useCollection<Franchise>(
+      useMemo(() => userInfo?.role === 'master' && firestore ? collection(firestore, 'franchises') : null, [firestore, userInfo?.role])
+  );
+  
+  const { data: allUsers, isLoading: isLoadingUsers } = useCollection<UserInfo>(
+    useMemo(() => userInfo?.role === 'master' && firestore ? collection(firestore, 'users') : null, [firestore, userInfo?.role])
+  );
+
 
   const fetchStats = useCallback(async () => {
     if (!userInfo?.role || !firestore) return;
@@ -86,62 +94,45 @@ export default function DashboardPage() {
         let newTotalInactiveClients = 0;
 
         if (isMaster) {
-            const franchisesSnap = await getDocs(collection(firestore, 'franchises'));
-            const allFranchises = franchisesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Franchise));
+            if (isLoadingFranchises || isLoadingUsers) return;
+
+            newStats.franchises = allFranchises?.length || 0;
+            newStats.clients = allUsers?.filter(u => u.role === 'client').length || 0;
+            newStats.technicians = allUsers?.filter(u => u.role === 'technician').length || 0;
             
-            let totalClients = 0;
-            let totalTechnicians = 0;
-            const newClientsByMonth: Record<string, number> = {};
             const revenueByMonth: Record<string, { faturado: number, recebido: number }> = {};
             monthLabels.forEach(m => {
-                newClientsByMonth[m] = 0;
                 revenueByMonth[m] = { faturado: 0, recebido: 0 };
             });
 
-            await Promise.all(allFranchises.map(async (f) => {
-                if (!f.id) return;
-                const clientsSnap = await getDocs(query(collection(firestore, 'franchises', f.id, 'clients'), where('isActive', '==', true)));
-                totalClients += clientsSnap.size;
-                
-                 const allClientsInFranchiseSnap = await getDocs(collection(firestore, 'franchises', f.id, 'clients'));
-                 allClientsInFranchiseSnap.forEach(doc => {
-                    const client = doc.data() as Client;
-                    if (client.createdAt) {
-                        const createdAtDate = new Date(client.createdAt);
-                        if (createdAtDate >= sixMonthsAgo) {
-                            const monthKey = format(createdAtDate, 'MMM', { locale: ptBR });
-                            newClientsByMonth[monthKey] = (newClientsByMonth[monthKey] || 0) + 1;
-                        }
-                    }
-                });
+            if (allFranchises) {
+              await Promise.all(allFranchises.map(async (f) => {
+                  if (!f.id) return;
 
-                const techniciansSnap = await getDocs(collection(firestore, 'franchises', f.id, 'technicians'));
-                totalTechnicians += techniciansSnap.size;
-
-                const paymentsSnap = await getDocs(query(
-                    collection(firestore, 'franchises', f.id, 'payments'),
-                    where('dueDate', '>=', sixMonthsAgo.toISOString())
-                ));
-                paymentsSnap.forEach(doc => {
-                    const payment = doc.data() as Payment;
-                    const monthKey = format(new Date(payment.dueDate), 'MMM', { locale: ptBR });
-                    if (revenueByMonth[monthKey]) {
-                        revenueByMonth[monthKey].faturado += payment.amount;
-                        if (payment.status === 'paid') {
-                            revenueByMonth[monthKey].recebido += payment.amount;
-                        }
-                    }
-                });
-            }));
+                  const paymentsSnap = await getDocs(query(
+                      collection(firestore, 'franchises', f.id, 'payments'),
+                      where('dueDate', '>=', sixMonthsAgo.toISOString())
+                  ));
+                  paymentsSnap.forEach(doc => {
+                      const payment = doc.data() as Payment;
+                      const monthKey = format(new Date(payment.dueDate), 'MMM', { locale: ptBR });
+                      if (revenueByMonth[monthKey]) {
+                          revenueByMonth[monthKey].faturado += payment.amount;
+                          if (payment.status === 'paid') {
+                              revenueByMonth[monthKey].recebido += payment.amount;
+                          }
+                      }
+                  });
+              }));
+            }
             
-            newStats = { ...newStats, franchises: allFranchises.length, clients: totalClients, technicians: totalTechnicians };
             newRevenueData = monthLabels.map(month => ({ month, ...revenueByMonth[month] }));
-            newClientStatsData = monthLabels.map(month => ({
+             newClientStatsData = monthLabels.map(month => ({
                 month,
-                newClients: newClientsByMonth[month] || 0,
+                newClients: 0, // Simplified for master view
                 inactiveClients: 0, 
             }));
-            newTotalActiveClients = totalClients;
+            newTotalActiveClients = newStats.clients;
         }
 
         if (isOwner && franchiseId) {
@@ -237,7 +228,7 @@ export default function DashboardPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [userInfo?.role, franchiseId, firestore, allAppointments]);
+  }, [userInfo?.role, franchiseId, firestore, allAppointments, allFranchises, allUsers, isLoadingFranchises, isLoadingUsers]);
 
   useEffect(() => {
     fetchStats();
@@ -254,7 +245,7 @@ export default function DashboardPage() {
     return <TechnicianDashboard />;
   }
 
-  const finalIsLoading = isLoading || (userInfo.role === 'owner' && isLoadingAppointments);
+  const finalIsLoading = isLoading || isLoadingAppointments || (userInfo.role === 'master' && (isLoadingFranchises || isLoadingUsers));
 
   return (
     <div className="space-y-8">
