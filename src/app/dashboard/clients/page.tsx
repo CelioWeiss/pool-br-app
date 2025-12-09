@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useMemo, useEffect, use } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,7 +16,7 @@ import type { Client, UserInfo } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useCollection, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, doc, writeBatch, updateDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, getAuth } from 'firebase/auth';
+import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -27,7 +27,6 @@ export default function ClientsPage() {
   const firestore = useFirestore();
   const auth = useMemo(() => getAuth(), []);
   const router = useRouter();
-  const params = use(useParams());
 
   const franchiseId = userInfo?.franchiseId;
   
@@ -69,6 +68,7 @@ export default function ClientsPage() {
 
         // Handle creating a user for an existing client that doesn't have one
         if (!editingClient.userId && clientData.password) {
+           sessionStorage.setItem('authAction', 'creation');
            const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
            const newUserId = userCredential.user.uid;
            finalData.userId = newUserId;
@@ -101,6 +101,7 @@ export default function ClientsPage() {
             throw new Error("A senha é obrigatória para novos clientes.");
         }
         
+        sessionStorage.setItem('authAction', 'creation');
         const userCredential = await createUserWithEmailAndPassword(auth, clientData.contactEmail, clientData.password);
         const newUserId = userCredential.user.uid;
 
@@ -401,5 +402,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    
