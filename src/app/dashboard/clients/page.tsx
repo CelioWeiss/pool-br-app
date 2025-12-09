@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PlusCircle, MoreHorizontal, Edit, UserX, UserCheck } from 'lucide-react';
+import { PlusCircle, MoreHorizontal, Edit, UserX, UserCheck, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { NewClientForm, type NewClientFormData } from '@/components/dashboard/clients/new-client-form';
@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
 import { firebaseConfig } from '@/firebase/config';
+import { Input } from '@/components/ui/input';
 
 export default function ClientsPage() {
   const { userInfo, user: adminUser } = useAuth();
@@ -37,6 +38,7 @@ export default function ClientsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [clientToDeactivate, setClientToDeactivate] = useState<Client | null>(null);
   const [clientToActivate, setClientToActivate] = useState<Client | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const clientsQuery = useMemo(() => 
     firestore && franchiseId ? collection(firestore, 'franchises', franchiseId, 'clients') : null
@@ -52,7 +54,6 @@ export default function ClientsPage() {
     setIsSaving(true);
     const isEditing = !!clientId;
     
-    // Create a temporary, secondary Firebase app instance for user creation
     const tempAppName = `temp-user-creation-${Date.now()}`;
     const tempApp = initializeApp(firebaseConfig, tempAppName);
     const tempAuth = getAuth(tempApp);
@@ -223,7 +224,12 @@ export default function ClientsPage() {
   const { activeClients, inactiveClients } = useMemo(() => {
     const active: Client[] = [];
     const inactive: Client[] = [];
-    (clientList || []).forEach(c => {
+
+    const filteredList = (clientList || []).filter(c =>
+        c.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    filteredList.forEach(c => {
         if (c.isActive === false) {
             inactive.push(c);
         } else {
@@ -231,7 +237,7 @@ export default function ClientsPage() {
         }
     });
     return { activeClients: active, inactiveClients: inactive };
-  }, [clientList]);
+  }, [clientList, searchTerm]);
 
   if (!isOwner || !franchiseId) {
     return <p>Acesso negado.</p>;
@@ -271,14 +277,20 @@ export default function ClientsPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <div>
                 <CardTitle>Clientes Ativos</CardTitle>
                 <CardDescription>Lista de clientes ativos da sua franquia.</CardDescription>
               </div>
-              {!isLoadingClients && activeClients && (
-                <Badge variant="secondary">{activeClients.length} cliente(s)</Badge>
-              )}
+              <div className="relative w-full max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Pesquisar cliente..." 
+                    className="pl-9"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -404,5 +416,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    
