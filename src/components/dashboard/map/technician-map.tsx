@@ -5,6 +5,7 @@ import React, { useEffect, useMemo } from 'react';
 import { APIProvider, Map, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { Wrench } from 'lucide-react';
 import type { Technician, Appointment, Client, ServiceLocation } from '@/lib/types';
+import { useAuth } from '@/hooks/use-auth';
 
 
 function RoutePolyline({ route }: { route: google.maps.LatLngLiteral[] }) {
@@ -89,6 +90,15 @@ const MapContent = ({ technicians, appointments, locations }: { technicians: Tec
 }
 
 export function TechnicianMap({ apiKey, technicians, appointments, locations }: { apiKey?: string, technicians: Technician[], appointments: Appointment[], locations: ServiceLocation[] }) {
+  const { hasRole } = useAuth();
+  
+  if (!hasRole(['owner', 'master'])) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <p>Acesso negado.</p>
+      </div>
+    )
+  }
 
   if (!apiKey) {
     return (

@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { useMemo } from 'react';
 
 export default function MapPage() {
-  const { userInfo, hasRole } = useAuth();
+  const { userInfo } = useAuth();
   const firestore = useFirestore();
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -33,16 +33,7 @@ export default function MapPage() {
   }, [firestore, franchiseId]);
   const { data: appointments, isLoading: isLoadingAppointments } = useCollection<Appointment>(appointmentsCollection);
 
-
   const isLoading = isLoadingTechnicians || isLoadingLocations || isLoadingAppointments;
-
-  if (!hasRole(['owner', 'master'])) {
-    return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <p>Acesso negado.</p>
-      </div>
-    )
-  }
 
   return (
     <div>
