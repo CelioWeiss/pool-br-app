@@ -15,11 +15,11 @@ import { Spinner } from '@/components/ui/spinner';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { NewTechnicianForm, type NewTechnicianFormData } from '@/components/dashboard/technicians/new-technician-form';
 import { useToast } from '@/hooks/use-toast';
-import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 
 
 export default function TechniciansPage() {
-  const { userInfo, hasRole } = useAuth();
+  const { userInfo, hasRole, user: adminUser } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
   const auth = useMemo(() => getAuth(), []);
@@ -53,11 +53,14 @@ export default function TechniciansPage() {
   }
 
   const handleSaveTechnician = async (data: NewTechnicianFormData) => {
-    if (!firestore || !franchiseId) return;
+    if (!firestore || !franchiseId || !auth || !adminUser?.email) return;
     setIsSaving(true);
     
     const batch = writeBatch(firestore);
     const [firstName, ...lastNameParts] = data.name.split(' ');
+    
+    const originalAdminEmail = adminUser.email;
+    const adminPassword = sessionStorage.getItem('adminPassword');
 
     try {
       if (editingTechnician) {
@@ -141,6 +144,15 @@ export default function TechniciansPage() {
       });
     } finally {
       setIsSaving(false);
+      // Re-authenticate admin if a new user was created
+      if (!editingTechnician && auth.currentUser?.email !== originalAdminEmail) {
+        if (adminPassword) {
+            await signInWithEmailAndPassword(auth, originalAdminEmail, adminPassword);
+        } else {
+            await signOut(auth);
+            router.push('/');
+        }
+      }
     }
   };
 

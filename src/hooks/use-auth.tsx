@@ -72,15 +72,16 @@ function useProvideAuth() {
 
 
   useEffect(() => {
-    if (firebaseUser && !firebaseUser.isAnonymous) {
-      if (
-        !isUserInfoLoading && 
-        userInfo && 
-        (pathname === '/' || pathname.startsWith('/auth'))
-      ) {
-         router.push('/dashboard');
-      }
-
+    // Only redirect if a real user is logged in, and their info is loaded,
+    // and they are on the landing page.
+    if (
+      firebaseUser &&
+      !firebaseUser.isAnonymous &&
+      !isUserInfoLoading &&
+      userInfo &&
+      pathname === '/'
+    ) {
+      router.push('/dashboard');
     }
   }, [firebaseUser, isUserInfoLoading, userInfo, pathname, router]);
 
@@ -194,5 +195,3 @@ export function useAuth() {
   }
   return context;
 }
-
-    
