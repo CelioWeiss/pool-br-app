@@ -7,6 +7,7 @@ import { Check, Clock, X, Microscope, Wrench, Image as ImageIcon, Droplets, List
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import { useFirestore, useDoc } from '@/firebase';
 import { doc } from 'firebase/firestore';
@@ -56,7 +57,7 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
     const hasAnyParameter = parameters.some(p => p.value !== undefined && p.value !== null);
 
     return (
-        <div className="space-y-8">
+        <CardContent className="pt-6 space-y-8">
             <ReportSection title="Parâmetros da Água" icon={Droplets} hasData={hasAnyParameter}>
                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     {parameters.map(p => (
@@ -104,12 +105,12 @@ const ServiceReportDetails = ({ report }: { report: ServiceReport }) => {
                     ))}
                 </div>
             </ReportSection>
-        </div>
+        </CardContent>
     );
 };
 
 
-const AppointmentAccordionContent = ({ appointment }: { appointment: Appointment }) => {
+const AppointmentReport = ({ appointment, technicianName }: { appointment: Appointment, technicianName: string }) => {
     const firestore = useFirestore();
     const { franchiseId, serviceReportId } = appointment;
 
@@ -119,25 +120,31 @@ const AppointmentAccordionContent = ({ appointment }: { appointment: Appointment
 
     const { data: serviceReport, isLoading } = useDoc<ServiceReport>(reportDocRef);
 
-    if (isLoading) {
-        return (
-            <div className="flex items-center justify-center p-8">
-                <Spinner />
-                <p className="ml-2 text-muted-foreground">Carregando relatório...</p>
-            </div>
-        );
-    }
-    
-    if (serviceReport) {
-        return <ServiceReportDetails report={serviceReport} />;
-    }
-
     return (
-        <div className="text-center py-6">
-            <p className="text-muted-foreground text-sm mb-4">
-                O relatório para este atendimento ainda não foi finalizado pelo técnico.
-            </p>
-        </div>
+        <Card className="w-full">
+            <CardHeader className="flex flex-row items-center justify-between">
+                 <div>
+                    <CardTitle>{format(new Date(appointment.scheduledDateTime), "dd 'de' MMMM, yyyy", { locale: ptBR })}</CardTitle>
+                    <p className="text-sm text-muted-foreground">Técnico: {technicianName}</p>
+                </div>
+                 <Badge className="bg-green-100 text-green-800 border-green-200">
+                    <Check className="mr-1 h-3 w-3" />
+                    Concluído
+                </Badge>
+            </CardHeader>
+            {isLoading && (
+                <div className="flex items-center justify-center p-8">
+                    <Spinner />
+                    <p className="ml-2 text-muted-foreground">Carregando relatório...</p>
+                </div>
+            )}
+            {serviceReport && <ServiceReportDetails report={serviceReport} />}
+            {!serviceReport && !isLoading && (
+                 <CardContent>
+                    <p className="text-muted-foreground text-sm text-center py-4">Relatório não encontrado.</p>
+                </CardContent>
+            )}
+        </Card>
     );
 }
 
@@ -148,10 +155,24 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
     [technicians]
   );
 
-  const sortedAppointments = useMemo(() => 
-    [...appointments].sort((a, b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime()), 
-    [appointments]
-  );
+  const { completedWithReport, otherAppointments } = useMemo(() => {
+    const completedWithReport: Appointment[] = [];
+    const otherAppointments: Appointment[] = [];
+
+    appointments.forEach(appt => {
+        if (appt.status === 'completed' && appt.serviceReportId) {
+            completedWithReport.push(appt);
+        } else {
+            otherAppointments.push(appt);
+        }
+    });
+
+    completedWithReport.sort((a,b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
+    otherAppointments.sort((a,b) => new Date(b.scheduledDateTime).getTime() - new Date(a.scheduledDateTime).getTime());
+
+    return { completedWithReport, otherAppointments };
+
+  }, [appointments]);
   
   if (!appointments || appointments.length === 0) {
     return <p className="text-muted-foreground text-center py-8">Nenhum histórico de atendimento encontrado.</p>;
@@ -165,31 +186,40 @@ export function AppointmentHistory({ appointments, technicians }: { appointments
   };
 
   return (
-    <Accordion type="single" collapsible className="w-full space-y-2">
-      {sortedAppointments.map((appt) => {
-        const technician = techniciansMap.get(appt.technicianId);
-        const currentStatus = statusInfo[appt.status] || statusInfo.scheduled;
-        
-        return (
-          <AccordionItem value={appt.id} key={appt.id}>
-            <AccordionTrigger className="p-4 bg-card hover:bg-accent rounded-lg border data-[state=open]:rounded-b-none" disabled={!appt.serviceReportId && appt.status !== 'in_progress'}>
-              <div className="flex items-center justify-between w-full">
-                <div className="flex flex-col text-left">
-                  <span className="font-bold">{format(new Date(appt.scheduledDateTime), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
-                  <span className="text-sm text-muted-foreground">Técnico: {technician?.firstName || 'N/A'}</span>
-                </div>
-                <Badge variant={currentStatus.variant} className={cn(currentStatus.className, 'whitespace-nowrap')}>
-                  <currentStatus.icon className="mr-1 h-3 w-3" />
-                  {currentStatus.label}
-                </Badge>
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="p-6 border border-t-0 rounded-lg rounded-t-none bg-card">
-               <AppointmentAccordionContent appointment={appt} />
-            </AccordionContent>
-          </AccordionItem>
-        )
-      })}
-    </Accordion>
+    <div className="space-y-4">
+        {completedWithReport.map(appt => {
+            const technician = techniciansMap.get(appt.technicianId);
+            const techName = technician ? `${technician.firstName} ${technician.lastName}` : 'N/A';
+            return <AppointmentReport key={appt.id} appointment={appt} technicianName={techName} />
+        })}
+
+        {otherAppointments.length > 0 && (
+             <Accordion type="single" collapsible className="w-full space-y-2">
+                {otherAppointments.map((appt) => {
+                    const technician = techniciansMap.get(appt.technicianId);
+                    const currentStatus = statusInfo[appt.status] || statusInfo.scheduled;
+                    
+                    return (
+                    <AccordionItem value={appt.id} key={appt.id}>
+                        <AccordionTrigger className="p-4 bg-card hover:bg-accent rounded-lg border data-[state=open]:rounded-b-none" disabled>
+                        <div className="flex items-center justify-between w-full">
+                            <div className="flex flex-col text-left">
+                            <span className="font-bold">{format(new Date(appt.scheduledDateTime), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
+                            <span className="text-sm text-muted-foreground">Técnico: {technician?.firstName || 'N/A'}</span>
+                            </div>
+                            <Badge variant={currentStatus.variant} className={cn(currentStatus.className, 'whitespace-nowrap')}>
+                            <currentStatus.icon className="mr-1 h-3 w-3" />
+                            {currentStatus.label}
+                            </Badge>
+                        </div>
+                        </AccordionTrigger>
+                    </AccordionItem>
+                    )
+                })}
+            </Accordion>
+        )}
+    </div>
   );
 }
+
+    

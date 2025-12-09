@@ -275,7 +275,8 @@ export function ServiceReportForm(props: {
 
         // sucesso -> remove da fila
         removePending(pending.id);
-      } catch {
+      } catch (err) {
+        console.error("Sync failed for a pending report:", err)
         // se falhar, mantém na fila e segue (tenta de novo na próxima reconexão)
       }
     }
@@ -453,7 +454,7 @@ export function ServiceReportForm(props: {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {!isOnline && (
-        <Alert>
+        <Alert variant="destructive">
           <WifiOff className="h-4 w-4" />
           <AlertTitle>Modo offline</AlertTitle>
           <AlertDescription>
