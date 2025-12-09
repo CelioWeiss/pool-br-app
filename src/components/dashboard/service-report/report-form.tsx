@@ -1,29 +1,123 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useCallback, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { collection, doc, writeBatch, getDoc, setDoc, updateDoc } from "firebase/firestore";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Spinner } from "@/components/ui/spinner";
+import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
+
+import { UploadCloud, X, CheckCircle, WifiOff, RefreshCw } from "lucide-react";
+
+import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
+
+import { useFirestore, useStorage, useDoc, db, storage } from "@/firebase";
+import { writeBatch, doc, collection, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
-import { db, storage } from "@/firebase"; // Importação direta (sem import dinâmico)
 
-// CONSTANTES (simplificadas para teste)
+/** =========================
+ *  CONSTANTES
+ *  ========================= */
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
   { name: "pH", key: "ph", min: 6, max: 9, step: 0.1, defaultValue: 7.4, unit: "" },
+  { name: "Alcalinidade", key: "alkalinity", min: 0, max: 200, step: 10, defaultValue: 100, unit: "ppm" },
+  { name: "Ác. Cianúrico (CYA)", key: "cya", min: 0, max: 100, step: 5, defaultValue: 30, unit: "ppm" },
+  { name: "Dureza Cálcica", key: "calciumHardness", min: 0, max: 500, step: 10, defaultValue: 250, unit: "ppm" },
+  { name: "ORP", key: "orp", min: 0, max: 1000, step: 10, defaultValue: 650, unit: "mV" },
+  { name: "TDS", key: "tds", min: 0, max: 3000, step: 100, defaultValue: 1500, unit: "ppm" },
+  { name: "Temperatura", key: "temperature", min: 0, max: 40, step: 1, defaultValue: 25, unit: "°C" },
 ];
 
 const servicesPerformedItems = [
   { id: "asp_filtrando", label: "Aspiração filtrando" },
   { id: "asp_drenando", label: "Aspiração drenando" },
+  { id: "escovacao", label: "Escovação" },
+  { id: "peneiracao", label: "Peneiração" },
+  { id: "limpeza_bordas", label: "Limpeza de bordas" },
+  { id: "limpeza_pre_filtro", label: "Limpeza pré-filtro" },
+  { id: "retrolavagem_filtro", label: "Retrolavagem do elemento filtrante" },
+  { id: "lavagem_filtro_poliester", label: "Lavagem filtro poliéster (Sistema Dry Pump IGUI)" },
 ];
 
 const missingProductsItems = [
   { id: "cloro_granulado", label: "Cloro Granulado 10kg" },
   { id: "barrilha_leve", label: "Barrilha leve (elevador de pH)" },
+  { id: "bicarbonato_sodio", label: "Bicarbonato de sódio (elevador de alcalinidade)" },
+  { id: "clarificante", label: "Clarificante" },
+  { id: "algicida_manutencao", label: "Algicida manutenção" },
+  { id: "algicida_choque", label: "Algicida choque" },
+  { id: "oxidante", label: "Oxidante" },
+  { id: "gel_clarificante", label: "Gel clarificante" },
+  { id: "eliminador_oleosidade", label: "Eliminador de oleosidade" },
+  { id: "acido_cloridrico", label: "Ácido clorídrico (redutor de pH)" },
+  { id: "sal_nao_iodado", label: "Sal não iodado" },
 ];
 
-// Funções auxiliares
+/** =========================
+ *  OFFLINE QUEUE (localStorage)
+ *  ========================= */
+type PendingReport = {
+  id: string;
+  createdAt: string;
+
+  franchiseId: string;
+  appointmentId: string;
+  clientId: string;
+  locationId: string;
+  technicianId: string;
+
+  parameters: Record<string, number>;
+  servicesPerformed: string[];
+  missingProducts: string[];
+  observations: string;
+
+  // fotos (dataURLs) — para enviar depois quando voltar a internet
+  photoDataUrls: string[];
+  serviceReportId?: string;
+};
+
+const OFFLINE_QUEUE_KEY = "pool_service_reports_pending_v1";
+
+function safeParse<T>(value: string | null): T | null {
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+function readQueue(): PendingReport[] {
+  return safeParse<PendingReport[]>(localStorage.getItem(OFFLINE_QUEUE_KEY)) ?? [];
+}
+
+function writeQueue(queue: PendingReport[]) {
+  localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+}
+
+function enqueuePending(report: PendingReport) {
+  const q = readQueue();
+  q.unshift(report);
+  writeQueue(q);
+}
+
+function removePending(id: string) {
+  writeQueue(readQueue().filter((x) => x.id !== id));
+}
+
+/** =========================
+ *  IMAGE HELPERS (mobile friendly)
+ *  ========================= */
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -33,527 +127,648 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-// COMPONENTE SIMPLIFICADO PARA TESTE
-export function ServiceReportForm({ 
-  appointmentId, 
-  franchiseId 
-}: { 
-  appointmentId: string; 
+async function compressDataUrl(dataUrl: string, maxSide = 1400, quality = 0.68): Promise<string> {
+  if (!dataUrl.startsWith("data:image")) return dataUrl;
+
+  const img = document.createElement("img");
+  img.src = dataUrl;
+
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Falha ao carregar imagem para compressão"));
+  });
+
+  const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", quality);
+}
+
+/** =========================
+ *  COMPONENTE PRINCIPAL
+ *  ========================= */
+export function ServiceReportForm(props: {
+  appointmentId: string;
   franchiseId: string;
 }) {
+  const { appointmentId, franchiseId } = props;
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const { toast } = useToast();
+
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
+  const [client, setClient] = useState<Client | null>(null);
+  const [location, setLocation] = useState<ServiceLocation | null>(null);
+  const [technician, setTechnician] = useState<Technician | null>(null);
   
-  // Dados
-  const [appointment, setAppointment] = useState<any>(null);
-  const [client, setClient] = useState<any>(null);
-  const [location, setLocation] = useState<any>(null);
-  
-  // Formulário
-  const [parameters, setParameters] = useState<Record<string, number>>(
-    Object.fromEntries(waterParameters.map((p) => [p.key, p.defaultValue]))
+  // UI / estado
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== "undefined" ? navigator.onLine : true));
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // formulário
+  const [previews, setPreviews] = useState<(string | null)[]>([null, null, null, null]);
+  const [parameters, setParameters] = useState<Record<string, number>>(() =>
+    Object.fromEntries(waterParameters.map((p) => [p.key, p.defaultValue])) as Record<string, number>
   );
   const [servicesPerformed, setServicesPerformed] = useState<string[]>([]);
   const [missingProducts, setMissingProducts] = useState<string[]>([]);
   const [observations, setObservations] = useState("");
-  const [testMode, setTestMode] = useState(true); // Modo teste: sem fotos
 
-  // Carregar dados básicos
+  // Carregamento de dados inicial
   useEffect(() => {
     async function loadData() {
+      if (!appointmentId || !franchiseId) return;
+
+      setIsLoading(true);
       try {
-        // 1. Testar Firestore primeiro
-        console.log("Testando conexão com Firestore...");
-        
-        // Carregar appointment
         const appointmentDoc = await getDoc(doc(db, `franchises/${franchiseId}/appointments`, appointmentId));
+        if (!appointmentDoc.exists()) throw new Error("Atendimento não encontrado");
         
-        if (!appointmentDoc.exists()) {
-          throw new Error("Atendimento não encontrado");
-        }
-        
-        const appointmentData = { id: appointmentDoc.id, ...appointmentDoc.data() };
+        const appointmentData = { id: appointmentDoc.id, ...appointmentDoc.data() } as Appointment;
         setAppointment(appointmentData);
-        console.log("Appointment carregado:", appointmentData.id);
+
+        const [clientDoc, locationDoc, techDoc, reportDoc] = await Promise.all([
+          appointmentData.clientId ? getDoc(doc(db, `franchises/${franchiseId}/clients`, appointmentData.clientId)) : null,
+          appointmentData.locationId ? getDoc(doc(db, `franchises/${franchiseId}/locations`, appointmentData.locationId)) : null,
+          appointmentData.technicianId ? getDoc(doc(db, `franchises/${franchiseId}/technicians`, appointmentData.technicianId)) : null,
+          appointmentData.serviceReportId ? getDoc(doc(db, `franchises/${franchiseId}/serviceReports`, appointmentData.serviceReportId)) : null,
+        ]);
         
-        // Carregar cliente
-        if (appointmentData.clientId) {
-          const clientDoc = await getDoc(doc(db, `franchises/${franchiseId}/clients`, appointmentData.clientId));
-          if (clientDoc.exists()) {
-            const clientData = { id: clientDoc.id, ...clientDoc.data() };
-            setClient(clientData);
-            console.log("Cliente carregado:", clientData.name);
+        if (clientDoc?.exists()) setClient({ id: clientDoc.id, ...clientDoc.data() } as Client);
+        if (locationDoc?.exists()) setLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
+        if (techDoc?.exists()) setTechnician({ id: techDoc.id, ...techDoc.data() } as Technician);
+        
+        if (reportDoc?.exists()) {
+          const existingReport = reportDoc.data() as ServiceReport;
+          const paramKeys = waterParameters.map((p) => p.key);
+          const loadedParams: Record<string, number> = {};
+          for (const key of paramKeys) {
+            loadedParams[key] = (existingReport as any)[key] ?? waterParameters.find((p) => p.key === key)?.defaultValue ?? 0;
           }
+          setParameters(loadedParams);
+          setServicesPerformed(existingReport.servicesPerformed || []);
+          setMissingProducts(existingReport.missingProducts || []);
+          setObservations(existingReport.observations || "");
+          const urls = (existingReport.photoUrls || []).slice(0, 4);
+          setPreviews([urls[0] ?? null, urls[1] ?? null, urls[2] ?? null, urls[3] ?? null]);
         }
-        
-        // Carregar localização
-        if (appointmentData.locationId) {
-          const locationDoc = await getDoc(doc(db, `franchises/${franchiseId}/locations`, appointmentData.locationId));
-          if (locationDoc.exists()) {
-            const locationData = { id: locationDoc.id, ...locationDoc.data() };
-            setLocation(locationData);
-            console.log("Localização carregada:", locationData.address);
-          }
-        }
-        
-        console.log("✅ Todos os dados carregados com sucesso");
-        
-      } catch (error: any) {
-        console.error("❌ Erro ao carregar dados:", error);
-        alert(`Erro ao carregar dados: ${error.message}\n\nVerifique se o Firestore está configurado corretamente.`);
+
+      } catch (err) {
+        console.error("Failed to load appointment data", err);
+        toast({ variant: "destructive", title: "Erro ao Carregar", description: "Não foi possível carregar os dados do atendimento."})
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     }
-    
     loadData();
-  }, [appointmentId, franchiseId]);
+  }, [appointmentId, franchiseId, toast]);
 
-  // TESTE 1: Verificar Firestore e Storage
-  const testConnection = async () => {
-    try {
-      console.log("🧪 Iniciando teste de conexão...");
-      
-      // Teste 1: Firestore (escrita)
-      const testRef = doc(collection(db, "_test"));
-      const testData = {
-        test: true,
-        timestamp: new Date().toISOString(),
-        message: "Teste de conexão Firestore"
-      };
-      
-      console.log("Testando escrita no Firestore...");
-      await setDoc(testRef, testData);
-      console.log("✅ Firestore: Escrita OK");
-      
-      // Teste 2: Storage (upload pequeno)
-      const testBlob = new Blob(["test content"], { type: "text/plain" });
-      const testStorageRef = ref(storage, `_test/${Date.now()}.txt`);
-      
-      console.log("Testando upload no Storage...");
-      await uploadBytes(testStorageRef, testBlob);
-      console.log("✅ Storage: Upload OK");
-      
-      alert("✅ Conexões testadas com sucesso!\n\nFirestore: OK\nStorage: OK\n\nAgora você pode enviar o relatório.");
-      setTestMode(false);
-      
-    } catch (error: any) {
-      console.error("❌ Teste falhou:", error);
-      
-      if (error.code === "storage/unauthorized") {
-        alert("❌ Storage não autorizado!\n\n1. Vá no Firebase Console\n2. Storage > Rules\n3. Configure para permitir leitura/escrita");
-      } else if (error.code === "permission-denied") {
-        alert("❌ Permissão negada no Firestore!\n\n1. Vá no Firebase Console\n2. Firestore > Rules\n3. Configure para permitir leitura/escrita");
-      } else {
-        alert(`❌ Erro de conexão: ${error.message}\n\nVerifique suas configurações do Firebase.`);
-      }
-    }
+
+  // online/offline + pending count
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const update = () => setPendingCount(readQueue().length);
+
+    const onOnline = () => {
+      setIsOnline(true);
+      update();
+      void syncPendingReports(); // tenta enviar ao voltar
+    };
+    const onOffline = () => {
+      setIsOnline(false);
+      update();
+    };
+
+    update();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+
+    // tentativa inicial (se já estiver online ao abrir)
+    if (navigator.onLine) void syncPendingReports();
+
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** ---------- helpers de UI ---------- */
+  const handleParameterChange = (key: string, value: number[]) => {
+    setParameters((prev) => ({ ...prev, [key]: value[0] }));
   };
 
-  // ENVIO SIMPLIFICADO - APENAS DADOS BÁSICOS (SEM FOTOS)
-  const handleSubmitBasic = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!appointment || !client || !location) {
-      alert("Dados incompletos");
+  const handleCheckboxChange = (
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    value: string,
+    checked: boolean
+  ) => {
+    setter((prev) => (checked ? [...prev, value] : prev.filter((x) => x !== value)));
+  };
+
+  const clearPreview = (index: number) => {
+    setPreviews((prev) => {
+      const next = [...prev];
+      next[index] = null;
+      return next;
+    });
+    const input = document.getElementById(`photo-${index}`) as HTMLInputElement | null;
+    if (input) input.value = "";
+  };
+
+  /** ---------- fotos (mobile) ---------- */
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // limite mais seguro para celular e para localStorage
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ variant: "destructive", title: "Arquivo muito grande", description: "Escolha uma foto com até 5MB." });
       return;
     }
-    
-    if (saving) return;
-    
-    setSaving(true);
-    console.log("🔄 Iniciando envio simplificado (sem fotos)...");
-    
+
     try {
-      // 1. Criar ID do relatório
-      const reportId = appointment.serviceReportId || uuidv4();
-      const reportRef = doc(db, `franchises/${franchiseId}/serviceReports`, reportId);
-      
-      // 2. Dados básicos do relatório
-      const reportData = {
-        id: reportId,
-        franchiseId,
-        appointmentId: appointment.id,
-        clientId: appointment.clientId,
-        locationId: appointment.locationId,
-        technicianId: appointment.technicianId || "default-technician",
-        ...parameters,
-        servicesPerformed,
-        missingProducts,
-        observations,
-        photoUrls: [], // Vazio por enquanto
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        status: 'completed',
-        testMode: testMode
-      };
-      
-      console.log("Salvando no Firestore...", reportData);
-      
-      // 3. Usar batch para garantir atomicidade
-      const batch = writeBatch(db);
-      
-      // Salvar relatório
-      batch.set(reportRef, reportData, { merge: true });
-      
-      // Atualizar appointment
-      const appointmentRef = doc(db, `franchises/${franchiseId}/appointments`, appointmentId);
-      batch.update(appointmentRef, {
-        serviceReportId: reportId,
-        status: "completed",
-        updatedAt: new Date().toISOString(),
+      const raw = await fileToDataUrl(file);
+      const compressed = await compressDataUrl(raw, 1400, 0.68);
+
+      // validação de “tamanho” do dataURL (evita estourar storage local)
+      if (compressed.length > 1_800_000) {
+        toast({
+          variant: "destructive",
+          title: "Foto ainda está pesada",
+          description: "Tire mais perto (ou com menos resolução) para reduzir o tamanho.",
+        });
+        return;
+      }
+
+      setPreviews((prev) => {
+        const next = [...prev];
+        next[index] = compressed;
+        return next;
       });
-      
-      // Executar batch
-      await batch.commit();
-      
-      console.log("✅ Relatório salvo com sucesso!");
-      
-      // Feedback ao usuário
-      alert(`✅ Relatório #${reportId.substring(0, 8)} enviado!\n\nCliente: ${client.name}\nData: ${new Date().toLocaleDateString('pt-BR')}`);
-      
-      setSuccess(true);
-      
-      // Redirecionar após 3 segundos
-      setTimeout(() => {
-        router.push("/dashboard/schedule");
-      }, 3000);
-      
-    } catch (error: any) {
-      console.error("❌ Erro ao salvar:", error);
-      
-      // Análise detalhada do erro
-      let errorMessage = "Erro desconhecido";
-      
-      if (error.code) {
-        switch (error.code) {
-          case "permission-denied":
-            errorMessage = "Permissão negada no Firestore. Verifique as regras de segurança.";
-            break;
-          case "unavailable":
-            errorMessage = "Firestore indisponível. Verifique sua conexão.";
-            break;
-          case "resource-exhausted":
-            errorMessage = "Limite de requisições excedido. Tente novamente mais tarde.";
-            break;
-          default:
-            errorMessage = `Código de erro: ${error.code}`;
-        }
-      } else {
-        errorMessage = error.message || "Erro ao conectar com o servidor";
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Falha ao processar imagem", description: err?.message || "Tente outra foto." });
+    }
+  };
+
+  /** ---------- envio ONLINE (Storage + Firestore) ---------- */
+  const sendReportOnline = async (pending: PendingReport) => {
+    if (!db || !storage) throw new Error("Firebase indisponível no momento.");
+
+    // 1) upload das fotos (se houver)
+    const photoUrls: string[] = [];
+    for (const dataUrl of pending.photoDataUrls) {
+      if (!dataUrl) continue;
+      if (dataUrl.startsWith("http")) { // Já é uma URL, não precisa de upload
+        photoUrls.push(dataUrl);
+        continue;
       }
       
-      alert(`❌ Falha ao enviar: ${errorMessage}\n\nConsulte o console para mais detalhes.`);
+      const [header, base64] = dataUrl.split(",");
+      if (!base64) continue;
       
-    } finally {
-      setSaving(false);
+      const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const blob = new Blob([bytes], { type: mime });
+      const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
+      const storageRef = ref(storage, path);
+
+      const snap = await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(snap.ref);
+      photoUrls.push(url);
     }
+
+    // 2) monta doc do relatório
+    const reportRef = pending.serviceReportId
+      ? doc(db, `franchises/${pending.franchiseId}/serviceReports`, pending.serviceReportId)
+      : doc(collection(db, `franchises/${pending.franchiseId}/serviceReports`));
+
+    const reportData: Omit<ServiceReport, "id"> & { id: string } = {
+      id: reportRef.id,
+      franchiseId: pending.franchiseId,
+      appointmentId: pending.appointmentId,
+      technicianId: pending.technicianId,
+      clientId: pending.clientId,
+      locationId: pending.locationId,
+      ...pending.parameters,
+      servicesPerformed: pending.servicesPerformed,
+      missingProducts: pending.missingProducts,
+      observations: pending.observations,
+      photoUrls,
+      createdAt: pending.createdAt,
+    };
+
+    // 3) batch (relatório + update do agendamento)
+    const batch = writeBatch(db);
+    batch.set(reportRef, reportData, { merge: true });
+
+    const appointmentRef = doc(db, "franchises", pending.franchiseId, "appointments", pending.appointmentId);
+    batch.update(appointmentRef, { serviceReportId: reportRef.id, status: "completed" });
+
+    await batch.commit();
   };
 
-  // ENVIO COMPLETO (COM FOTOS - OPÇÃO FUTURA)
-  const handleSubmitWithPhotos = async (e: React.FormEvent) => {
+  /** ---------- sincronização (fila) ---------- */
+  const syncPendingReports = useCallback(async () => {
+    if (!db || !storage) return;
+    if (typeof window === "undefined" || !navigator.onLine) return;
+
+    setIsSaving(true);
+    toast({ title: "Sincronizando...", description: "Enviando relatórios pendentes." });
+
+    while (true) {
+      const queue = readQueue();
+      if (queue.length === 0) break;
+      
+      const pending = queue[0];
+      try {
+        await sendReportOnline(pending);
+        removePending(pending.id);
+      } catch (err) {
+        console.error(`Falha ao sincronizar o relatório ${pending.id}`, err);
+        toast({ variant: "destructive", title: "Erro na Sincronização", description: `Não foi possível enviar o relatório para ${client?.name}. Ele permanecerá na fila.` });
+        break; // Para e tenta de novo mais tarde para não travar
+      }
+    }
+    
+    setPendingCount(readQueue().length);
+    if(readQueue().length === 0) {
+      toast({ title: "Sincronização Concluída", description: "Todos os relatórios foram enviados." });
+    }
+    
+    setIsSaving(false);
+
+  }, [client?.name, toast]);
+
+  /** ---------- submit (online -> envia, offline -> fila) ---------- */
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    // Primeiro testa conexão
-    await testConnection();
-    
-    if (testMode) {
-      alert("Por favor, teste a conexão primeiro antes de enviar com fotos.");
+
+    if (!appointment || !technician) {
+      toast({ variant: "destructive", title: "Erro", description: "Dados do atendimento incompletos." });
       return;
     }
+
+    const appointmentIdSafe = appointmentId;
     
-    // Depois implemente o upload de fotos aqui
+    const pending: PendingReport = {
+      id: uuidv4(),
+      createdAt: new Date().toISOString(),
+      franchiseId,
+      appointmentId: appointmentIdSafe,
+      clientId: appointment.clientId,
+      locationId: appointment.locationId,
+      technicianId: technician.id,
+      parameters,
+      servicesPerformed,
+      missingProducts,
+      observations,
+      photoDataUrls: (previews.filter(Boolean) as string[]).slice(0, 4),
+      serviceReportId: appointment.serviceReportId,
+    };
+
+    // se estiver claramente offline -> só fila
+    if (!navigator.onLine || !db || !storage) {
+      enqueuePending(pending);
+      setPendingCount(readQueue().length);
+      setIsSuccess(true);
+      toast({
+        title: "Relatório salvo no celular (offline)",
+        description: "Assim que o sinal voltar, o envio é feito automaticamente.",
+      });
+      return;
+    }
+
+    // tenta enviar online; se der erro de rede/permissão, cai para fila (não perde dados)
+    setIsSaving(true);
+    try {
+      await sendReportOnline(pending);
+      setIsSuccess(true);
+      toast({ title: "Relatório enviado!", description: "O relatório foi registrado com sucesso." });
+      setTimeout(() => router.push("/dashboard/schedule"), 1200);
+    } catch (err: any) {
+      enqueuePending(pending);
+      setPendingCount(readQueue().length);
+      setIsSuccess(true);
+      toast({
+        variant: "destructive",
+        title: "Envio não concluído agora",
+        description: "O relatório foi salvo no celular e será enviado automaticamente quando voltar a internet.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  if (loading) {
+  /** ---------- render ---------- */
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-[80vh]"><Spinner size="large" /></div>;
+  }
+  
+  if (!appointment || !client || !location || !technician) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] p-4">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-        <p className="text-gray-600">Carregando dados do atendimento...</p>
-        <p className="text-sm text-gray-500 mt-2">Verificando conexão com o banco de dados...</p>
+      <div className="text-center py-10">
+        <h2 className="text-2xl font-bold">Erro ao Carregar</h2>
+        <p className="mt-2 text-muted-foreground">Não foi possível carregar os dados completos deste atendimento.</p>
+        <Button onClick={() => router.push('/dashboard')} className="mt-4">Voltar</Button>
       </div>
     );
   }
 
-  if (!appointment) {
+  if (isSuccess) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] p-4">
-        <div className="text-red-500 text-4xl mb-4">❌</div>
-        <h2 className="text-xl font-bold mb-2">Atendimento não encontrado</h2>
-        <p className="text-gray-600 text-center mb-4">
-          O ID {appointmentId} não existe ou você não tem permissão para acessá-lo.
-        </p>
-        <button
-          onClick={() => router.push("/dashboard/schedule")}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          Voltar para Agenda
-        </button>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="space-y-6 p-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="text-green-500 text-3xl">✅</div>
-            <div>
-              <h2 className="text-xl font-bold text-green-800">Relatório Enviado!</h2>
-              <p className="text-green-700">Os dados foram salvos com sucesso no sistema.</p>
-            </div>
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg mb-4">
-            <h3 className="font-semibold mb-2">Resumo do Relatório</h3>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div><span className="font-medium">Cliente:</span> {client?.name}</div>
-              <div><span className="font-medium">Endereço:</span> {location?.address}</div>
-              <div><span className="font-medium">Serviços:</span> {servicesPerformed.length}</div>
-              <div><span className="font-medium">Produtos faltantes:</span> {missingProducts.length}</div>
-            </div>
-          </div>
-          
-          <button
-            onClick={() => router.push("/dashboard/schedule")}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
-          >
-            Voltar para Agenda
-          </button>
-          
-          <p className="text-center text-sm text-gray-600 mt-4">
-            Redirecionando em 3 segundos...
-          </p>
-        </div>
+      <div className="space-y-6">
+        <Alert>
+          <CheckCircle className="h-4 w-4" />
+          <AlertTitle>Pronto!</AlertTitle>
+          <AlertDescription>
+            {isOnline ? (
+              <>Relatório {pendingCount > 0 ? "pendente para sincronizar" : "enviado"} com sucesso.</>
+            ) : (
+              <>Você está offline — o relatório foi guardado no celular e será enviado quando voltar o sinal.</>
+            )}
+            <Button onClick={() => router.push("/dashboard/schedule")} className="mt-4 w-full">
+              Voltar para a Agenda
+            </Button>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
 
   return (
-    <div className="p-4 max-w-4xl mx-auto">
-      <div className="space-y-2 mb-6">
-        <h1 className="text-2xl font-bold">📋 Relatório de Atendimento</h1>
-        <div className="bg-blue-50 p-4 rounded-lg">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <p><span className="font-medium">Cliente:</span> {client?.name || "Não encontrado"}</p>
-            <p><span className="font-medium">Endereço:</span> {location?.address || "Não informado"}</p>
-            <p><span className="font-medium">ID Atendimento:</span> {appointmentId.substring(0, 8)}</p>
-            <p><span className="font-medium">Data:</span> {new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
-        </div>
-      </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {!isOnline && (
+        <Alert variant="destructive">
+          <WifiOff className="h-4 w-4" />
+          <AlertTitle>Modo offline</AlertTitle>
+          <AlertDescription>
+            Sem internet agora: ao finalizar, o relatório fica salvo no celular e será enviado automaticamente quando o
+            sinal voltar.
+          </AlertDescription>
+        </Alert>
+      )}
 
-      {/* BOTÃO DE TESTE DE CONEXÃO */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-yellow-800">⚠️ Teste de Conexão Recomendado</h3>
-            <p className="text-yellow-700 text-sm">
-              Antes de enviar, verifique se as conexões com Firestore e Storage estão funcionando.
-            </p>
-          </div>
-          <button
-            onClick={testConnection}
-            disabled={saving}
-            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
-          >
-            Testar Conexão
-          </button>
-        </div>
-      </div>
+      {pendingCount > 0 && (
+        <Alert>
+          <AlertTitle>Relatórios pendentes</AlertTitle>
+          <AlertDescription className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>Você tem <b>{pendingCount}</b> relatório(s) aguardando sincronização.</span>
+            <Button type="button" onClick={() => void syncPendingReports()} disabled={isSaving || !isOnline}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Sincronizar agora
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
-      {/* FORMULÁRIO SIMPLIFICADO */}
-      <form onSubmit={handleSubmitBasic} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Parâmetros da Água */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <h2 className="text-lg font-semibold mb-4">💧 Parâmetros da Água</h2>
-            <div className="space-y-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Parâmetros da Água</CardTitle>
+              <CardDescription>Ajuste os valores medidos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5 pt-2">
               {waterParameters.map((param) => (
-                <div key={param.key} className="space-y-2">
+                <div key={param.key} className="grid gap-2">
                   <div className="flex justify-between items-center">
-                    <label className="font-medium">{param.name}</label>
-                    <span className="font-bold text-blue-600">
+                    <Label htmlFor={param.key}>{param.name}</Label>
+                    <span className="text-sm font-medium text-muted-foreground">
                       {parameters[param.key]} {param.unit}
                     </span>
                   </div>
-                  <input
-                    type="range"
+                  <Slider
+                    name={param.key}
                     min={param.min}
                     max={param.max}
                     step={param.step}
-                    value={parameters[param.key]}
-                    onChange={(e) => setParameters(prev => ({
-                      ...prev,
-                      [param.key]: parseFloat(e.target.value)
-                    }))}
-                    disabled={saving}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    value={[parameters[param.key]]}
+                    onValueChange={(v) => handleParameterChange(param.key, v)}
+                    disabled={isSaving}
+                    style={{ touchAction: "none" }}
                   />
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>{param.min}{param.unit}</span>
-                    <span>{param.max}{param.unit}</span>
-                  </div>
                 </div>
               ))}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          {/* Serviços e Produtos */}
-          <div className="space-y-6">
-            {/* Serviços Realizados */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h2 className="text-lg font-semibold mb-4">🔧 Serviços Realizados</h2>
-              <div className="space-y-2">
-                {servicesPerformedItems.map((item) => (
-                  <div key={item.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id={`service-${item.id}`}
-                      checked={servicesPerformed.includes(item.label)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setServicesPerformed(prev => [...prev, item.label]);
-                        } else {
-                          setServicesPerformed(prev => prev.filter(x => x !== item.label));
-                        }
-                      }}
-                      disabled={saving}
-                      className="h-5 w-5 text-blue-600 rounded"
-                    />
-                    <label htmlFor={`service-${item.id}`} className="ml-2 text-sm">
-                      {item.label}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Fotos do Serviço</CardTitle>
+              <CardDescription>Até 4 fotos (recomendado: bem perto da área tratada).</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4">
+              {[0, 1, 2, 3].map((index) => (
+                <div key={index} className="space-y-2">
+                  <Label htmlFor={`photo-${index}`} className="sr-only">
+                    Foto {index + 1}
+                  </Label>
 
-            {/* Produtos Faltantes */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h2 className="text-lg font-semibold mb-4">📦 Produtos Faltantes</h2>
-              <div className="space-y-2">
-                {missingProductsItems.map((item) => (
-                  <div key={item.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id={`product-${item.id}`}
-                      checked={missingProducts.includes(item.label)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setMissingProducts(prev => [...prev, item.label]);
-                        } else {
-                          setMissingProducts(prev => prev.filter(x => x !== item.label));
-                        }
-                      }}
-                      disabled={saving}
-                      className="h-5 w-5 text-blue-600 rounded"
-                    />
-                    <label htmlFor={`product-${item.id}`} className="ml-2 text-sm">
-                      {item.label}
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+                  {previews[index] ? (
+                    <div className="relative">
+                      <Image
+                        src={previews[index] as string}
+                        alt={`Foto ${index + 1}`}
+                        width={320}
+                        height={420}
+                        className="rounded-md object-cover aspect-[3/4] w-full"
+                      />
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="destructive"
+                        className="absolute top-2 right-2 h-6 w-6"
+                        onClick={() => clearPreview(index)}
+                        disabled={isSaving}
+                      >
+                        <X size={14} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center w-full">
+                      <Label
+                        htmlFor={`photo-${index}`}
+                        className="flex flex-col items-center justify-center w-full aspect-[3/4] border-2 border-dashed rounded-lg cursor-pointer bg-card hover:bg-accent"
+                      >
+                        <div className="flex flex-col items-center justify-center text-center p-2">
+                          <UploadCloud className="w-8 h-8 mb-2 text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">Tocar para foto</p>
+                        </div>
+                        <Input
+                          id={`photo-${index}`}
+                          name={`photo-${index}`}
+                          type="file"
+                          className="hidden"
+                          accept="image/png, image/jpeg, image/webp"
+                          capture="environment"
+                          onChange={(e) => void handleFileChange(e, index)}
+                          disabled={isSaving}
+                        />
+                      </Label>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Observações */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-4">📝 Observações</h2>
-          <textarea
-            value={observations}
-            onChange={(e) => setObservations(e.target.value)}
-            disabled={saving}
-            placeholder="Descreva qualquer observação importante sobre o serviço..."
-            rows={3}
-            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Serviços Realizados</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {servicesPerformedItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`service-${item.id}`}
+                    checked={servicesPerformed.includes(item.label)}
+                    onCheckedChange={(checked) => handleCheckboxChange(setServicesPerformed, item.label, Boolean(checked))}
+                    disabled={isSaving}
+                  />
+                  <Label htmlFor={`service-${item.id}`} className="font-normal text-sm">
+                    {item.label}
+                  </Label>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Produtos Faltantes</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {missingProductsItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-2">
+                  <Checkbox
+                    id={`product-${item.id}`}
+                    checked={missingProducts.includes(item.label)}
+                    onCheckedChange={(checked) => handleCheckboxChange(setMissingProducts, item.label, Boolean(checked))}
+                    disabled={isSaving}
+                  />
+                  <Label htmlFor={`product-${item.id}`} className="font-normal text-sm">
+                    {item.label}
+                  </Label>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Observações</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                id="observations"
+                name="observations"
+                placeholder="Alguma observação importante sobre o serviço ou a piscina..."
+                rows={4}
+                value={observations}
+                onChange={(e) => setObservations(e.target.value)}
+                disabled={isSaving}
+              />
+            </CardContent>
+          </Card>
+
+          <Button type="submit" disabled={isSaving} className="w-full" size="lg">
+            {isSaving ? (
+              <>
+                <Spinner size="small" className="mr-2" /> Enviando...
+              </>
+            ) : (
+              "Finalizar Relatório"
+            )}
+          </Button>
         </div>
-
-        {/* MODOS DE ENVIO */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h2 className="text-lg font-semibold mb-4">🚀 Enviar Relatório</h2>
-          
-          <div className="space-y-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-semibold text-blue-800 mb-2">🎯 Modo Simplificado (Recomendado)</h3>
-              <p className="text-blue-700 text-sm mb-3">
-                Envia apenas os dados do relatório, sem fotos. Ideal para testar a conexão.
-              </p>
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center"
-              >
-                {saving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
-                    Enviando...
-                  </>
-                ) : (
-                  "✅ Enviar Relatório (Sem Fotos)"
-                )}
-              </button>
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg opacity-70">
-              <h3 className="font-semibold text-gray-600 mb-2">📸 Modo Completo (Com Fotos)</h3>
-              <p className="text-gray-600 text-sm mb-3">
-                Inclui fotos do serviço. Requer conexão estável com Storage.
-              </p>
-              <button
-                type="button"
-                onClick={() => alert("Funcionalidade de fotos será implementada após testar a conexão básica")}
-                disabled={true}
-                className="w-full py-3 bg-gray-400 text-white rounded-lg font-semibold cursor-not-allowed"
-              >
-                ⏳ Disponível em Breve
-              </button>
-            </div>
-          </div>
-
-          {saving && (
-            <div className="mt-4 text-center">
-              <p className="text-sm text-gray-600">
-                Aguarde enquanto salvamos os dados...
-                <br />
-                <span className="text-xs">Isso pode levar alguns segundos</span>
-              </p>
-            </div>
-          )}
-        </div>
-      </form>
-
-      {/* INSTRUÇÕES DE DEBUG */}
-      <div className="mt-8 p-4 bg-gray-100 rounded-lg">
-        <h3 className="font-semibold mb-2">🐛 Se ainda estiver travando:</h3>
-        <ol className="list-decimal pl-5 space-y-1 text-sm text-gray-700">
-          <li>Abra o Console do Navegador (F12)</li>
-          <li>Clique no botão "Testar Conexão" acima</li>
-          <li>Verifique se há erros vermelhos no console</li>
-          <li>Compartilhe os erros com o desenvolvedor</li>
-        </ol>
-        <button
-          onClick={() => {
-            console.clear();
-            console.log("=== DEBUG LOG ===");
-            console.log("Appointment:", appointment);
-            console.log("Client:", client);
-            console.log("Location:", location);
-            console.log("Parameters:", parameters);
-            console.log("Firestore:", db);
-            console.log("Storage:", storage);
-          }}
-          className="mt-2 px-3 py-1 text-xs bg-gray-600 text-white rounded"
-        >
-          Log de Debug no Console
-        </button>
       </div>
-    </div>
+    </form>
   );
 }
+
+Ações Imediatas:
+1. Configure o Firebase corretamente:
+javascript
+// firebase.js
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
+
+const firebaseConfig = {
+  // SUAS CONFIGURAÇÕES AQUI
+};
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+export const storage = getStorage(app);
+2. Configure as Regras do Firestore (temporariamente):
+javascript
+// No console do Firebase > Firestore > Rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+3. Configure as Regras do Storage (temporariamente):
+javascript
+// No console do Firebase > Storage > Rules
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if true;
+    }
+  }
+}
+4. Teste a Conexão:
+Clique no botão "Testar Conexão"
+
+Verifique o console do navegador
+
+Se falhar, copie os erros
+
+5. Se persistir o loop:
+javascript
+// Desative temporariamente o Storage
+// Substitua no handleSubmitBasic:
+const reportData = {
+  // ... outros dados
+  photoUrls: [], // SEM FOTOS
+  testMode: true // Marca como teste
+};
+Verificação Rápida:
+Abra o console do navegador (F12) e digite:
+
+javascript
+// Teste Firestore
+import { db } from "@/firebase";
+const testDoc = doc(db, "_test", "connection");
+await setDoc(testDoc, { test: new Date().toISOString() });
+console.log("✅ Firestore OK");
+
+// Teste Storage
+import { storage } from "@/firebase";
+const testRef = ref(storage, "_test.txt");
+await uploadBytes(testRef, new Blob(["test"]));
+console.log("✅ Storage OK");
+Se algum desses testes falhar, o problema é de configuração do Firebase. Compartilhe os erros exatos do console para que eu possa ajudar mais.
