@@ -326,6 +326,7 @@ export function ServiceReportForm(props: {
   /** ---------- envio ONLINE (Storage + Firestore) ---------- */
   const sendReportOnline = async (pending: PendingReport) => {
     if (!db || !storage) throw new Error("Firebase indisponível no momento.");
+    const appointmentIdSafe = pending.appointmentId;
 
     // 1) upload das fotos (se houver)
     const photoUrls: string[] = [];
@@ -345,7 +346,7 @@ export function ServiceReportForm(props: {
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
       const blob = new Blob([bytes], { type: mime });
-      const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
+      const path = `service-reports/${pending.franchiseId}/${appointmentIdSafe}/${uuidv4()}`;
       const storageRef = ref(storage, path);
 
       const snap = await uploadBytes(storageRef, blob);
@@ -361,7 +362,7 @@ export function ServiceReportForm(props: {
     const reportData: Omit<ServiceReport, "id"> & { id: string } = {
       id: reportRef.id,
       franchiseId: pending.franchiseId,
-      appointmentId: pending.appointmentId,
+      appointmentId: appointmentIdSafe,
       technicianId: pending.technicianId,
       clientId: pending.clientId,
       locationId: pending.locationId,
@@ -377,7 +378,7 @@ export function ServiceReportForm(props: {
     const batch = writeBatch(db);
     batch.set(reportRef, reportData, { merge: true });
 
-    const appointmentRef = doc(db, "franchises", pending.franchiseId, "appointments", pending.appointmentId);
+    const appointmentRef = doc(db, "franchises", pending.franchiseId, "appointments", appointmentIdSafe);
     batch.update(appointmentRef, { serviceReportId: reportRef.id, status: "completed" });
 
     await batch.commit();
@@ -401,7 +402,7 @@ export function ServiceReportForm(props: {
         removePending(pending.id);
       } catch (err) {
         console.error(`Falha ao sincronizar o relatório ${pending.id}`, err);
-        toast({ variant: "destructive", title: "Erro na Sincronização", description: `Não foi possível enviar o relatório para ${client?.name}. Ele permanecerá na fila.` });
+        toast({ variant: "destructive", title: "Erro na Sincronização", description: `Não foi possível enviar o relatório. Ele permanecerá na fila.` });
         break; // Para e tenta de novo mais tarde para não travar
       }
     }
@@ -413,7 +414,7 @@ export function ServiceReportForm(props: {
     
     setIsSaving(false);
 
-  }, [client?.name, toast]);
+  }, [toast]);
 
   /** ---------- submit (online -> envia, offline -> fila) ---------- */
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -424,15 +425,16 @@ export function ServiceReportForm(props: {
       return;
     }
 
-    const appointmentIdSafe = appointmentId;
+    const { franchiseId, clientId, locationId } = appointment;
+    const appointmentIdSafe = appointmentId; // Use a prop aqui
     
     const pending: PendingReport = {
       id: uuidv4(),
       createdAt: new Date().toISOString(),
       franchiseId,
       appointmentId: appointmentIdSafe,
-      clientId: appointment.clientId,
-      locationId: appointment.locationId,
+      clientId,
+      locationId,
       technicianId: technician.id,
       parameters,
       servicesPerformed,
@@ -441,7 +443,7 @@ export function ServiceReportForm(props: {
       photoDataUrls: (previews.filter(Boolean) as string[]).slice(0, 4),
       serviceReportId: appointment.serviceReportId,
     };
-
+    
     // se estiver claramente offline -> só fila
     if (!navigator.onLine || !db || !storage) {
       enqueuePending(pending);
@@ -702,4 +704,3 @@ export function ServiceReportForm(props: {
     </form>
   );
 }
-```
