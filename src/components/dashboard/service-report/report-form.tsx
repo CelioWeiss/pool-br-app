@@ -1,18 +1,17 @@
-
 "use client";
 
 import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, doc, writeBatch, getDoc, getFirestore } from "firebase/firestore";
+import { collection, doc, writeBatch, getDoc, setDoc, updateDoc, getFirestore } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
+import { initializeFirebase } from "@/firebase";
 import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 
-// Importações de UI básicas (se não funcionar, usar elementos nativos)
+// Importações de UI básicas
 import { AlertTriangle, CheckCircle, WifiOff, RefreshCw, UploadCloud, X } from "lucide-react";
-import { initializeFirebase } from "@/firebase";
 
-// CONSTANTES (mantém igual)
+
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
   { name: "pH", key: "ph", min: 6, max: 9, step: 0.1, defaultValue: 7.4, unit: "" },
@@ -135,48 +134,50 @@ export function ServiceReportForm({
   const [servicesPerformed, setServicesPerformed] = useState<string[]>([]);
   const [missingProducts, setMissingProducts] = useState<string[]>([]);
   const [observations, setObservations] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   // Carregar dados
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
+        const { firestore: db } = initializeFirebase();
         
         // Carregar appointment
-        const { firestore: db } = initializeFirebase();
         const appointmentDoc = await getDoc(doc(db, `franchises/${franchiseId}/appointments`, appointmentId));
         
         if (!appointmentDoc.exists()) {
           throw new Error("Atendimento não encontrado");
         }
         
-        const appointmentData = appointmentDoc.data() as Appointment;
+        const appointmentData = { id: appointmentDoc.id, ...appointmentDoc.data() } as Appointment;
         setAppointment(appointmentData);
         
         // Carregar dados relacionados
         if (appointmentData.clientId) {
           const clientDoc = await getDoc(doc(db, `franchises/${franchiseId}/clients`, appointmentData.clientId));
           if (clientDoc.exists()) {
-            setClient(clientDoc.data() as Client);
+            setClient({ id: clientDoc.id, ...clientDoc.data() } as Client);
           }
         }
         
         if (appointmentData.locationId) {
           const locationDoc = await getDoc(doc(db, `franchises/${franchiseId}/locations`, appointmentData.locationId));
           if (locationDoc.exists()) {
-            setLocation(locationDoc.data() as ServiceLocation);
+            setLocation({ id: locationDoc.id, ...locationDoc.data() } as ServiceLocation);
           }
         }
         
         if (appointmentData.technicianId) {
           const technicianDoc = await getDoc(doc(db, `franchises/${franchiseId}/technicians`, appointmentData.technicianId));
           if (technicianDoc.exists()) {
-            setTechnician(technicianDoc.data() as Technician);
+            setTechnician({ id: technicianDoc.id, ...technicianDoc.data() } as Technician);
           }
         }
         
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
+        setError("Erro ao carregar dados do atendimento");
       } finally {
         setLoading(false);
       }
@@ -200,11 +201,6 @@ export function ServiceReportForm({
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
-
-  // Atualizar contagem pendente
-  useEffect(() => {
-    setPendingCount(readQueue().length);
-  }, [success, saving]);
 
   // Handlers simplificados
   const handleParameterChange = (key: string, value: number) => {
@@ -252,7 +248,22 @@ export function ServiceReportForm({
     if (input) input.value = "";
   };
 
-  // Enviar relatório (online/offline)
+  // Função para converter base64 para blob
+  function dataURLtoBlob(dataurl: string) {
+    const arr = dataurl.split(',');
+    const mimeMatch = arr[0].match(/:(.*?);/);
+    if (!mimeMatch) return null;
+    const mime = mimeMatch[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  }
+
+  // Enviar relatório com tratamento de CORS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -262,112 +273,119 @@ export function ServiceReportForm({
     }
     
     setSaving(true);
-    
-    const pendingReport: PendingReport = {
-      id: uuidv4(),
-      createdAt: new Date().toISOString(),
-      franchiseId,
-      appointmentId: appointment.id,
-      clientId: appointment.clientId,
-      locationId: appointment.locationId,
-      technicianId: technician.id,
-      parameters,
-      servicesPerformed,
-      missingProducts,
-      observations,
-      photoDataUrls: previews.filter(Boolean) as string[],
-      serviceReportId: appointment.serviceReportId,
-    };
+    setError(null);
     
     try {
-      // Verificar se está online
-      if (online) {
-        // Tentar enviar online
-        const { firestore: db, storage } = initializeFirebase();
+      const { firestore: db, storage } = initializeFirebase();
+      const reportId = appointment.serviceReportId || uuidv4();
+      const reportRef = doc(db, `franchises/${franchiseId}/serviceReports`, reportId);
+      
+      // 1. Preparar dados básicos do relatório
+      const reportData: any = {
+        id: reportId,
+        franchiseId,
+        appointmentId: appointment.id,
+        technicianId: technician.id,
+        clientId: appointment.clientId,
+        locationId: appointment.locationId,
+        ...parameters,
+        servicesPerformed,
+        missingProducts,
+        observations,
+        photoUrls: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: 'completed'
+      };
+      
+      // 2. Primeiro salva o relatório sem fotos (mais rápido)
+      await setDoc(reportRef, reportData, { merge: true });
+      
+      // 3. Upload das fotos (se houver) - pode ser feito depois
+      const photoUrls: string[] = [];
+      const photosToUpload = previews.filter(Boolean) as string[];
+      
+      for (let i = 0; i < photosToUpload.length; i++) {
+        const dataUrl = photosToUpload[i];
+        if (!dataUrl.startsWith('data:')) {
+          photoUrls.push(dataUrl); // Mantém URL existente
+          continue;
+        };
         
-        // Upload de fotos
-        const photoUrls: string[] = [];
-        for (const dataUrl of pendingReport.photoDataUrls) {
-          if (dataUrl.startsWith("http")) {
-            photoUrls.push(dataUrl);
-            continue;
-          }
-          
-          const [header, base64] = dataUrl.split(",");
-          const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
-          const binary = atob(base64);
-          const bytes = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
-          }
-          
-          const blob = new Blob([bytes], { type: mime });
-          const path = `service-reports/${franchiseId}/${appointmentId}/${uuidv4()}`;
+        try {
+          const blob = dataURLtoBlob(dataUrl);
+          if (!blob) continue;
+
+          const path = `service-reports/${franchiseId}/${appointmentId}/${uuidv4()}.jpg`;
           const storageRef = ref(storage, path);
-          const snap = await uploadBytes(storageRef, blob);
-          const url = await getDownloadURL(snap.ref);
+          
+          await uploadBytes(storageRef, blob);
+          const url = await getDownloadURL(storageRef);
           photoUrls.push(url);
+        } catch (uploadError) {
+          console.error(`Erro no upload da foto ${i + 1}:`, uploadError);
+          // Continua mesmo se uma foto falhar
         }
-        
-        // Criar documento
-        const reportId = pendingReport.serviceReportId || uuidv4();
-        const reportRef = doc(db, `franchises/${franchiseId}/serviceReports`, reportId);
-        
-        const reportData = {
-          id: reportId,
+      }
+      
+      // 4. Atualiza o relatório com as URLs das fotos
+      if (photoUrls.length > 0) {
+        await updateDoc(reportRef, {
+          photoUrls,
+          updatedAt: new Date().toISOString()
+        });
+      }
+      
+      // 5. Atualiza o agendamento
+      const appointmentRef = doc(db, `franchises/${franchiseId}/appointments`, appointmentId);
+      await updateDoc(appointmentRef, {
+        serviceReportId: reportId,
+        status: "completed",
+      });
+      
+      // 6. Sucesso
+      alert("Relatório enviado com sucesso!");
+      setSuccess(true);
+      
+      // Redireciona após 2 segundos
+      setTimeout(() => {
+        router.push("/dashboard/schedule");
+      }, 2000);
+      
+    } catch (error: any) {
+      console.error("Erro completo ao salvar relatório:", error);
+      setError(error.message || "Erro ao enviar relatório");
+      
+      // Fallback: salvar localmente
+      try {
+        const pendingReport: PendingReport = {
+          id: uuidv4(),
+          createdAt: new Date().toISOString(),
           franchiseId,
           appointmentId: appointment.id,
-          technicianId: technician.id,
           clientId: appointment.clientId,
           locationId: appointment.locationId,
-          ...parameters,
+          technicianId: technician.id,
+          parameters,
           servicesPerformed,
           missingProducts,
           observations,
-          photoUrls,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          photoDataUrls: previews.filter(Boolean) as string[],
+          serviceReportId: appointment.serviceReportId,
         };
         
-        // Batch update
-        const batch = writeBatch(db);
-        batch.set(reportRef, reportData, { merge: true });
-        
-        // Atualizar appointment
-        const appointmentRef = doc(db, `franchises/${franchiseId}/appointments`, appointmentId);
-        batch.update(appointmentRef, {
-          serviceReportId: reportId,
-          status: "completed"
-        });
-        
-        await batch.commit();
-        
-        alert("Relatório enviado com sucesso!");
-        setSuccess(true);
-      } else {
-        // Salvar offline
         enqueuePending(pendingReport);
-        alert("Relatório salvo localmente (offline). Será enviado quando houver conexão.");
+        alert("Relatório salvo localmente. Será enviado quando houver conexão.");
         setSuccess(true);
-      }
-      
-    } catch (error) {
-      console.error("Erro ao salvar relatório:", error);
-      
-      // Fallback: salvar offline
-      if (online) {
-        enqueuePending(pendingReport);
-        alert("Falha no envio. Relatório salvo localmente para envio posterior.");
-        setSuccess(true);
-      } else {
-        alert("Erro ao salvar relatório. Tente novamente.");
+      } catch (fallbackError) {
+        alert("Erro crítico! Por favor, anote os dados e tente novamente mais tarde.");
       }
     } finally {
       setSaving(false);
     }
   };
 
-  // Sincronizar pendentes
+  // Sincronizar pendentes - versão simplificada
   const syncPendingReports = async () => {
     if (!online) {
       alert("Você está offline. Conecte-se à internet para sincronizar.");
@@ -376,41 +394,20 @@ export function ServiceReportForm({
     
     setSaving(true);
     const queue = readQueue();
+    const { firestore: db, storage } = initializeFirebase();
     
     try {
-      for (const pending of queue) {
+      while (true) {
+        const currentQueue = readQueue();
+        if (currentQueue.length === 0) break;
+        
+        const pending = currentQueue[0];
         try {
-          const { firestore: db, storage } = initializeFirebase();
-          
-          // Upload de fotos (mesma lógica do handleSubmit)
-          const photoUrls: string[] = [];
-          for (const dataUrl of pending.photoDataUrls) {
-            if (dataUrl.startsWith("http")) {
-              photoUrls.push(dataUrl);
-              continue;
-            }
-            
-            const [header, base64] = dataUrl.split(",");
-            const mime = header?.match(/:(.*?);/)?.[1] || "image/jpeg";
-            const binary = atob(base64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i);
-            }
-            
-            const blob = new Blob([bytes], { type: mime });
-            const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}`;
-            const storageRef = ref(storage, path);
-            const snap = await uploadBytes(storageRef, blob);
-            const url = await getDownloadURL(snap.ref);
-            photoUrls.push(url);
-          }
-          
-          // Criar documento
           const reportId = pending.serviceReportId || uuidv4();
           const reportRef = doc(db, `franchises/${pending.franchiseId}/serviceReports`, reportId);
           
-          const reportData = {
+          // Dados básicos
+          const reportData: any = {
             id: reportId,
             franchiseId: pending.franchiseId,
             appointmentId: pending.appointmentId,
@@ -421,35 +418,66 @@ export function ServiceReportForm({
             servicesPerformed: pending.servicesPerformed,
             missingProducts: pending.missingProducts,
             observations: pending.observations,
-            photoUrls,
+            photoUrls: [],
             createdAt: pending.createdAt,
             updatedAt: new Date().toISOString(),
+            status: 'completed'
           };
           
-          const batch = writeBatch(db);
-          batch.set(reportRef, reportData, { merge: true });
+          await setDoc(reportRef, reportData, { merge: true });
           
+          // Upload de fotos
+          const photoUrls: string[] = [];
+          for (const dataUrl of pending.photoDataUrls) {
+            if (dataUrl.startsWith('data:')) {
+              try {
+                const blob = dataURLtoBlob(dataUrl);
+                if(!blob) continue;
+                const path = `service-reports/${pending.franchiseId}/${pending.appointmentId}/${uuidv4()}.jpg`;
+                const storageRef = ref(storage, path);
+                await uploadBytes(storageRef, blob);
+                const url = await getDownloadURL(storageRef);
+                photoUrls.push(url);
+              } catch (photoError) {
+                console.error("Erro ao enviar foto pendente:", photoError);
+              }
+            } else {
+              photoUrls.push(dataUrl); // Keep existing URL
+            }
+          }
+          
+          // Atualizar com fotos
+          if (photoUrls.length > 0) {
+            await updateDoc(reportRef, {
+              photoUrls,
+              updatedAt: new Date().toISOString()
+            });
+          }
+          
+          // Atualizar appointment
           const appointmentRef = doc(db, `franchises/${pending.franchiseId}/appointments`, pending.appointmentId);
-          batch.update(appointmentRef, {
+          await updateDoc(appointmentRef, {
             serviceReportId: reportId,
-            status: "completed"
+            status: "completed",
           });
           
-          await batch.commit();
-          
           removePending(pending.id);
-        } catch (error) {
-          console.error(`Erro ao sincronizar relatório ${pending.id}:`, error);
-          // Continua com os próximos
+        } catch (singleError) {
+          console.error(`Erro ao sincronizar relatório ${pending.id}:`, singleError);
+          break; // Para a sincronização se um item falhar, para evitar loop infinito
         }
       }
       
       setPendingCount(readQueue().length);
-      alert("Sincronização concluída!");
+      if (readQueue().length === 0) {
+        alert("Todos os relatórios foram sincronizados!");
+      } else {
+        alert("Alguns relatórios podem não ter sido sincronizados.");
+      }
       
     } catch (error) {
       console.error("Erro na sincronização:", error);
-      alert("Erro na sincronização. Alguns relatórios podem não ter sido enviados.");
+      alert("Erro na sincronização.");
     } finally {
       setSaving(false);
     }
@@ -465,14 +493,12 @@ export function ServiceReportForm({
     );
   }
 
-  if (!appointment || !client || !location || !technician) {
+  if (error && !appointment) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] p-4">
-        <AlertTriangle className="h-12 w-12 text-red-500 mb-4" />
-        <h2 className="text-xl font-bold mb-2">Atendimento Não Encontrado</h2>
-        <p className="text-gray-600 text-center mb-4">
-          Não foi possível carregar os dados do atendimento. Verifique o ID e tente novamente.
-        </p>
+        <div className="text-red-500 text-lg mb-4">⚠️</div>
+        <h2 className="text-xl font-bold mb-2">Erro ao carregar atendimento</h2>
+        <p className="text-gray-600 text-center mb-4">{error}</p>
         <button
           onClick={() => router.push("/dashboard/schedule")}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -489,39 +515,44 @@ export function ServiceReportForm({
         <div className="space-y-2">
           <h1 className="text-2xl font-bold">Relatório de Atendimento</h1>
           <p className="text-gray-600">
-            Cliente: <span className="font-semibold">{client.name}</span>
+            Cliente: <span className="font-semibold">{client?.name}</span>
           </p>
           <p className="text-gray-600">
-            Endereço: <span className="font-semibold">{location.address}</span>
+            Endereço: <span className="font-semibold">{location?.address}</span>
           </p>
         </div>
         
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+            <div className="h-5 w-5 text-green-600 mt-0.5">✅</div>
             <div>
               <h3 className="font-semibold text-green-800">Pronto!</h3>
               <p className="text-green-700 mt-1">
                 {online
-                  ? pendingCount > 0
-                    ? "Relatório pendente para sincronizar."
-                    : "Relatório enviado com sucesso!"
-                  : "Você está offline. O relatório foi salvo no celular e será enviado quando voltar o sinal."}
+                  ? "Relatório enviado com sucesso!"
+                  : "Você está offline. O relatório foi salvo localmente e será enviado quando voltar o sinal."}
               </p>
               
-              {pendingCount > 0 && online && (
-                <button
-                  onClick={syncPendingReports}
-                  disabled={saving}
-                  className="mt-3 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                >
-                  {saving ? "Sincronizando..." : `Sincronizar ${pendingCount} pendente(s)`}
-                </button>
+              {pendingCount > 0 && (
+                <div className="mt-3">
+                  <p className="text-green-700">
+                    Você ainda tem <span className="font-bold">{pendingCount}</span> relatório(s) pendente(s).
+                  </p>
+                  {online && (
+                    <button
+                      onClick={syncPendingReports}
+                      disabled={saving}
+                      className="mt-2 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {saving ? "Sincronizando..." : "Sincronizar agora"}
+                    </button>
+                  )}
+                </div>
               )}
               
               <button
                 onClick={() => router.push("/dashboard/schedule")}
-                className="mt-3 w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
                 Voltar para a Agenda
               </button>
@@ -534,21 +565,38 @@ export function ServiceReportForm({
 
   // Renderizar formulário
   return (
-    <div className="p-4">
+    <div className="p-4 max-w-6xl mx-auto">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="text-red-500">⚠️</div>
+            <p className="text-red-700">{error}</p>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-2 mb-6">
         <h1 className="text-2xl font-bold">Relatório de Atendimento</h1>
-        <p className="text-gray-600">
-          Cliente: <span className="font-semibold">{client.name}</span>
-        </p>
-        <p className="text-gray-600">
-          Endereço: <span className="font-semibold">{location.address}</span>
-        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <p className="text-gray-600">
+            <span className="font-semibold">Cliente:</span> {client?.name}
+          </p>
+          <p className="text-gray-600">
+            <span className="font-semibold">Endereço:</span> {location?.address}
+          </p>
+          <p className="text-gray-600">
+            <span className="font-semibold">Técnico:</span> {technician?.firstName} {technician?.lastName}
+          </p>
+          <p className="text-gray-600">
+            <span className="font-semibold">Data:</span> {new Date().toLocaleDateString('pt-BR')}
+          </p>
+        </div>
       </div>
 
       {!online && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
-            <WifiOff className="h-5 w-5 text-yellow-600 mt-0.5" />
+            <div className="text-yellow-600 mt-0.5">📶</div>
             <div>
               <h3 className="font-semibold text-yellow-800">Modo offline</h3>
               <p className="text-yellow-700">
@@ -571,9 +619,9 @@ export function ServiceReportForm({
               type="button"
               onClick={syncPendingReports}
               disabled={saving || !online}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center"
             >
-              <RefreshCw className="inline-block h-4 w-4 mr-2" />
+              <span className="mr-2">🔄</span>
               {saving ? "Sincronizando..." : "Sincronizar agora"}
             </button>
           </div>
@@ -582,7 +630,7 @@ export function ServiceReportForm({
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Coluna esquerda */}
+          {/* Coluna esquerda - Parâmetros e Fotos */}
           <div className="space-y-6">
             {/* Parâmetros da Água */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -594,7 +642,7 @@ export function ServiceReportForm({
                       <label htmlFor={param.key} className="font-medium">
                         {param.name}
                       </label>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm font-semibold text-blue-600">
                         {parameters[param.key]} {param.unit}
                       </span>
                     </div>
@@ -608,7 +656,7 @@ export function ServiceReportForm({
                       value={parameters[param.key]}
                       onChange={(e) => handleParameterChange(param.key, parseFloat(e.target.value))}
                       disabled={saving}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-600"
                     />
                     <div className="flex justify-between text-xs text-gray-500">
                       <span>{param.min} {param.unit}</span>
@@ -621,41 +669,37 @@ export function ServiceReportForm({
 
             {/* Fotos */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h2 className="text-lg font-semibold mb-4">Fotos do Serviço</h2>
+              <h2 className="text-lg font-semibold mb-2">Fotos do Serviço</h2>
               <p className="text-sm text-gray-600 mb-4">Até 4 fotos (tire bem perto da área tratada)</p>
               
               <div className="grid grid-cols-2 gap-4">
                 {[0, 1, 2, 3].map((index) => (
                   <div key={index} className="space-y-2">
-                    <label htmlFor={`photo-${index}`} className="sr-only">
-                      Foto {index + 1}
-                    </label>
-                    
                     {previews[index] ? (
                       <div className="relative">
                         <img
                           src={previews[index] as string}
                           alt={`Foto ${index + 1}`}
-                          className="w-full aspect-[3/4] object-cover rounded-lg"
+                          className="w-full aspect-[3/4] object-cover rounded-lg border border-gray-300"
                         />
                         <button
                           type="button"
                           onClick={() => clearPreview(index)}
                           disabled={saving}
-                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full"
+                          className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600"
                         >
-                          <X className="h-4 w-4" />
+                          ✕
                         </button>
                       </div>
                     ) : (
                       <label
                         htmlFor={`photo-${index}`}
-                        className="flex flex-col items-center justify-center w-full aspect-[3/4] border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 bg-gray-50"
+                        className="flex flex-col items-center justify-center w-full aspect-[3/4] border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 bg-gray-50 transition-colors"
                       >
-                        <div className="flex flex-col items-center justify-center p-2">
-                          <UploadCloud className="h-8 w-8 text-gray-400 mb-2" />
+                        <div className="flex flex-col items-center justify-center p-4">
+                          <div className="text-2xl mb-2 text-gray-400">📷</div>
                           <p className="text-xs text-gray-500 text-center">
-                            Tocar para foto
+                            Clique para tirar foto
                           </p>
                         </div>
                         <input
@@ -675,7 +719,7 @@ export function ServiceReportForm({
             </div>
           </div>
 
-          {/* Coluna direita */}
+          {/* Coluna direita - Serviços, Produtos, Observações */}
           <div className="space-y-6">
             {/* Serviços Realizados */}
             <div className="bg-white border border-gray-200 rounded-lg p-4">
@@ -689,11 +733,11 @@ export function ServiceReportForm({
                       checked={servicesPerformed.includes(item.label)}
                       onChange={(e) => handleCheckboxChange(setServicesPerformed, item.label, e.target.checked)}
                       disabled={saving}
-                      className="h-4 w-4 text-blue-600 rounded"
+                      className="h-5 w-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                     />
                     <label
                       htmlFor={`service-${item.id}`}
-                      className="ml-2 text-sm"
+                      className="ml-2 text-sm cursor-pointer"
                     >
                       {item.label}
                     </label>
@@ -714,11 +758,11 @@ export function ServiceReportForm({
                       checked={missingProducts.includes(item.label)}
                       onChange={(e) => handleCheckboxChange(setMissingProducts, item.label, e.target.checked)}
                       disabled={saving}
-                      className="h-4 w-4 text-blue-600 rounded"
+                      className="h-5 w-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                     />
                     <label
                       htmlFor={`product-${item.id}`}
-                      className="ml-2 text-sm"
+                      className="ml-2 text-sm cursor-pointer"
                     >
                       {item.label}
                     </label>
@@ -737,22 +781,36 @@ export function ServiceReportForm({
                 disabled={saving}
                 placeholder="Alguma observação importante sobre o serviço ou a piscina..."
                 rows={4}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
               />
             </div>
 
             {/* Botão de envio */}
-            <button
-              type="submit"
-              disabled={saving}
-              className="w-full py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {saving ? "Enviando..." : "Finalizar Relatório"}
-            </button>
+            <div className="sticky bottom-4 bg-white p-4 border-t border-gray-200 rounded-lg shadow-lg">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full py-4 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-lg flex items-center justify-center"
+              >
+                {saving ? (
+                  <>
+                    <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></span>
+                    Enviando...
+                  </>
+                ) : (
+                  "✅ Finalizar Relatório"
+                )}
+              </button>
+              
+              {saving && (
+                <p className="text-center text-sm text-gray-600 mt-2">
+                  Isso pode levar alguns segundos...
+                </p>
+              )}
+            </div>
           </div>
         </div>
       </form>
     </div>
   );
 }
-
