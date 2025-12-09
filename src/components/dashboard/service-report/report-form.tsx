@@ -2,16 +2,16 @@
 
 import React, { useEffect, useMemo, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, doc, writeBatch, getDoc, setDoc, updateDoc, getFirestore } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL, getStorage } from "firebase/storage";
+import { collection, doc, writeBatch, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
-import { initializeFirebase } from "@/firebase";
+import { db, storage } from "@/firebase"; // Importação direta (sem import dinâmico)
 import type { Client, Appointment, ServiceReport, ServiceLocation, Technician } from "@/lib/types";
 
-// Importações de UI básicas
+// Importações de UI básicas (se não funcionar, usar elementos nativos)
 import { AlertTriangle, CheckCircle, WifiOff, RefreshCw, UploadCloud, X } from "lucide-react";
 
-
+// CONSTANTES (mantém igual)
 const waterParameters = [
   { name: "Cloro", key: "chlorine", min: 0, max: 5, step: 0.1, defaultValue: 2.5, unit: "ppm" },
   { name: "pH", key: "ph", min: 6, max: 9, step: 0.1, defaultValue: 7.4, unit: "" },
@@ -141,7 +141,6 @@ export function ServiceReportForm({
     async function loadData() {
       try {
         setLoading(true);
-        const { firestore: db } = initializeFirebase();
         
         // Carregar appointment
         const appointmentDoc = await getDoc(doc(db, `franchises/${franchiseId}/appointments`, appointmentId));
@@ -251,9 +250,9 @@ export function ServiceReportForm({
   // Função para converter base64 para blob
   function dataURLtoBlob(dataurl: string) {
     const arr = dataurl.split(',');
+    if (arr.length < 2) return null;
     const mimeMatch = arr[0].match(/:(.*?);/);
-    if (!mimeMatch) return null;
-    const mime = mimeMatch[1];
+    const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
     const bstr = atob(arr[1]);
     let n = bstr.length;
     const u8arr = new Uint8Array(n);
@@ -276,7 +275,6 @@ export function ServiceReportForm({
     setError(null);
     
     try {
-      const { firestore: db, storage } = initializeFirebase();
       const reportId = appointment.serviceReportId || uuidv4();
       const reportRef = doc(db, `franchises/${franchiseId}/serviceReports`, reportId);
       
@@ -308,14 +306,14 @@ export function ServiceReportForm({
       for (let i = 0; i < photosToUpload.length; i++) {
         const dataUrl = photosToUpload[i];
         if (!dataUrl.startsWith('data:')) {
-          photoUrls.push(dataUrl); // Mantém URL existente
+          photoUrls.push(dataUrl); // Mantém URL existente se não for base64
           continue;
-        };
+        }
         
         try {
           const blob = dataURLtoBlob(dataUrl);
           if (!blob) continue;
-
+          
           const path = `service-reports/${franchiseId}/${appointmentId}/${uuidv4()}.jpg`;
           const storageRef = ref(storage, path);
           
@@ -393,16 +391,13 @@ export function ServiceReportForm({
     }
     
     setSaving(true);
-    const queue = readQueue();
-    const { firestore: db, storage } = initializeFirebase();
     
-    try {
-      while (true) {
-        const currentQueue = readQueue();
-        if (currentQueue.length === 0) break;
-        
-        const pending = currentQueue[0];
-        try {
+    while(true) {
+      const queue = readQueue();
+      if(queue.length === 0) break;
+      
+      const pending = queue[0];
+      try {
           const reportId = pending.serviceReportId || uuidv4();
           const reportRef = doc(db, `franchises/${pending.franchiseId}/serviceReports`, reportId);
           
@@ -429,6 +424,10 @@ export function ServiceReportForm({
           // Upload de fotos
           const photoUrls: string[] = [];
           for (const dataUrl of pending.photoDataUrls) {
+            if(dataUrl.startsWith('http')) {
+              photoUrls.push(dataUrl);
+              continue;
+            }
             if (dataUrl.startsWith('data:')) {
               try {
                 const blob = dataURLtoBlob(dataUrl);
@@ -441,8 +440,6 @@ export function ServiceReportForm({
               } catch (photoError) {
                 console.error("Erro ao enviar foto pendente:", photoError);
               }
-            } else {
-              photoUrls.push(dataUrl); // Keep existing URL
             }
           }
           
@@ -462,25 +459,18 @@ export function ServiceReportForm({
           });
           
           removePending(pending.id);
-        } catch (singleError) {
+      } catch (singleError) {
           console.error(`Erro ao sincronizar relatório ${pending.id}:`, singleError);
-          break; // Para a sincronização se um item falhar, para evitar loop infinito
-        }
+          break; // Para a sincronização se um item falhar
       }
-      
-      setPendingCount(readQueue().length);
-      if (readQueue().length === 0) {
-        alert("Todos os relatórios foram sincronizados!");
-      } else {
-        alert("Alguns relatórios podem não ter sido sincronizados.");
-      }
-      
-    } catch (error) {
-      console.error("Erro na sincronização:", error);
-      alert("Erro na sincronização.");
-    } finally {
-      setSaving(false);
     }
+    setPendingCount(readQueue().length);
+    if (readQueue().length === 0) {
+      alert("Todos os relatórios foram sincronizados!");
+    } else {
+      alert("Alguns relatórios podem não ter sido sincronizados.");
+    }
+    setSaving(false);
   };
 
   // Estados de carregamento
