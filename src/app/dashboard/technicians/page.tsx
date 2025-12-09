@@ -17,13 +17,13 @@ import { NewTechnicianForm, type NewTechnicianFormData } from '@/components/dash
 import { useToast } from '@/hooks/use-toast';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { useRouter } from 'next/navigation';
-
+import { initializeApp, deleteApp } from 'firebase/app';
+import { firebaseConfig } from '@/firebase/config';
 
 export default function TechniciansPage() {
   const { userInfo, hasRole, user: adminUser } = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const auth = useMemo(() => getAuth(), []);
   const router = useRouter();
 
   const franchiseId = userInfo?.franchiseId;
@@ -55,12 +55,17 @@ export default function TechniciansPage() {
   }
 
   const handleSaveTechnician = async (data: NewTechnicianFormData) => {
-    if (!firestore || !franchiseId || !auth || !adminUser?.email) return;
+    if (!firestore || !franchiseId) return;
     setIsSaving(true);
     
     const batch = writeBatch(firestore);
     const [firstName, ...lastNameParts] = data.name.split(' ');
     
+    // Create a temporary, secondary Firebase app instance for user creation
+    const tempAppName = `temp-tech-creation-${Date.now()}`;
+    const tempApp = initializeApp(firebaseConfig, tempAppName);
+    const tempAuth = getAuth(tempApp);
+
     try {
       if (editingTechnician) {
         // UPDATE existing technician
@@ -69,7 +74,7 @@ export default function TechniciansPage() {
           firstName: firstName,
           lastName: lastNameParts.join(' ') || '',
           phone: data.phone,
-          email: data.email, // Note: email changes here won't affect Firebase Auth email
+          email: data.email,
         };
         batch.update(technicianRef, technicianUpdateData);
         
@@ -85,11 +90,9 @@ export default function TechniciansPage() {
 
       } else {
         // CREATE new technician
-        // 1. Create user in Firebase Auth
-        const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password!);
+        const userCredential = await createUserWithEmailAndPassword(tempAuth, data.email, data.password!);
         const newUserId = userCredential.user.uid;
 
-        // 2. Create Technician document
         const technicianRef = doc(collection(firestore, 'franchises', franchiseId, 'technicians'));
         const newTechnician: Technician = {
           id: technicianRef.id,
@@ -104,7 +107,6 @@ export default function TechniciansPage() {
         };
         batch.set(technicianRef, newTechnician);
 
-        // 3. Create User Profile document
         const userProfileRef = doc(firestore, 'users', newUserId);
         const newUserProfile: UserInfo = {
           id: newUserId,
@@ -119,7 +121,6 @@ export default function TechniciansPage() {
         batch.set(userProfileRef, newUserProfile);
       }
 
-      // 4. Commit batch
       await batch.commit();
 
       toast({
@@ -143,6 +144,7 @@ export default function TechniciansPage() {
       });
     } finally {
       setIsSaving(false);
+      await deleteApp(tempApp);
     }
   };
 
