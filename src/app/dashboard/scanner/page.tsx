@@ -20,6 +20,7 @@ export default function ScannerPage() {
     const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
     const [scannedData, setScannedData] = useState<string | null>(null);
     const [isScanning, setIsScanning] = useState(true);
+    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
     const { toast } = useToast();
     const streamRef = useRef<MediaStream | null>(null);
 
@@ -45,15 +46,59 @@ export default function ScannerPage() {
             setHasCameraPermission(true);
 
             if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.play().catch(e => {
-                    console.error("Video play failed:", e);
+                const video = videoRef.current;
+                video.srcObject = stream;
+                setIsVideoPlaying(false);
+                
+                // Aguardar o vídeo estar pronto antes de tentar reproduzir
+                const handleLoadedMetadata = () => {
+                    video.play().then(() => {
+                        setIsVideoPlaying(true);
+                    }).catch(e => {
+                        console.error("Video play failed:", e);
+                        setIsVideoPlaying(false);
+                        toast({
+                            variant: 'destructive',
+                            title: 'Erro ao iniciar câmera',
+                            description: 'Não foi possível iniciar a visualização da câmera. Tente atualizar a página.',
+                        });
+                    });
+                };
+
+                const handlePlaying = () => {
+                    setIsVideoPlaying(true);
+                };
+
+                const handlePause = () => {
+                    setIsVideoPlaying(false);
+                };
+
+                const handleError = (e: Event) => {
+                    console.error("Video error:", e);
+                    setIsVideoPlaying(false);
                     toast({
                         variant: 'destructive',
                         title: 'Erro ao iniciar câmera',
-                        description: 'Não foi possível iniciar a visualização da câmera.',
+                        description: 'Ocorreu um erro ao inicializar o vídeo da câmera.',
                     });
-                });
+                };
+
+                // Remover listeners anteriores se existirem
+                video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+                video.removeEventListener('playing', handlePlaying);
+                video.removeEventListener('pause', handlePause);
+                video.removeEventListener('error', handleError);
+                
+                // Adicionar novos listeners
+                video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+                video.addEventListener('playing', handlePlaying);
+                video.addEventListener('pause', handlePause);
+                video.addEventListener('error', handleError, { once: true });
+
+                // Se o vídeo já tiver metadata carregado, tentar reproduzir imediatamente
+                if (video.readyState >= 1) {
+                    handleLoadedMetadata();
+                }
             }
         } catch (error) {
             console.error('Erro ao acessar a câmera:', error);
@@ -72,6 +117,7 @@ export default function ScannerPage() {
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
             }
+            setIsVideoPlaying(false);
         };
     }, [getCameraPermission]);
 
@@ -79,13 +125,21 @@ export default function ScannerPage() {
         let animationFrameId: number;
 
         const tick = () => {
-            if (!isScanning || !videoRef.current?.HAVE_ENOUGH_DATA || !canvasRef.current || !hasCameraPermission) {
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            
+            // Verificar se o vídeo está pronto e tem dados suficientes
+            if (!isScanning || !video || !canvas || !hasCameraPermission) {
+                if (isScanning) animationFrameId = requestAnimationFrame(tick);
+                return;
+            }
+
+            // Verificar se o vídeo tem dimensões válidas e está reproduzindo
+            if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) {
                 if (isScanning) animationFrameId = requestAnimationFrame(tick);
                 return;
             }
             
-            const canvas = canvasRef.current;
-            const video = videoRef.current;
             const context = canvas.getContext('2d');
 
             if (context) {
@@ -177,10 +231,22 @@ export default function ScannerPage() {
                         )}
                         {hasCameraPermission && (
                             <>
-                                <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
+                                {!isVideoPlaying && (
+                                    <div className="flex h-full w-full flex-col items-center justify-center absolute inset-0 bg-muted/50">
+                                        <Spinner size="large" />
+                                        <p className="mt-4 text-muted-foreground">Iniciando câmera...</p>
+                                    </div>
+                                )}
+                                <video 
+                                    ref={videoRef} 
+                                    className="h-full w-full object-cover" 
+                                    playsInline 
+                                    muted 
+                                    autoPlay
+                                />
                                 <canvas ref={canvasRef} className="hidden" />
-                                {isScanning && (
-                                    <div className="absolute inset-0 flex items-center justify-center">
+                                {isScanning && isVideoPlaying && (
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                                         <div className="h-64 w-64 rounded-lg border-4 border-dashed border-primary" />
                                          <ScanLine className="absolute h-64 w-64 text-primary/50 animate-pulse"/>
                                     </div>

@@ -19,16 +19,18 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { NewLocationForm } from './new-location-form';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/use-auth';
 
 
 const LocationCard = ({ location, technicians, onEdit, onToggleStatus, onDelete }: { location: ServiceLocation, technicians: Technician[], onEdit: (location: ServiceLocation) => void, onToggleStatus: (location: ServiceLocation) => void, onDelete: (location: ServiceLocation) => void }) => {
     const [qrCodeDataUrl, setQrCodeDataUrl] = useState('');
     const [isQrCodeDialogOpen, setIsQrCodeDialogOpen] = useState(false);
-
+    const { userInfo } = useAuth();
+  
+    const isTechnician = userInfo?.role === 'technician';
     const technicianName = location.technicianId 
         ? (technicians.find(t => t.id === location.technicianId) ? `${technicians.find(t => t.id === location.technicianId)?.firstName} ${technicians.find(t => t.id === location.technicianId)?.lastName}` : 'Não atribuído') 
         : 'Não atribuído';
-
     useEffect(() => {
         if(location.id && location.franchiseId) {
             const qrData = JSON.stringify({ appointmentId: location.id, franchiseId: location.franchiseId });
@@ -89,7 +91,9 @@ const LocationCard = ({ location, technicians, onEdit, onToggleStatus, onDelete 
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Detalhes:</span> {location.poolDetails}</p>
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Técnico:</span> {technicianName}</p>
                 <p className="text-sm"><span className="font-medium text-muted-foreground">Dias de visita:</span> {location.serviceDays.join(', ')}</p>
-                <p className="text-sm font-semibold"><span className="font-medium text-muted-foreground">Mensalidade:</span> {location.fee?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'N/A'}</p>
+                {isTechnician && (
+                    <p className="text-sm font-semibold"><span className="font-medium text-muted-foreground">Mensalidade: {userInfo?.role == 'technician' ? '---' :  location.fee?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) || 'N/A'}</span></p>
+                )}
 
                 
                 <div className="flex gap-2 pt-2">
